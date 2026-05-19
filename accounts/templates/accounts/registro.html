@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Cadastro — Loterias{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card">
+    <h1><i class="fas fa-user-plus" style="color:var(--accent)"></i> Criar Conta</h1>
+    <p class="auth-subtitle">Cadastre-se para gerar e conferir seus jogos</p>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="form-group">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<p class="form-help">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary btn-block btn-lg">Criar Conta</button>
+    </form>
+    <div class="auth-footer">
+      <p>Já tem conta? <a href="{% url 'accounts:login' %}">Entrar</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

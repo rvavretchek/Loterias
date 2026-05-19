@@ -1,0 +1,40 @@
+# Nested clone (empty, leftover)
+Loterias/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Django
+*.sqlite3
+staticfiles/
+media/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Legacy files
+loterias.py
+test_melhorias.py
+historico.json
+Loterias.docx

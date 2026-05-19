@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Histórico — Loterias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="fas fa-history" style="color:var(--accent)"></i> Histórico de Jogos</h1>
+  <p>Clique em um jogo para ver detalhes e conferir</p>
+</div>
+
+<div class="filters-bar">
+  <form method="get" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+    <select name="tipo" class="form-select" onchange="this.form.submit()">
+      <option value="">Todos os jogos</option>
+      {% for t in tipos_jogo %}
+      <option value="{{ t.id }}" {% if tipo_filtro == t.id|stringformat:"d" %}selected{% endif %}>{{ t.nome }}</option>
+      {% endfor %}
+    </select>
+    <select name="conferido" class="form-select" onchange="this.form.submit()">
+      <option value="">Todos</option>
+      <option value="sim" {% if conferido_filtro == 'sim' %}selected{% endif %}>Conferidos</option>
+      <option value="nao" {% if conferido_filtro == 'nao' %}selected{% endif %}>Pendentes</option>
+    </select>
+  </form>
+</div>
+
+{% if jogos %}
+<div class="card" style="padding:0">
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Jogo</th>
+          <th>Concurso</th>
+          <th>Números</th>
+          <th>Data</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for jogo in jogos %}
+        <tr onclick="verDetalhes({{ jogo.id }})">
+          <td>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <span style="width:10px;height:10px;border-radius:50%;background:{{ jogo.tipo_jogo.cor }};flex-shrink:0"></span>
+              <span style="font-weight:600">{{ jogo.tipo_jogo.nome }}</span>
+            </div>
+          </td>
+          <td style="font-weight:600">#{{ jogo.numero_concurso }}</td>
+          <td>
+            <span class="nums-preview">
+              {% for n in jogo.numeros %}{{ n|stringformat:"02d" }}{% if not forloop.last %} - {% endif %}{% endfor %}
+            </span>
+          </td>
+          <td style="white-space:nowrap;color:var(--text-secondary)">{{ jogo.criado_em|date:"d/m/Y H:i" }}</td>
+          <td>
+            {% if jogo.conferido %}
+              <span class="badge {% if jogo.acertos >= 3 %}badge-success{% elif jogo.acertos > 0 %}badge-info{% else %}badge-outline{% endif %}">
+                {{ jogo.acertos }} acertos
+              </span>
+            {% else %}
+              <span class="badge badge-warning">Pendente</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="fas fa-inbox"></i>
+    <p>Nenhum jogo encontrado</p>
+    <a href="{% url 'jogos:novo_jogo' %}" class="btn btn-primary" style="margin-top:1rem">Gerar Primeiro Jogo</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,5 @@
+django>=5.1,<6.0
+requests>=2.31
+django-crontab>=0.7.1
+gunicorn>=22.0
+python-dotenv>=1.0
