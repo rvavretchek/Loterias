@@ -33,6 +33,10 @@ Thumbs.db
 # Logs
 *.log
 
+# Deploy scripts (contain secrets)
+deploy_setup.sh
+deploy_nginx.sh
+
 # Legacy files
 loterias.py
 test_melhorias.py
