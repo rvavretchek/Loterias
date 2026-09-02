@@ -60,9 +60,9 @@ DATABASE_ROUTERS = (
 DJANGO_TENANT_SQLITE = {
     "TENANT_MODEL": "accounts.Tenant",
     "DOMAIN_MODEL": "accounts.Domain",
-    "TENANT_ROUTING_MODE": "SUBFOLDER",
+    "TENANT_ROUTING_MODE": os.getenv('TENANT_ROUTING_MODE', 'DOMAIN'),
     "TENANT_SUBFOLDER_PREFIX": "r",
-    "TENANT_BASE_DOMAIN": "localhost:8000",
+    "TENANT_BASE_DOMAIN": os.getenv('TENANT_BASE_DOMAIN', 'localhost:8000'),
     "TENANTS_DB_FOLDER": "tenants",
 }
 

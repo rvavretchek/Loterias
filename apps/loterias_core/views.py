@@ -23,7 +23,7 @@ def home(request):
             total=Count('id')
         ).order_by('-total')
 
-        ultimos_jogos = JogoGerado.objects.filter(usuario=request.user).select_related('usuario')[:10]
+        ultimos_jogos = JogoGerado.objects.filter(usuario=request.user)[:10]
 
         context = {
             'total_jogos': total_jogos,
@@ -136,7 +136,7 @@ def detalhes_jogo(request, pk):
 @login_required
 def historico(request):
     """Pagina de historico de jogos."""
-    jogos_list = JogoGerado.objects.filter(usuario=request.user).select_related('usuario')
+    jogos_list = JogoGerado.objects.filter(usuario=request.user)
 
     jogo_filtro = request.GET.get('jogo')
     if jogo_filtro and jogo_filtro in JOGOS_CONFIG:
