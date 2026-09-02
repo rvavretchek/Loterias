@@ -1,0 +1,183 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Historico - Gerador de Loterias{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-clock-history me-2 text-primary"></i>Historico de Jogos</h2>
+            <p class="text-secondary">Todos os jogos gerados por voce</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Filtrar por Jogo</label>
+                    <select name="jogo" class="form-select">
+                        <option value="">Todos os jogos</option>
+                        {% for key, config in jogos_disponiveis.items %}
+                        <option value="{{ key }}" {% if jogo_filtro == key %}selected{% endif %}>
+                            {{ config.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ordenacao</label>
+                    <select name="ordenacao" class="form-select">
+                        <option value="-criado_em" {% if ordenacao == '-criado_em' %}selected{% endif %}>
+                            Mais recentes primeiro
+                        </option>
+                        <option value="criado_em" {% if ordenacao == 'criado_em' %}selected{% endif %}>
+                            Mais antigos primeiro
+                        </option>
+                        <option value="jogo" {% if ordenacao == 'jogo' %}selected{% endif %}>
+                            Tipo de jogo
+                        </option>
+                        <option value="concurso" {% if ordenacao == 'concurso' %}selected{% endif %}>
+                            Concurso
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel me-2"></i>Filtrar
+                    </button>
+                </div>
+                <div class="col-md-3 text-md-end">
+                    <a href="{% url 'home' %}" class="btn btn-success">
+                        <i class="bi bi-plus-circle me-2"></i>Novo Jogo
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Jogos -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Jogo</th>
+                            <th>Concurso</th>
+                            <th>Numeros</th>
+                            <th>Trevos</th>
+                            <th>Seq.</th>
+                            <th>Data</th>
+                            <th class="text-end">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for jogo in jogos %}
+                        <tr class="fade-in">
+                            <td>
+                                <span class="badge bg-primary">{{ jogo.jogo }}</span>
+                            </td>
+                            <td class="fw-semibold">{{ jogo.concurso }}</td>
+                            <td>
+                                <div class="d-flex flex-wrap" style="max-width: 300px;">
+                                    {% for num in jogo.numeros %}
+                                    <span class="numero-bola" style="width:32px;height:32px;font-size:11px;">
+                                        {{ num|stringformat:"02d" }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if jogo.trevos %}
+                                    {% for trevo in jogo.trevos %}
+                                    <span class="trevo-bola" style="width:32px;height:32px;font-size:11px;">
+                                        {{ trevo|stringformat:"02d" }}
+                                    </span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if jogo.pares_sequenciais > 0 %}
+                                <span class="badge bg-warning text-dark">{{ jogo.pares_sequenciais }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ jogo.criado_em|date:"d/m/Y" }}<br>{{ jogo.criado_em|date:"H:i" }}</small>
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group">
+                                    <a href="{% url 'detalhes_jogo' jogo.pk %}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'refazer_jogo' jogo.pk %}" class="btn btn-sm btn-outline-success" title="Gerar novamente">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'excluir_jogo' jogo.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <i class="bi bi-inbox display-4 text-muted"></i>
+                                <p class="mt-3 text-secondary">Nenhum jogo encontrado.</p>
+                                <a href="{% url 'home' %}" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-2"></i>Gerar Primeiro Jogo
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao -->
+    {% if jogos.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if jogos.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ jogos.previous_page_number }}{% if jogo_filtro %}&jogo={{ jogo_filtro }}{% endif %}{% if ordenacao %}&ordenacao={{ ordenacao }}{% endif %}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in jogos.paginator.page_range %}
+                {% if jogos.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+                {% elif num > jogos.number|add:'-3' and num < jogos.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if jogo_filtro %}&jogo={{ jogo_filtro }}{% endif %}{% if ordenacao %}&ordenacao={{ ordenacao }}{% endif %}">{{ num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if jogos.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ jogos.next_page_number }}{% if jogo_filtro %}&jogo={{ jogo_filtro }}{% endif %}{% if ordenacao %}&ordenacao={{ ordenacao }}{% endif %}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

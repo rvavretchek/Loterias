@@ -1,0 +1,283 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Inicio - Gerador de Loterias{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Hero Section -->
+    <div class="row mb-5">
+        <div class="col-lg-8 mx-auto text-center">
+            <h1 class="display-4 fw-bold mb-3">
+                <i class="bi bi-stars text-warning"></i>
+                Gerador de Loterias
+            </h1>
+            <p class="lead text-secondary mb-4">
+                Gere apostas inteligentes para as principais loterias brasileiras. 
+                Mantenha seu historico, acompanhe estatisticas e aumente suas chances.
+            </p>
+            {% if not user.is_authenticated %}
+            <div class="d-flex justify-content-center gap-3">
+                <a href="{% url 'account_signup' %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-person-plus me-2"></i>Criar Conta Gratis
+                </a>
+                <a href="{% url 'account_login' %}" class="btn btn-outline-primary btn-lg">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Ja Tenho Conta
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if user.is_authenticated %}
+    <!-- Dashboard Stats -->
+    <div class="row mb-5">
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card h-100">
+                <i class="bi bi-ticket-perforated text-primary"></i>
+                <div class="stat-value">{{ total_jogos }}</div>
+                <div class="stat-label">Jogos Gerados</div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card h-100">
+                <i class="bi bi-collection text-success"></i>
+                <div class="stat-value">{{ jogos_por_tipo|length }}</div>
+                <div class="stat-label">Tipos de Jogo</div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card h-100">
+                <i class="bi bi-clock-history text-info"></i>
+                <div class="stat-value">{{ ultimos_jogos|length }}</div>
+                <div class="stat-label">Jogos Recentes</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gerar Novo Jogo -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-plus-circle me-2 text-primary"></i>
+                    <span>Gerar Novo Jogo</span>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'gerar_jogo' %}">
+                        {% csrf_token %}
+
+                        <div class="row g-3 mb-4">
+                            {% for key, config in jogos_disponiveis.items %}
+                            <div class="col-md-4 col-lg-2">
+                                <div class="game-selector" onclick="selectGame(this, '{{ key }}')">
+                                    <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
+                                    <div class="text-center">
+                                        <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
+                                        <h5 class="mb-1">{{ config.nome }}</h5>
+                                        <small class="text-secondary">
+                                            {{ config.apostas }} de {{ config.numeros }}
+                                            {% if config.trevos > 0 %}
+                                            <br>+ {{ config.trevos }} trevos
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 col-lg-4">
+                                <div class="mb-3">
+                                    <label for="concurso" class="form-label fw-semibold">
+                                        <i class="bi bi-hash me-1"></i>Numero do Concurso
+                                    </label>
+                                    <input type="text" class="form-control form-control-lg" id="concurso" 
+                                           name="concurso" placeholder="Ex: 2500" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-magic me-2"></i>Gerar Jogo
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-pencil-square me-2 text-success"></i>
+                    <span>Guardar Jogo Manual</span>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'salvar_jogo_manual' %}">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Jogo</label>
+                                <select name="jogo" class="form-select" required>
+                                    {% for key, config in jogos_disponiveis.items %}
+                                    <option value="{{ key }}">{{ config.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Concurso</label>
+                                <input type="text" name="concurso" class="form-control" placeholder="Ex: 2500" required>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Números</label>
+                                <input type="text" name="numeros" class="form-control" placeholder="Ex: 01, 12, 23, 34, 45, 56" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success mt-3">
+                            <i class="bi bi-save me-2"></i>Salvar Jogo Manual
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ultimos Jogos -->
+    {% if ultimos_jogos %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-2 text-primary"></i>Ultimos Jogos</span>
+                    <a href="{% url 'historico' %}" class="btn btn-sm btn-outline-primary">
+                        Ver Todos <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Jogo</th>
+                                    <th>Concurso</th>
+                                    <th>Numeros</th>
+                                    <th>Trevos</th>
+                                    <th>Data</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for jogo in ultimos_jogos %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary">{{ jogo.jogo }}</span>
+                                    </td>
+                                    <td>{{ jogo.concurso }}</td>
+                                    <td>
+                                        {% for num in jogo.numeros %}
+                                        <span class="numero-bola">{{ num|stringformat:"02d" }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if jogo.trevos %}
+                                            {% for trevo in jogo.trevos %}
+                                            <span class="trevo-bola">{{ trevo|stringformat:"02d" }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ jogo.criado_em|date:"d/m/Y H:i" }}</td>
+                                    <td>
+                                        <a href="{% url 'detalhes_jogo' jogo.pk %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Features para visitantes -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 text-center p-4">
+                <div class="card-body">
+                    <i class="bi bi-shuffle display-4 text-primary mb-3"></i>
+                    <h4>Geracao Inteligente</h4>
+                    <p class="text-secondary">Algoritmo que respeita regras de sequencia e evita repeticoes automaticamente.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 text-center p-4">
+                <div class="card-body">
+                    <i class="bi bi-graph-up display-4 text-success mb-3"></i>
+                    <h4>Estatisticas Detalhadas</h4>
+                    <p class="text-secondary">Acompanhe numeros mais frequentes, padroes e historico completo.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 text-center p-4">
+                <div class="card-body">
+                    <i class="bi bi-shield-check display-4 text-info mb-3"></i>
+                    <h4>Multitenant Seguro</h4>
+                    <p class="text-secondary">Seus dados isolados e seguros. Acesse de qualquer dispositivo.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jogos Disponiveis -->
+    <div class="row">
+        <div class="col-12">
+            <h3 class="text-center mb-4">Loterias Suportadas</h3>
+            <div class="row g-3">
+                {% for key, config in jogos_disponiveis.items %}
+                <div class="col-md-4 col-lg-2">
+                    <div class="card text-center p-3 h-100">
+                        <div class="card-body">
+                            <i class="bi bi-dice-5 fs-1 text-primary mb-2"></i>
+                            <h5 class="card-title">{{ config.nome }}</h5>
+                            <p class="card-text text-secondary">
+                                <strong>{{ config.apostas }}</strong> numeros<br>
+                                de <strong>{{ config.numeros }}</strong> possiveis
+                                {% if config.trevos > 0 %}
+                                <br>+<strong>{{ config.trevos }}</strong> trevos
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function selectGame(element, gameName) {
+    // Remove active de todos
+    document.querySelectorAll('.game-selector').forEach(el => {
+        el.classList.remove('active');
+        el.querySelector('input[type="radio"]').checked = false;
+    });
+
+    // Adiciona active ao clicado
+    element.classList.add('active');
+    element.querySelector('input[type="radio"]').checked = true;
+}
+</script>
+{% endblock %}

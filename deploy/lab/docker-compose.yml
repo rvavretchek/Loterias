@@ -1,0 +1,35 @@
+services:
+  loterias-web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: loterias-web
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: loterias.settings
+      DEBUG: "False"
+      SECRET_KEY: ${LOTERIAS_SECRET_KEY}
+      PASSWORD_PEPPER: ${LOTERIAS_PASSWORD_PEPPER}
+      DATABASE_NAME: /app/data/db.sqlite3
+      ALLOWED_HOSTS: loterias.internal,www.loterias.internal
+      CSRF_TRUSTED_ORIGINS: http://loterias.internal,http://www.loterias.internal
+      SECURE_SSL_REDIRECT: "False"
+    volumes:
+      - loterias_data:/app/data
+      - loterias_tenants:/app/tenants
+      - loterias_media:/app/media
+    networks:
+      - lab-network
+
+volumes:
+  loterias_data:
+    name: loterias_data
+  loterias_tenants:
+    name: loterias_tenants
+  loterias_media:
+    name: loterias_media
+
+networks:
+  lab-network:
+    name: infra-lab_lab-network
+    external: true
