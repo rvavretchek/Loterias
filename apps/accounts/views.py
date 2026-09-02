@@ -11,6 +11,7 @@ from .forms import CustomSignupForm, ProfileUpdateForm
 
 class CustomSignupView(SignupView):
     form_class = CustomSignupForm
+    template_name = 'accounts/signup.html'
 
 
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
