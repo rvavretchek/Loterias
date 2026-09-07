@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Dashboard — Loterias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Olá, {{ user.first_name }}! <span style="font-size:.8em">🍀</span></h1>
+  <p>Seu painel de jogos de loteria</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon" style="color:var(--accent)"><i class="fas fa-dice"></i></div>
+    <div class="stat-value">{{ total_jogos }}</div>
+    <div class="stat-label">Jogos Gerados</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="color:var(--warning)"><i class="fas fa-clock"></i></div>
+    <div class="stat-value">{{ jogos_pendentes }}</div>
+    <div class="stat-label">Pendentes de Conferência</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="color:var(--success)"><i class="fas fa-star"></i></div>
+    <div class="stat-value">{{ jogos_com_acertos }}</div>
+    <div class="stat-label">Com Acertos</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-header"><h2>Ações Rápidas</h2></div>
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <a href="{% url 'jogos:novo_jogo' %}" class="btn btn-primary btn-lg"><i class="fas fa-plus-circle"></i> Gerar Novo Jogo</a>
+      <a href="{% url 'jogos:historico' %}" class="btn btn-outline"><i class="fas fa-history"></i> Ver Histórico</a>
+      <a href="{% url 'jogos:resultados' %}" class="btn btn-outline"><i class="fas fa-trophy"></i> Resultados Oficiais</a>
+    </div>
+  </div>
+
+  <!-- Recent Games -->
+  <div class="card">
+    <div class="card-header"><h2>Últimos Jogos</h2></div>
+    {% if ultimos_jogos %}
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      {% for jogo in ultimos_jogos %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:pointer" onclick="verDetalhes({{ jogo.id }})">
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span style="width:10px;height:10px;border-radius:50%;background:{{ jogo.tipo_jogo.cor }}"></span>
+          <div>
+            <div style="font-weight:600;font-size:.9rem">{{ jogo.tipo_jogo.nome }}</div>
+            <div style="font-size:.8rem;color:var(--text-muted)">#{{ jogo.numero_concurso }} &bull; {{ jogo.criado_em|date:"d/m/Y H:i" }}</div>
+          </div>
+        </div>
+        {% if jogo.conferido %}
+          <span class="badge {% if jogo.acertos >= 3 %}badge-success{% else %}badge-outline{% endif %}">{{ jogo.acertos }} acertos</span>
+        {% else %}
+          <span class="badge badge-outline">Pendente</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="fas fa-dice"></i>
+      <p>Nenhum jogo gerado ainda</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+@media (max-width:768px) {
+  div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

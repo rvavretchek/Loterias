@@ -1,0 +1,169 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Detalhes do Jogo - {{ jogo.jogo }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Breadcrumb -->
+            <nav aria-label="breadcrumb" class="mb-4">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Inicio</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'historico' %}">Historico</a></li>
+                    <li class="breadcrumb-item active">{{ jogo.jogo }} - Concurso {{ jogo.concurso }}</li>
+                </ol>
+            </nav>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">
+                            <i class="bi bi-ticket-perforated me-2 text-primary"></i>
+                            {{ jogo.jogo }}
+                        </h4>
+                        <small class="text-secondary">Concurso {{ jogo.concurso }}</small>
+                    </div>
+                    <span class="badge bg-primary fs-6">{{ jogo.criado_em|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="card-body text-center py-5">
+                    <!-- Numeros -->
+                    <h5 class="mb-4 text-secondary">Numeros Sorteados</h5>
+                    <div class="mb-4">
+                        {% for num in jogo.numeros %}
+                        <span class="numero-bola fs-5">{{ num|stringformat:"02d" }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Trevos -->
+                    {% if jogo.trevos %}
+                    <h5 class="mb-3 text-secondary">Trevos</h5>
+                    <div class="mb-4">
+                        {% for trevo in jogo.trevos %}
+                        <span class="trevo-bola fs-5">{{ trevo|stringformat:"02d" }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Info Sequencia -->
+                    {% if aplica_regra_sequencia %}
+                    <div class="alert {% if jogo.pares_sequenciais > 0 %}alert-warning{% else %}alert-success{% endif %} d-inline-block">
+                        <i class="bi {% if jogo.pares_sequenciais > 0 %}bi-exclamation-triangle{% else %}bi-check-circle{% endif %} me-2"></i>
+                        Pares sequenciais: <strong>{{ jogo.pares_sequenciais }}</strong>
+                        {% if jogo.pares_sequenciais > 0 %}
+                        <br><small>Este jogo possui numeros consecutivos</small>
+                        {% else %}
+                        <br><small>Nenhum par sequencial encontrado</small>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <a href="{% url 'verificar_resultado_jogo' jogo.pk %}" class="btn btn-outline-primary">
+                            <i class="bi bi-check-circle me-2"></i>Verificar Resultado da CEF
+                        </a>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="{% url 'refazer_jogo' jogo.pk %}" class="btn btn-success me-2">
+                            <i class="bi bi-arrow-repeat me-2"></i>Gerar Novamente
+                        </a>
+                        <a href="{% url 'historico' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Voltar
+                        </a>
+                    </div>
+                    <form method="post" action="{% url 'excluir_jogo' jogo.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-delete">
+                            <i class="bi bi-trash me-2"></i>Excluir
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {% if resultado_oficial or premio_info %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-trophy me-2 text-warning"></i>Resultado e Premiação
+                </div>
+                <div class="card-body">
+                    {% if resultado_oficial %}
+                    <p><strong>Concurso:</strong> {{ resultado_oficial.concurso }}</p>
+                    <p><strong>Jogo:</strong> {{ resultado_oficial.jogo }}</p>
+                    <p><strong>Números sorteados:</strong> {% for num in resultado_oficial.numeros %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+                    <p><strong>Origem:</strong> {{ resultado_oficial.origem }}</p>
+                    {% endif %}
+
+                    {% if premio_info %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered mt-3 mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Acertos</th>
+                                    <th>Categoria</th>
+                                    <th>Premio</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>{{ premio_info.acertos }}</td>
+                                    <td>{{ premio_info.categoria }}</td>
+                                    <td>{{ premio_info.valor }}</td>
+                                    <td>{% if premio_info.ganhou %}<span class="badge bg-success">Ganhou</span>{% else %}<span class="badge bg-secondary">Sem premio</span>{% endif %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Jogos Anteriores -->
+            {% if jogos_anteriores %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-2 text-primary"></i>
+                    Jogos Anteriores de {{ jogo.jogo }}
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Concurso</th>
+                                    <th>Numeros</th>
+                                    <th>Data</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for j in jogos_anteriores %}
+                                <tr>
+                                    <td>{{ j.concurso }}</td>
+                                    <td>
+                                        {% for num in j.numeros %}
+                                        <span class="numero-bola" style="width:32px;height:32px;font-size:12px;">{{ num|stringformat:"02d" }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ j.criado_em|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'detalhes_jogo' j.pk %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

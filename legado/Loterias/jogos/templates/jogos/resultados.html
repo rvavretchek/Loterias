@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Resultados Oficiais — Loterias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="fas fa-trophy" style="color:var(--warning)"></i> Resultados Oficiais</h1>
+  <p>Busque e gerencie resultados oficiais das loterias da Caixa</p>
+</div>
+
+<!-- Fetch from API -->
+<div class="card" style="margin-bottom:1.5rem">
+  <div class="card-header">
+    <h2><i class="fas fa-search"></i> Buscar Resultado</h2>
+    <p>Busque automaticamente via API da Caixa</p>
+  </div>
+  <form id="form-buscar" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:end">
+    {% csrf_token %}
+    <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px">
+      <label>Tipo de Jogo</label>
+      <select name="tipo_jogo" id="busca_tipo_jogo" class="form-select" required>
+        <option value="">Selecione...</option>
+        {% for t in tipos_jogo %}
+        <option value="{{ t.id }}">{{ t.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;flex:1;min-width:120px">
+      <label>Concurso</label>
+      <input type="number" name="numero_concurso" id="busca_concurso" class="form-input" placeholder="Ex: 2700" required min="1">
+    </div>
+    <button type="button" class="btn btn-primary" onclick="buscarResultado()" style="height:42px">
+      <i class="fas fa-bolt"></i> Buscar na Caixa
+    </button>
+    <a href="{% url 'jogos:cadastrar_resultado' %}" class="btn btn-outline" style="height:42px">
+      <i class="fas fa-edit"></i> Cadastrar Manual
+    </a>
+  </form>
+  <div id="busca-resultado" style="margin-top:1rem"></div>
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+  <form method="get" style="display:flex;gap:.75rem">
+    <select name="tipo" class="form-select" onchange="this.form.submit()">
+      <option value="">Todos os tipos</option>
+      {% for t in tipos_jogo %}
+      <option value="{{ t.id }}" {% if tipo_filtro == t.id|stringformat:"d" %}selected{% endif %}>{{ t.nome }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if concursos %}
+<div class="card" style="padding:0">
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Jogo</th><th>Concurso</th><th>Dezenas</th><th>Data</th><th>Origem</th></tr></thead>
+      <tbody>
+        {% for c in concursos %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <span style="width:10px;height:10px;border-radius:50%;background:{{ c.tipo_jogo.cor }}"></span>
+              <span style="font-weight:600">{{ c.tipo_jogo.nome }}</span>
+            </div>
+          </td>
+          <td style="font-weight:600">#{{ c.numero }}</td>
+          <td><span class="nums-preview">{% for d in c.dezenas %}{{ d|stringformat:"02d" }}{% if not forloop.last %} - {% endif %}{% endfor %}</span></td>
+          <td style="color:var(--text-secondary)">{{ c.data_sorteio|date:"d/m/Y"|default:"-" }}</td>
+          <td>
+            {% if c.cadastrado_manualmente %}
+              <span class="badge badge-outline">Manual</span>
+            {% else %}
+              <span class="badge badge-info">API</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="empty-state"><i class="fas fa-database"></i><p>Nenhum resultado cadastrado</p></div></div>
+{% endif %}
+
+<script>
+function buscarResultado() {
+  const tipo = document.getElementById('busca_tipo_jogo').value;
+  const concurso = document.getElementById('busca_concurso').value;
+  if (!tipo || !concurso) { showToast('Preencha todos os campos.', 'warning'); return; }
+  const div = document.getElementById('busca-resultado');
+  div.innerHTML = '<div class="spinner"></div>';
+  buscarResultadoAPI(tipo, concurso, (data) => {
+    let html = `<div style="padding:1rem;background:var(--input-bg);border-radius:var(--radius-md)">`;
+    html += `<strong>Dezenas:</strong> <span style="font-family:monospace">${data.dezenas.map(d=>String(d).padStart(2,'0')).join(' - ')}</span>`;
+    if (data.dezenas_segundo_sorteio && data.dezenas_segundo_sorteio.length) {
+      html += `<br><strong>2o Sorteio:</strong> <span style="font-family:monospace">${data.dezenas_segundo_sorteio.map(d=>String(d).padStart(2,'0')).join(' - ')}</span>`;
+    }
+    if (data.trevos_sorteados && data.trevos_sorteados.length) {
+      html += `<br><strong>Trevos:</strong> <span style="font-family:monospace">${data.trevos_sorteados.join(', ')}</span>`;
+    }
+    if (data.data_sorteio) html += `<br><strong>Data:</strong> ${data.data_sorteio}`;
+    html += `</div>`;
+    div.innerHTML = html;
+    setTimeout(() => location.reload(), 2000);
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends 'base/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Meu Perfil - Gerador de Loterias{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-person-circle me-2 text-primary"></i>Meu Perfil
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-4">
+                            {% if user.avatar %}
+                                <img src="{{ user.avatar.url }}" alt="Avatar" class="rounded-circle mb-3" width="120" height="120">
+                            {% else %}
+                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3" style="width:120px;height:120px;font-size:48px;font-weight:700;">
+                                    {{ user.get_initials }}
+                                </div>
+                            {% endif %}
+                            <h5>{{ user.get_full_name }}</h5>
+                            <p class="text-secondary">{{ user.email }}</p>
+                            <span class="badge bg-primary">{{ user.tema_preferido|title }} Mode</span>
+                        </div>
+                        <div class="col-md-8">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                {{ form|crispy }}
+
+                                <div class="d-grid gap-2 mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-check-circle me-2"></i>Salvar Alteracoes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-graph-up me-2 text-primary"></i>Resumo da Conta
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="stat-card">
+                                <i class="bi bi-ticket-perforated text-primary"></i>
+                                <div class="stat-value">{{ user.jogos.count }}</div>
+                                <div class="stat-label">Jogos Gerados</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-card">
+                                <i class="bi bi-calendar text-success"></i>
+                                <div class="stat-value">{{ user.date_joined|date:"d/m/Y" }}</div>
+                                <div class="stat-label">Membro desde</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-card">
+                                <i class="bi bi-envelope-check text-info"></i>
+                                <div class="stat-value">{% if user.is_active %}Sim{% else %}Nao{% endif %}</div>
+                                <div class="stat-label">Conta Ativa</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

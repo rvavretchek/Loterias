@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Cadastrar Resultado — Loterias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="fas fa-edit" style="color:var(--accent)"></i> Cadastrar Resultado Manual</h1>
+  <p>Use quando a busca automática na API não estiver disponível</p>
+</div>
+
+<div class="card" style="max-width:600px">
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-group">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<p class="form-help">{{ field.help_text }}</p>{% endif %}
+      {% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+    </div>
+    {% endfor %}
+    <div style="display:flex;gap:.75rem;margin-top:1.5rem">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Resultado</button>
+      <a href="{% url 'jogos:resultados' %}" class="btn btn-outline">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

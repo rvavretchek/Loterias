@@ -1,0 +1,29 @@
+{% extends 'base/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Confirmar E-mail - Gerador de Loterias{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card">
+                <div class="card-body p-4 p-md-5 text-center">
+                    <i class="bi bi-envelope-check display-4 text-primary"></i>
+                    <h3 class="mt-3">Confirmar E-mail</h3>
+                    <p class="text-secondary">Clique no botao abaixo para confirmar seu endereco de e-mail.</p>
+
+                    <form method="post" action="{{ request.path }}">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle me-2"></i>Confirmar E-mail
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

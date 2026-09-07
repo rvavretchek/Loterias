@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Link Inválido — Loterias{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card" style="text-align:center">
+    <i class="fas fa-exclamation-circle" style="font-size:3rem;color:var(--danger);margin-bottom:1rem"></i>
+    <h1>Link Inválido</h1>
+    <p style="color:var(--text-secondary);margin-top:1rem">Este link de ativação é inválido ou já foi utilizado.</p>
+    <div style="margin-top:2rem">
+      <a href="{% url 'accounts:registro' %}" class="btn btn-primary">Cadastrar Novamente</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

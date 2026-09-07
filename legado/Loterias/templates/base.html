@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-theme="{% if user.is_authenticated %}{{ user.tema_preferido }}{% else %}light{% endif %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gerador de Loterias — Gere e confira seus jogos de loteria">
+    <title>{% block title %}Gerador de Loterias{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'jogos/css/style.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{% url 'jogos:dashboard' %}" class="navbar-brand">
+                <i class="fas fa-clover brand-icon"></i>
+                <span>Loterias</span>
+            </a>
+
+            <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="navbar-menu" id="navbar-menu">
+                {% if user.is_authenticated %}
+                <a href="{% url 'jogos:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-home"></i> Início
+                </a>
+                <a href="{% url 'jogos:novo_jogo' %}" class="nav-link {% if request.resolver_match.url_name == 'novo_jogo' %}active{% endif %}">
+                    <i class="fas fa-dice"></i> Novo Jogo
+                </a>
+                <a href="{% url 'jogos:historico' %}" class="nav-link {% if request.resolver_match.url_name == 'historico' %}active{% endif %}">
+                    <i class="fas fa-history"></i> Histórico
+                </a>
+                <a href="{% url 'jogos:resultados' %}" class="nav-link {% if request.resolver_match.url_name == 'resultados' or request.resolver_match.url_name == 'cadastrar_resultado' %}active{% endif %}">
+                    <i class="fas fa-trophy"></i> Resultados
+                </a>
+
+                <div class="nav-right">
+                    <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema">
+                        <i class="fas fa-moon theme-icon-dark"></i>
+                        <i class="fas fa-sun theme-icon-light"></i>
+                    </button>
+                    <div class="nav-user-dropdown">
+                        <button class="nav-user-btn" id="user-dropdown-btn">
+                            <i class="fas fa-user-circle"></i>
+                            <span>{{ user.first_name }}</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="dropdown-menu" id="user-dropdown-menu">
+                            <a href="{% url 'accounts:perfil' %}"><i class="fas fa-cog"></i> Perfil</a>
+                            <hr>
+                            <a href="{% url 'accounts:logout' %}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="nav-right">
+                    <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema">
+                        <i class="fas fa-moon theme-icon-dark"></i>
+                        <i class="fas fa-sun theme-icon-light"></i>
+                    </button>
+                    <a href="{% url 'accounts:login' %}" class="nav-link">Entrar</a>
+                    <a href="{% url 'accounts:registro' %}" class="btn btn-primary btn-sm">Cadastrar</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="messages-container">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}" role="alert">
+            <span>{{ message }}</span>
+            <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Modal container -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal-container">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Gerador de Loterias</p>
+        </div>
+    </footer>
+
+    <script src="{% static 'jogos/js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
