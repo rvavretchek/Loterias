@@ -18,8 +18,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Aplicacoes Django
-SHARED_APPS = (
-    'django_sqlite_tenants',
+INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,38 +35,12 @@ SHARED_APPS = (
     'crispy_bootstrap5',
     'django_extensions',
 
-    # Apps locais (compartilhados)
+    # Apps locais
     'apps.accounts',
-)
-
-TENANT_APPS = (
-    'django.contrib.contenttypes',
-    'django.contrib.auth',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-
-    # Apps locais (tenant-specific)
     'apps.loterias_core',
-)
-
-INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
-
-# Configuracao do django-sqlite-tenants
-DATABASE_ROUTERS = (
-    'django_sqlite_tenants.db_routers.TenantRouter',
-)
-
-DJANGO_TENANT_SQLITE = {
-    "TENANT_MODEL": "accounts.Tenant",
-    "DOMAIN_MODEL": "accounts.Domain",
-    "TENANT_ROUTING_MODE": os.getenv('TENANT_ROUTING_MODE', 'DOMAIN'),
-    "TENANT_SUBFOLDER_PREFIX": "r",
-    "TENANT_BASE_DOMAIN": os.getenv('TENANT_BASE_DOMAIN', 'localhost:8000'),
-    "TENANTS_DB_FOLDER": "tenants",
-}
+]
 
 MIDDLEWARE = [
-    "django_sqlite_tenants.middlewares.TenantMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -100,7 +73,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'loterias.wsgi.application'
 
-# Database - Multitenant com SQLite
+# Database - SQLite
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

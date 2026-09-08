@@ -1,55 +1,44 @@
 from django.db import models
+from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
-from django_sqlite_tenants.models import TenantMixin, DomainMixin
 
 
-class Tenant(TenantMixin):
-    """Modelo de tenant para multitenancy com SQLite."""
-    nome = models.CharField(max_length=100, verbose_name='Nome da Organizacao')
-    slug = models.SlugField(unique=True, verbose_name='Identificador')
-    email = models.EmailField(verbose_name='E-mail')
-    ativo = models.BooleanField(default=True, verbose_name='Ativo')
-    criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+class UserManager(BaseUserManager):
+    """Manager para User com e-mail como identificador (sem username)."""
 
-    class Meta:
-        verbose_name = 'Organizacao'
-        verbose_name_plural = 'Organizacoes'
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('O e-mail e obrigatorio.')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
-    def __str__(self):
-        return self.nome
-
-
-class Domain(DomainMixin):
-    """Dominios associados aos tenants."""
-    class Meta:
-        verbose_name = 'Dominio'
-        verbose_name_plural = 'Dominios'
-
-    def __str__(self):
-        return self.domain
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser precisa ter is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser precisa ter is_superuser=True.')
+        return self.create_user(email, password, **extra_fields)
 
 
 class User(AbstractUser):
     """Usuario customizado com suporte a email."""
-    username = models.CharField(max_length=150, unique=True, blank=True, null=True)
+    username = None
     email = models.EmailField(unique=True, verbose_name='E-mail')
-    tenant = models.ForeignKey(
-        Tenant, 
-        on_delete=models.CASCADE, 
-        related_name='usuarios',
-        null=True,
-        blank=True,
-        verbose_name='Organizacao'
-    )
     tema_preferido = models.CharField(
-        max_length=10, 
+        max_length=10,
         choices=[('light', 'Claro'), ('dark', 'Escuro')],
         default='light',
         verbose_name='Tema Preferido'
     )
     avatar = models.ImageField(
-        upload_to='avatars/', 
-        null=True, 
+        upload_to='avatars/',
+        null=True,
         blank=True,
         verbose_name='Avatar'
     )
@@ -58,6 +47,8 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    objects = UserManager()
 
     class Meta:
         verbose_name = 'Usuario'

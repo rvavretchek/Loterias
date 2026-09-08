@@ -5,7 +5,6 @@ Sistema web moderno para geracao de apostas de loterias brasileiras, desenvolvid
 ## ✨ Funcionalidades
 
 - **Geracao Inteligente**: Algoritmo que respeita regras de sequencia e evita repeticoes
-- **Multitenancy**: Cada organizacao/tenant tem seu proprio banco de dados SQLite isolado
 - **Autenticacao por E-mail**: Cadastro e login via e-mail com verificacao (django-allauth)
 - **Temas Diurno/Noturno**: Interface moderna com alternancia entre tema claro e escuro
 - **Historico Completo**: Mantem registro de todos os jogos gerados
@@ -15,7 +14,6 @@ Sistema web moderno para geracao de apostas de loterias brasileiras, desenvolvid
 ## 🚀 Tecnologias
 
 - **Django 5.0.6**
-- **django-sqlite-tenants** (Multitenancy com SQLite)
 - **django-allauth** (Autenticacao)
 - **Bootstrap 5** + **Crispy Forms**
 - **SQLite3**
@@ -25,7 +23,7 @@ Sistema web moderno para geracao de apostas de loterias brasileiras, desenvolvid
 ```
 loterias_django/
 ├── apps/
-│   ├── accounts/          # Usuarios, Tenants, Dominios
+│   ├── accounts/          # Usuarios
 │   └── loterias_core/     # Jogos, Estatisticas, Utils
 ├── loterias/              # Configuracoes Django
 ├── templates/             # Templates HTML
@@ -88,31 +86,6 @@ python manage.py runserver
 
 Acesse: http://localhost:8000
 
-## 🏢 Multitenancy
-
-O projeto utiliza **django-sqlite-tenants** para multitenancy. Cada tenant tem seu proprio banco SQLite isolado.
-
-### Criar um Tenant
-
-```bash
-python manage.py create_tenant meu-tenant --name "Minha Organizacao" --domain "meu-tenant.local"
-```
-
-### Acessar um Tenant
-
-- **Modo Subfolder**: http://localhost:8000/r/meu-tenant/
-- **Modo Domain**: http://meu-tenant.localhost:8000
-
-### Migrar Tenants
-
-```bash
-# Migrar todos os tenants
-python manage.py migrate_tenant
-
-# Migrar tenant especifico
-python manage.py migrate_tenant --tenant meu-tenant
-```
-
 ## 📧 Configuracao de E-mail
 
 Para envio de e-mails reais, configure no `.env`:
@@ -138,12 +111,6 @@ O sistema possui tema claro e escuro. O usuario pode alternar clicando no icone 
 ```bash
 # Shell Django
 python manage.py shell
-
-# Criar tenant
-python manage.py create_tenant <slug> --name "Nome" --domain "dominio.com"
-
-# Migrar tenants
-python manage.py migrate_tenant
 
 # Coletar arquivos estaticos
 python manage.py collectstatic

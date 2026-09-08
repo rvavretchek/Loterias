@@ -23,7 +23,6 @@ services:
       DEFAULT_FROM_EMAIL: ${BREVO_FROM_EMAIL}
     volumes:
       - loterias_data:/app/data
-      - loterias_tenants:/app/tenants
       - loterias_media:/app/media
     networks:
       - lab-network
@@ -31,8 +30,6 @@ services:
 volumes:
   loterias_data:
     name: loterias_data
-  loterias_tenants:
-    name: loterias_tenants
   loterias_media:
     name: loterias_media
 
