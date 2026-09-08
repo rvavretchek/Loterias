@@ -1,18 +1,18 @@
 from django.contrib import admin
-from .models import JogoGerado, EstatisticaJogo
+from .models import GeneratedBet, GameStatistics
 
 
-@admin.register(JogoGerado)
-class JogoGeradoAdmin(admin.ModelAdmin):
-    list_display = ('jogo', 'concurso', 'usuario', 'pares_sequenciais', 'criado_em')
-    list_filter = ('jogo', 'criado_em', 'pares_sequenciais')
-    search_fields = ('concurso', 'usuario__email', 'usuario__first_name')
-    date_hierarchy = 'criado_em'
-    readonly_fields = ('pares_sequenciais', 'criado_em', 'atualizado_em')
+@admin.register(GeneratedBet)
+class GeneratedBetAdmin(admin.ModelAdmin):
+    list_display = ('game', 'contest', 'user', 'sequential_pairs', 'created_at')
+    list_filter = ('game', 'created_at', 'sequential_pairs')
+    search_fields = ('contest', 'user__email', 'user__first_name')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('sequential_pairs', 'created_at', 'updated_at')
 
 
-@admin.register(EstatisticaJogo)
-class EstatisticaJogoAdmin(admin.ModelAdmin):
-    list_display = ('jogo', 'usuario', 'total_jogos', 'ultima_atualizacao')
-    list_filter = ('jogo', 'ultima_atualizacao')
-    search_fields = ('usuario__email',)
+@admin.register(GameStatistics)
+class GameStatisticsAdmin(admin.ModelAdmin):
+    list_display = ('game', 'user', 'total_bets', 'last_updated')
+    list_filter = ('game', 'last_updated')
+    search_fields = ('user__email',)

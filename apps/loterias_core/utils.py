@@ -128,25 +128,27 @@ def calculate_statistics(user, game_name):
 
     most_frequent = sorted(frequency.items(), key=lambda x: x[1], reverse=True)[:10]
 
+    sequence_percentage = (with_sequence / total * 100) if total > 0 else 0
     return {
         'total': total,
-        'com_sequencia': with_sequence,
-        'sem_sequencia': total - with_sequence,
-        'mais_frequentes': most_frequent,
-        'percentual_sequencia': (with_sequence / total * 100) if total > 0 else 0
+        'with_sequence': with_sequence,
+        'without_sequence': total - with_sequence,
+        'most_frequent': most_frequent,
+        'sequence_percentage': sequence_percentage,
+        'without_sequence_percentage': 100 - sequence_percentage,
     }
 
 
 def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=None):
     """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e status."""
     if official_result is None:
-        return {'ganhou': False, 'acertos': 0, 'valor': 'R$ 0,00', 'categoria': 'Sem resultado'}
+        return {'won': False, 'hits': 0, 'value': 'R$ 0,00', 'category': 'Sem resultado'}
 
     user_numbers = set(normalize_numbers(user_numbers))
-    result_numbers = set(normalize_numbers(official_result.get('numeros', [])))
+    result_numbers = set(normalize_numbers(official_result.get('numbers', [])))
     hits = len(user_numbers & result_numbers)
 
-    prizes = official_result.get('premiacoes', {})
+    prizes = official_result.get('prizes', {})
     prize_key = None
     amount = Decimal('0')
 
@@ -165,7 +167,7 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
 
     if prize_key and isinstance(prizes, dict):
         prize_info = prizes.get(prize_key, {})
-        raw_amount = prize_info.get('valor', 'R$ 0,00')
+        raw_amount = prize_info.get('value', 'R$ 0,00')
         raw_amount = str(raw_amount).replace('R$', '').replace('.', '').replace(',', '.')
         try:
             amount = Decimal(raw_amount.strip())
@@ -174,11 +176,11 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
 
     won = bool(prize_key and hits > 0 and amount > 0)
     return {
-        'ganhou': won,
-        'acertos': hits,
-        'valor': f'R$ {amount:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-        'categoria': prize_key or 'Sem premio',
-        'resultado': official_result,
+        'won': won,
+        'hits': hits,
+        'value': f'R$ {amount:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+        'category': prize_key or 'Sem premio',
+        'result': official_result,
     }
 
 
@@ -227,11 +229,11 @@ def fetch_cef_result(game, contest):
         return None
 
     return {
-        'jogo': game,
-        'concurso': contest,
-        'numeros': numbers,
-        'trevos': [],
-        'premiacoes': {'sena': {'valor': 'R$ 0,00'}}
+        'game': game,
+        'contest': contest,
+        'numbers': numbers,
+        'clovers': [],
+        'prizes': {'sena': {'value': 'R$ 0,00'}}
     }
 
 
@@ -249,9 +251,9 @@ def check_user_results(user=None):
             continue
         prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
         bet.result_checked = True
-        bet.hits = prize['acertos']
-        bet.prize = Decimal(str(prize['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        bet.prize_description = prize['categoria']
+        bet.hits = prize['hits']
+        bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
+        bet.prize_description = prize['category']
         bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
 
     return True

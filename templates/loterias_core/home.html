@@ -64,7 +64,7 @@
                     <span>Gerar Novo Jogo</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{% url 'gerar_jogo' %}">
+                    <form method="post" action="{% url 'create_bet' %}">
                         {% csrf_token %}
 
                         <div class="row g-3 mb-4">
@@ -74,11 +74,11 @@
                                     <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
                                     <div class="text-center">
                                         <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
-                                        <h5 class="mb-1">{{ config.nome }}</h5>
+                                        <h5 class="mb-1">{{ config.name }}</h5>
                                         <small class="text-secondary">
-                                            {{ config.apostas }} de {{ config.numeros }}
-                                            {% if config.trevos > 0 %}
-                                            <br>+ {{ config.trevos }} trevos
+                                            {{ config.bets_count }} de {{ config.numbers_count }}
+                                            {% if config.clovers > 0 %}
+                                            <br>+ {{ config.clovers }} trevos
                                             {% endif %}
                                         </small>
                                     </div>
@@ -116,14 +116,14 @@
                     <span>Guardar Jogo Manual</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{% url 'salvar_jogo_manual' %}">
+                    <form method="post" action="{% url 'save_manual_bet' %}">
                         {% csrf_token %}
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Jogo</label>
                                 <select name="jogo" class="form-select" required>
                                     {% for key, config in jogos_disponiveis.items %}
-                                    <option value="{{ key }}">{{ config.nome }}</option>
+                                    <option value="{{ key }}">{{ config.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -152,7 +152,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-clock-history me-2 text-primary"></i>Ultimos Jogos</span>
-                    <a href="{% url 'historico' %}" class="btn btn-sm btn-outline-primary">
+                    <a href="{% url 'history' %}" class="btn btn-sm btn-outline-primary">
                         Ver Todos <i class="bi bi-arrow-right ms-1"></i>
                     </a>
                 </div>
@@ -173,26 +173,26 @@
                                 {% for jogo in ultimos_jogos %}
                                 <tr>
                                     <td>
-                                        <span class="badge bg-primary">{{ jogo.jogo }}</span>
+                                        <span class="badge bg-primary">{{ jogo.game }}</span>
                                     </td>
-                                    <td>{{ jogo.concurso }}</td>
+                                    <td>{{ jogo.contest }}</td>
                                     <td>
-                                        {% for num in jogo.numeros %}
+                                        {% for num in jogo.numbers %}
                                         <span class="numero-bola">{{ num|stringformat:"02d" }}</span>
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        {% if jogo.trevos %}
-                                            {% for trevo in jogo.trevos %}
+                                        {% if jogo.clovers %}
+                                            {% for trevo in jogo.clovers %}
                                             <span class="trevo-bola">{{ trevo|stringformat:"02d" }}</span>
                                             {% endfor %}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ jogo.criado_em|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ jogo.created_at|date:"d/m/Y H:i" }}</td>
                                     <td>
-                                        <a href="{% url 'detalhes_jogo' jogo.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <a href="{% url 'bet_detail' jogo.pk %}" class="btn btn-sm btn-outline-primary">
                                             <i class="bi bi-eye"></i>
                                         </a>
                                     </td>
@@ -249,12 +249,12 @@
                     <div class="card text-center p-3 h-100">
                         <div class="card-body">
                             <i class="bi bi-dice-5 fs-1 text-primary mb-2"></i>
-                            <h5 class="card-title">{{ config.nome }}</h5>
+                            <h5 class="card-title">{{ config.name }}</h5>
                             <p class="card-text text-secondary">
-                                <strong>{{ config.apostas }}</strong> numeros<br>
-                                de <strong>{{ config.numeros }}</strong> possiveis
-                                {% if config.trevos > 0 %}
-                                <br>+<strong>{{ config.trevos }}</strong> trevos
+                                <strong>{{ config.bets_count }}</strong> numeros<br>
+                                de <strong>{{ config.numbers_count }}</strong> possiveis
+                                {% if config.clovers > 0 %}
+                                <br>+<strong>{{ config.clovers }}</strong> trevos
                                 {% endif %}
                             </p>
                         </div>

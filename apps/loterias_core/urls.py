@@ -3,13 +3,13 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
-    path('gerar/', views.gerar_jogo, name='gerar_jogo'),
-    path('jogo/manual/', views.salvar_jogo_manual, name='salvar_jogo_manual'),
-    path('jogo/<int:pk>/', views.detalhes_jogo, name='detalhes_jogo'),
-    path('jogo/<int:pk>/refazer/', views.refazer_jogo, name='refazer_jogo'),
-    path('jogo/<int:pk>/excluir/', views.excluir_jogo, name='excluir_jogo'),
-    path('jogo/<int:pk>/verificar/', views.verificar_resultado_jogo, name='verificar_resultado_jogo'),
-    path('historico/', views.historico, name='historico'),
-    path('estatisticas/', views.estatisticas, name='estatisticas'),
-    path('api/gerar/', views.api_gerar_jogo, name='api_gerar_jogo'),
+    path('gerar/', views.create_bet_view, name='create_bet'),
+    path('jogo/manual/', views.save_manual_bet_view, name='save_manual_bet'),
+    path('jogo/<int:pk>/', views.bet_detail_view, name='bet_detail'),
+    path('jogo/<int:pk>/refazer/', views.regenerate_bet_view, name='regenerate_bet'),
+    path('jogo/<int:pk>/excluir/', views.delete_bet_view, name='delete_bet'),
+    path('jogo/<int:pk>/verificar/', views.check_bet_result_view, name='check_bet_result'),
+    path('historico/', views.history_view, name='history'),
+    path('estatisticas/', views.statistics_view, name='statistics'),
+    path('api/gerar/', views.api_create_bet_view, name='api_create_bet'),
 ]
