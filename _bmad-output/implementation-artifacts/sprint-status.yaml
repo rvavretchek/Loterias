@@ -35,7 +35,7 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 development_status:
-  epic-1: in-progress
+  epic-1: done
   1-1-renomear-models-e-constantes-de-loterias_core-para-inglês: review
   1-2-renomear-funções-de-domínio-em-utils-py: review
   1-3-renomear-views-admin-py-e-atualizar-urls-py-templates: review
