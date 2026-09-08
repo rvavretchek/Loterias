@@ -68,6 +68,8 @@ Esta é a última story do Epic 1 (5 de 5). Com ela concluída, as 5 stories est
 
 Suíte final: 77 testes no projeto inteiro (era 74 após a Story 1.4) -- 100% passando. `manage.py check` sem erro novo (só o warning pré-existente de `staticfiles.W004`).
 
+**Addendum (mesmo dia, pós-commit desta story):** varredura final de fechamento do Epic 1 achou 4 variáveis locais/instância em português remanescentes nos testes (`self.usuario`, `estatisticas`, 2x `outro_usuario`) e todos os nomes de método `def test_...` ainda em português (55 em `loterias_core/tests.py`, 4 em `accounts/tests.py`). Perguntado explicitamente, o Boss decidiu que nome de método de teste conta como identificador de código pra fins da regra de zero exceção, mesmo não tendo sido citado em nenhum Code Map das Stories 1.1-1.5. Corrigido em commit separado (`fc5681a`), suíte re-confirmada 100% passando (77 testes).
+
 ## Log de Triagem da Revisão
 
 Story de baixo risco e escopo pequeno (rename de 2 campos + 6 arquivos consumidores diretos, já mapeados por completo antes da implementação via grep no projeto inteiro). Revisão em 3 camadas não foi acionada -- verificação direta (grep de zero ocorrência + suíte 100% passando + `manage.py check` limpo) foi suficiente pra confirmar completude. Nenhum patch ou item adiado.
