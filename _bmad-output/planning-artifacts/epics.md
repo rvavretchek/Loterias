@@ -169,7 +169,18 @@ Para que a renomeação não vire uma regressão silenciosa nem um risco de perd
 **E** antes do deploy real, a migration é rodada contra uma **cópia do `db.sqlite3` de produção** (não só o banco de teste vazio do Django) — contagem de linhas antes/depois confere e uma amostra de registros é conferida manualmente
 **E** as 4 stories deste épico são mergeadas como um único PR/commit (AD-2) — não incrementalmente
 
-## Epic 2: Verificação e Notificação Diária de Resultados
+### Story 1.5: Renomear campos remanescentes em português no model User
+
+Como desenvolvedor do Loterias,
+Eu quero renomear `User.tema_preferido` e `User.telefone` (`apps/accounts`) pros nomes em inglês,
+Para que a convenção de nomenclatura fique completa — a PRD original afirmava que `apps/accounts` já seguia a convenção, mas esses 2 campos escaparam da varredura e só foram achados durante a implementação do Epic 1.
+
+**Critérios de Aceite:**
+
+**Dado** `User.tema_preferido` e `User.telefone`
+**Quando** renomeados pra `preferred_theme` e `phone` (migration `RenameField`/`RenameModel` como as demais, ou banco recriado — mesma regra de dev descartável da Story 1.1)
+**Então** `apps/accounts/admin.py`, `forms.py`, `views.py`, `apps/loterias_core/context_processors.py` e o template `accounts/profile.html` são atualizados juntos — nenhuma referência aos nomes antigos sobra em código
+**E** `verbose_name`/`choices`/labels em português (`'Tema Preferido'`, `'Telefone'`, `'Claro'`/`'Escuro'`) continuam inalterados — só os identificadores de código mudam
 
 O jogador sabe se ganhou sem precisar lembrar de checar manualmente — o sistema vigia os resultados oficiais da Caixa sozinho e avisa ao logar, diferenciando acerto premiado de não premiado. Depende do Epic 1 concluído.
 

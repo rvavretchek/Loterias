@@ -1,77 +1,77 @@
-# Review: ARCHITECTURE-SPINE.md (Loterias, 2026-09-08)
+# Revisão: ARCHITECTURE-SPINE.md (Loterias, 2026-09-08)
 
-**Reviewer:** rubric-walker (good-spine checklist)
-**Target:** `_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md`
-**Driving spec:** `_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md` (FR-1..FR-14, §3.1 rename)
-**Also checked against:** `CLAUDE.md`, `docs/diagnostico-projeto.md`, and the actual code (`apps/loterias_core/models.py`, `utils.py`, `views.py`, `apps/accounts/{models,forms,adapter,views,urls}.py`, `loterias/settings/base.py`, `Dockerfile`, `deploy/lab/docker-compose.yml`, `requirements.txt`).
+**Revisor:** rubric-walker (checklist de espinha dorsal boa)
+**Alvo:** `_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md`
+**Spec condutora:** `_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md` (FR-1..FR-14, rename §3.1)
+**Também checado contra:** `CLAUDE.md`, `docs/diagnostico-projeto.md`, e o código real (`apps/loterias_core/models.py`, `utils.py`, `views.py`, `apps/accounts/{models,forms,adapter,views,urls}.py`, `loterias/settings/base.py`, `Dockerfile`, `deploy/lab/docker-compose.yml`, `requirements.txt`).
 
-## Verdict
+## Veredito
 
-**Not ready as-is.** The spine is well-formed and mostly ratifies the brownfield code correctly (naming/rename mapping, current write-paths for `ResultadoLoteria`, current Dockerfile/compose shape are all described accurately), and the cron/notification half (FR-1–FR-9) is architected with real, checkable rules (AD-5/6/7). But it has two areas where a Rule is either unenforceable as written or entirely absent for the PRD's most novel/risky capability, plus one un-modeled data need and one environmental gap. These are exactly the kind of divergence points a spine review exists to catch — recommend a revision pass before this is used to drive epics/stories.
-
----
-
-## Findings
-
-### 1. [HIGH] AD-7's sidecar rule doesn't actually run `cron` — it reuses an image that has no cron binary
-
-AD-7's own diagnosis is correct: "a imagem atual (`python:3.12-slim`) não tem daemon de cron instalado." Verified against `Dockerfile`: it does `pip install -r requirements.txt` and nothing else — zero `apt-get`/system package steps, so there is no `cron` executable in the image today.
-
-But AD-7's *Rule* says the new `loterias-cron` service uses "mesma imagem/Dockerfile do `loterias-web`" with `CMD` changed to `manage.py crontab add && cron -f`. If the Dockerfile is genuinely unchanged, `cron -f` has nothing to exec — the sidecar container will crash-loop or no-op, and (per AD-7's own stated purpose) "a rotina simplesmente nunca dispara em produção," which is precisely the failure mode the AD claims to prevent.
-
-This fails the checklist item "Every AD's Rule is enforceable and actually prevents its stated divergence" — it's enforceable (a builder can absolutely stand up a second compose service with that CMD) but it does not prevent the divergence/failure it names, because the missing ingredient (`apt-get install -y cron`, or a separate `Dockerfile.cron` / build stage) is never stated as part of the rule.
-
-**Fix:** AD-7's Rule needs an explicit line that the Dockerfile (or a cron-specific variant/stage) installs the `cron` package, otherwise two builders will hit this in two different ways (one patches the shared Dockerfile, one forks a second Dockerfile, one discovers it in prod).
-
-### 2. [HIGH] FR-10–FR-13 (passwordless-first signup) has no architecture — dismissed as "just extend the existing form," but the existing form and settings do the opposite of what's needed
-
-The Capability Map row for FR-10–FR-13 says: *"apps/accounts (views/forms existentes, estendidas) | convenção já fixada em CLAUDE.md (estender `CustomSignupForm`/`CustomAccountAdapter`)."* That treats this as routine, already-covered ground.
-
-Checked against the actual code and settings, and this is not routine:
-
-- `loterias/settings/base.py`: `ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']` — password is required at signup **today**. FR-10 requires the signup screen to ask for **only** email.
-- `ACCOUNT_CONFIRM_EMAIL_ON_GET = True` + `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` — today, clicking the confirmation link confirms and **logs the user in immediately**. FR-12 requires the link to land on a password-creation screen instead, and FR-10 requires "conta pendente não permite login antes da senha ser definida" — i.e., login must be blocked until a step that, in the current settings, is skipped entirely (password already exists) and gated by a flag (auto-login) that must not fire yet.
-- `apps/accounts/forms.py` `CustomSignupForm` currently requires `first_name`/`last_name` at signup and inherits allauth's password fields — none of that matches "e-mail only" (FR-10) or "name/surname only at first login" (FR-14).
-- `apps/accounts/models.py` has no notion of a "pending" account (no usable-password flag, no state field) that a builder could use to gate login.
-
-This is not a narrow gap — it's the single most novel mechanism in the whole PRD (deliberately inverting allauth's built-in signup/confirm/login sequence), yet it gets zero AD, no decision on which adapter/view hooks change, no decision on how "pending, no password yet" is represented, and no reconciliation with the `ACCOUNT_*` settings that currently contradict it.
-
-Tellingly, the spine's own cited source, `docs/diagnostico-projeto.md` §5.3, already flagged this explicitly: *"precisa de uma view de 'definir senha' customizada acionada pelo link de confirmação, e um passo obrigatório de completar perfil no primeiro acesso autenticado."* The spine cites this document as a source but doesn't carry its own diagnosis forward into an AD — it regresses to treating the work as a template-level `forms.py` edit.
-
-**Risk if unaddressed:** two builders will independently invent incompatible solutions — e.g. one adds a `has_usable_password()` check + custom `ACCOUNT_ADAPTER.login()` override, another adds a new boolean field to `User`, a third builds a bespoke non-allauth view outside `SignupView` entirely — each with different implications for `EmailConfirmationHMAC` reuse (FR-11/13 depend on the same token mechanism), for the `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION` setting, and for whether `CustomSignupForm` still exists as today's class or is replaced.
-
-### 3. [MEDIUM-HIGH] AD-6's exact cron times assume a timezone the container isn't shown to have
-
-AD-6 pins the retry schedule to three concrete wall-clock times: 3h00, 3h15, 3h30 "horário de Brasília." `django-crontab`'s `CRONJOBS` writes ordinary crontab lines, which the OS `cron` daemon interprets in the **container's system time**, not Django's `TIME_ZONE` setting (`America/Sao_Paulo`, confirmed in `loterias/settings/base.py`) — `TIME_ZONE`/`USE_TZ` only affect how Django itself renders/stores datetimes, not what wall-clock cron fires on.
-
-Neither the `Dockerfile` nor `deploy/lab/docker-compose.yml` sets `TZ` or installs `tzdata`. Docker's `python:3.12-slim` defaults to UTC. As specified, "3h00" in the container's crontab is 3h00 UTC = 00h00 Brasília — a 3-hour drift that could run the routine *before* the nightly Caixa draws finish, directly undermining the stated rationale in FR-1 ("janela segura após os sorteios noturnos da Caixa terminarem") and AD-6 itself.
-
-**Fix:** AD-7 (or AD-6) needs an explicit line: set `TZ=America/Sao_Paulo` (and install `tzdata`) in the cron container/image, or express the `CRONJOBS` entries with that constraint made explicit, so a builder doesn't ship a routine that silently fires at the wrong time.
-
-### 4. [MEDIUM] FR-8's "tabela de valores de premiação vigentes" is a new data need that's never modeled anywhere in the spine
-
-FR-8 states `update_monthly_prize_values` "atualiza a tabela de valores de premiação vigentes usada por `calculate_bet_prize`." That's a persistent structure distinct from anything in the current schema — today, `calcular_premiacao_jogo`/`calculate_bet_prize` reads prize values embedded in the specific `resultado_oficial`/`LotteryResult.premiacoes` for that draw (confirmed in `apps/loterias_core/utils.py`), not from any separate "current tier values" table.
-
-The spine's Models list (Design Paradigm + Structural Seed) only adds `HitNotification` and `NotificationPreference` (AD-3). Nowhere is a model, field, or even a settings constant named for the "tabela vigente" FR-8 needs. This also sits in tension with the FR-9 NFR the spine itself echoes in Consistency Conventions — that a displayed prize must always trace to a concrete `LotteryResult.prizes` and never be estimated — without the spine resolving whether FR-8's "current" table is a fallback/estimate source (which the NFR forbids using for display) or something else entirely.
-
-This is a real capability (FR-8, explicitly bound in the frontmatter and mapped in the Capability table) with no architecture behind its data, which is exactly the kind of gap that lets two builders pick incompatible schemas (a new model vs. a field bolted onto `LotteryResult` vs. a settings/constants dict).
-
-### 5. [LOW] Stack table materially understates how stale `django-crontab` is
-
-The version pin itself checks out: PyPI's `django-crontab` latest release is indeed `0.7.1` — this is genuinely the current/only available version, not a hallucinated one. But the risk note ("não recebe release há mais de 12 meses") is a significant understatement: `0.7.1` shipped **March 2016** — over a decade unmaintained, not "12+ months." The "risco baixo" conclusion may still be right (it's a small package that only shells out to `python-crontab`), but the evidence quoted to support it undersells the actual staleness, which matters for a portfolio document meant to demonstrate the PM's diagnostic rigor (per PRD §2.1's "Jobs To Be Done" bullet about the project demonstrating that rigor).
-
-### 6. [LOW] Two smaller gaps, noted for completeness
-
-- **FR-2's capability-map row** ("bloqueio de concurso já sorteado") glosses over that it's a behavior change to code that already ships: today `gerar_jogo`/`salvar_jogo_manual` only *warn* (not block) on a duplicate `jogo`+`concurso` for the *same user* (see `apps/loterias_core/views.py` lines ~60–61 and ~192–193); FR-2 requires a hard block keyed on whether *any* `LotteryResult` exists for that `jogo`+`concurso`, which is a different check entirely. Not an architecture-breaking omission (it's confined to two view functions), but a one-line Consistency Convention entry would remove ambiguity about "block, don't warn" and "check `LotteryResult`, not sibling `GeneratedBet` rows."
-- **No restart policy stated for `loterias-cron`.** The existing `loterias-web` service has `restart: unless-stopped`; AD-7's rule for the new sidecar doesn't say whether it inherits the same policy. If the cron container dies silently, FR-1/FR-8 simply stop running with no operational signal — a small operational-envelope gap worth one line in AD-7.
+**Não está pronta como está.** A espinha dorsal é bem formada e na maior parte ratifica corretamente o código legado (mapeamento de nomenclatura/rename, caminhos de escrita atuais de `ResultadoLoteria`, formato atual do Dockerfile/compose são todos descritos com precisão), e a metade de cron/notificação (FR-1–FR-9) está arquitetada com regras reais e verificáveis (AD-5/6/7). Mas ela tem duas áreas onde uma Regra é inexequível como está escrita ou totalmente ausente pra capacidade mais nova/arriscada do PRD, mais uma necessidade de dado não modelada e uma lacuna de ambiente. Esses são exatamente o tipo de ponto de divergência que uma revisão de espinha dorsal existe pra capturar — recomendo uma passada de revisão antes de usar isso pra conduzir epics/stories.
 
 ---
 
-## What the spine gets right (for balance)
+## Achados
 
-- Paradigm (Shared-Database integration between web and cron processes, never in-process calls) is a genuinely useful invariant and is enforced consistently through AD-5/6/7.
-- AD-1/AD-2 (rename convention + rename-epic-first sequencing, using `RenameModel`/`RenameField` with a pre-migration backup step) directly and correctly answers PRD Open Question §8.4.
-- The rename mapping table cross-checked cleanly against the actual `apps/loterias_core/models.py`/`utils.py`/`views.py` symbol names — no stale or invented legacy names found.
-- AD-3/AD-4's "no second source of truth" rule (cache fields on `GeneratedBet` stay authoritative, `HitNotification` never substitutes them) is a real, enforceable rule that would catch a common bug class.
-- The Consistency Conventions table correctly reuses django-allauth's existing `EmailConfirmation` history for FR-11's cooldown/rate-limit instead of inventing a new model — good minimalism, and it's an accurate read of what allauth already tracks.
-- `requirements.txt`/`Dockerfile`/`docker-compose.yml` claims about current state (celery/redis present but unused, no cron service today, single `gunicorn` process, no `django-crontab` in requirements) all checked out exactly as described.
+### 1. [ALTO] A regra de sidecar da AD-7 na verdade não roda o `cron` — reutiliza uma imagem que não tem o binário do cron
+
+O próprio diagnóstico da AD-7 está correto: "a imagem atual (`python:3.12-slim`) não tem daemon de cron instalado." Verificado contra o `Dockerfile`: ele faz `pip install -r requirements.txt` e nada mais — zero passos de `apt-get`/pacote de sistema, então não há executável `cron` na imagem hoje.
+
+Mas a *Regra* da AD-7 diz que o novo serviço `loterias-cron` usa "mesma imagem/Dockerfile do `loterias-web`" com o `CMD` mudado pra `manage.py crontab add && cron -f`. Se o Dockerfile de fato permanecer inalterado, `cron -f` não tem nada pra executar — o container sidecar vai entrar em crash-loop ou não fazer nada, e (pelo próprio propósito declarado da AD-7) "a rotina simplesmente nunca dispara em produção," que é precisamente o modo de falha que a AD afirma prevenir.
+
+Isso falha no item de checklist "toda Regra de AD é exequível e de fato previne a divergência declarada" — é exequível (um builder consegue perfeitamente levantar um segundo serviço de compose com esse CMD) mas não previne a divergência/falha que ela nomeia, porque o ingrediente ausente (`apt-get install -y cron`, ou um `Dockerfile.cron`/estágio de build separado) nunca é declarado como parte da regra.
+
+**Correção:** a Regra da AD-7 precisa de uma linha explícita de que o Dockerfile (ou uma variante/estágio específico do cron) instala o pacote `cron`, senão dois builders vão bater nisso de dois jeitos diferentes (um corrige o Dockerfile compartilhado, outro cria um segundo Dockerfile em fork, um descobre em produção).
+
+### 2. [ALTO] FR-10–FR-13 (cadastro sem senha primeiro) não tem arquitetura — descartado como "só estender o formulário existente," mas o formulário e as configurações existentes fazem o oposto do que é preciso
+
+A linha do Mapa de Capacidades pra FR-10–FR-13 diz: *"apps/accounts (views/forms existentes, estendidas) | convenção já fixada em CLAUDE.md (estender `CustomSignupForm`/`CustomAccountAdapter`)."* Isso trata como terreno rotineiro, já coberto.
+
+Checado contra o código e as configurações reais, isso não é rotineiro:
+
+- `loterias/settings/base.py`: `ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']` — senha é obrigatória no cadastro **hoje**. O FR-10 exige que a tela de cadastro peça **só** e-mail.
+- `ACCOUNT_CONFIRM_EMAIL_ON_GET = True` + `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` — hoje, clicar no link de confirmação confirma e **loga o usuário imediatamente**. O FR-12 exige que o link caia numa tela de criação de senha em vez disso, e o FR-10 exige que "conta pendente não permite login antes da senha ser definida" — ou seja, o login precisa ser bloqueado até um passo que, nas configurações atuais, é pulado por completo (a senha já existe) e controlado por uma flag (auto-login) que ainda não deve disparar.
+- O `CustomSignupForm` de `apps/accounts/forms.py` hoje exige `first_name`/`last_name` no cadastro e herda os campos de senha do allauth — nada disso bate com "só e-mail" (FR-10) ou "nome/sobrenome só no primeiro login" (FR-14).
+- `apps/accounts/models.py` não tem nenhuma noção de conta "pendente" (nenhuma flag de senha utilizável, nenhum campo de estado) que um builder pudesse usar pra bloquear o login.
+
+Isso não é uma lacuna estreita — é o mecanismo mais novo de todo o PRD (inverter deliberadamente a sequência nativa do allauth de cadastro/confirmação/login), e mesmo assim não recebe nenhuma AD, nenhuma decisão sobre qual hook de adapter/view muda, nenhuma decisão sobre como "pendente, ainda sem senha" é representado, e nenhuma reconciliação com as configurações `ACCOUNT_*` que atualmente a contradizem.
+
+Revelador: a própria fonte citada pela espinha dorsal, `docs/diagnostico-projeto.md` §5.3, já sinalizava isso explicitamente: *"precisa de uma view de 'definir senha' customizada acionada pelo link de confirmação, e um passo obrigatório de completar perfil no primeiro acesso autenticado."* A espinha dorsal cita esse documento como fonte mas não carrega o próprio diagnóstico dele adiante numa AD — ela regride a tratar o trabalho como uma edição de `forms.py` no nível de template.
+
+**Risco se não for endereçado:** dois builders vão inventar independentemente soluções incompatíveis — ex.: um adiciona uma checagem `has_usable_password()` + um override customizado de `ACCOUNT_ADAPTER.login()`, outro adiciona um novo campo booleano em `User`, um terceiro constrói uma view sob medida totalmente fora do `SignupView` do allauth — cada um com implicações diferentes pro reaproveitamento de `EmailConfirmationHMAC` (FR-11/13 dependem do mesmo mecanismo de token), pra configuração `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION`, e pra saber se o `CustomSignupForm` continua existindo como a classe de hoje ou é substituído.
+
+### 3. [MÉDIO-ALTO] Os horários exatos de cron da AD-6 assumem um timezone que o container não tem demonstrado ter
+
+A AD-6 fixa a agenda de retentativa em três horários concretos de relógio: 3h00, 3h15, 3h30 "horário de Brasília." O `CRONJOBS` do `django-crontab` escreve linhas de crontab comuns, que o daemon `cron` do sistema operacional interpreta no **horário de sistema do container**, não na configuração `TIME_ZONE` do Django (`America/Sao_Paulo`, confirmado em `loterias/settings/base.py`) — `TIME_ZONE`/`USE_TZ` só afetam como o próprio Django renderiza/armazena datetimes, não em que horário de relógio o cron dispara.
+
+Nem o `Dockerfile` nem o `deploy/lab/docker-compose.yml` define `TZ` ou instala `tzdata`. O `python:3.12-slim` do Docker usa UTC por padrão. Como especificado, "3h00" no crontab do container é 3h00 UTC = 00h00 Brasília — uma deriva de 3 horas que poderia rodar a rotina *antes* dos sorteios noturnos da Caixa terminarem, minando diretamente a justificativa declarada no FR-1 ("janela segura após os sorteios noturnos da Caixa terminarem") e a própria AD-6.
+
+**Correção:** a AD-7 (ou a AD-6) precisa de uma linha explícita: definir `TZ=America/Sao_Paulo` (e instalar `tzdata`) no container/imagem do cron, ou expressar as entradas de `CRONJOBS` com essa restrição explicitada, pra que um builder não entregue uma rotina que dispara silenciosamente no horário errado.
+
+### 4. [MÉDIO] A "tabela de valores de premiação vigentes" do FR-8 é uma necessidade de dado nova que nunca é modelada em nenhum lugar da espinha dorsal
+
+O FR-8 declara que `update_monthly_prize_values` "atualiza a tabela de valores de premiação vigentes usada por `calculate_bet_prize`." Essa é uma estrutura persistente distinta de qualquer coisa no schema atual — hoje, `calcular_premiacao_jogo`/`calculate_bet_prize` lê valores de premiação embutidos no `resultado_oficial`/`LotteryResult.premiacoes` específico daquele sorteio (confirmado em `apps/loterias_core/utils.py`), não de nenhuma tabela separada de "valores vigentes da faixa."
+
+A lista de Models da espinha dorsal (Paradigma de Design + Semente Estrutural) só adiciona `HitNotification` e `NotificationPreference` (AD-3). Em nenhum lugar existe um model, campo, ou mesmo uma constante de configuração nomeada pra "tabela vigente" que o FR-8 precisa. Isso também fica em tensão com o RNF do FR-9 que a própria espinha dorsal ecoa nas Convenções de Consistência — que um prêmio exibido precisa sempre remontar a um `LotteryResult.prizes` concreto e nunca ser estimado — sem a espinha dorsal resolver se a tabela "vigente" do FR-8 é uma fonte de fallback/estimativa (que o RNF proíbe usar pra exibição) ou algo completamente diferente.
+
+Essa é uma capacidade real (FR-8, explicitamente vinculada no frontmatter e mapeada na tabela de Capacidades) sem nenhuma arquitetura por trás do seu dado, que é exatamente o tipo de lacuna que deixa dois builders escolherem schemas incompatíveis (um model novo vs. um campo enxertado em `LotteryResult` vs. um dict de configurações/constantes).
+
+### 5. [BAIXO] A tabela de Stack subestima materialmente o quão obsoleto está o `django-crontab`
+
+O pin de versão em si se confirma: o último release do `django-crontab` no PyPI é de fato `0.7.1` — isso é genuinamente a versão atual/única disponível, não uma inventada. Mas a nota de risco ("não recebe release há mais de 12 meses") é uma subestimação significativa: `0.7.1` saiu em **março de 2016** — mais de uma década sem manutenção, não "12+ meses." A conclusão de "risco baixo" ainda pode estar certa (é um pacote pequeno que só invoca o `python-crontab`), mas a evidência citada pra sustentar isso subestima a obsolescência real, o que importa pra um documento de portfólio destinado a demonstrar o rigor diagnóstico do PM (conforme o item "Jobs To Be Done" do §2.1 do PRD sobre o projeto demonstrar esse rigor).
+
+### 6. [BAIXO] Duas lacunas menores, anotadas por completude
+
+- **A linha do mapa de capacidades do FR-2** ("bloqueio de concurso já sorteado") passa por cima do fato de que é uma mudança de comportamento em código que já está em produção: hoje `gerar_jogo`/`salvar_jogo_manual` só *avisam* (não bloqueiam) sobre um `jogo`+`concurso` duplicado pro *mesmo usuário* (ver `apps/loterias_core/views.py` linhas ~60–61 e ~192–193); o FR-2 exige um bloqueio duro baseado em existir *qualquer* `LotteryResult` pra aquele `jogo`+`concurso`, que é uma checagem totalmente diferente. Não é uma omissão que quebra a arquitetura (fica confinada a duas funções de view), mas uma entrada de uma linha nas Convenções de Consistência removeria a ambiguidade sobre "bloquear, não avisar" e "checar `LotteryResult`, não linhas irmãs de `GeneratedBet`".
+- **Nenhuma política de restart declarada pra `loterias-cron`.** O serviço `loterias-web` existente tem `restart: unless-stopped`; a regra da AD-7 pro novo sidecar não diz se ele herda a mesma política. Se o container de cron morrer silenciosamente, FR-1/FR-8 simplesmente param de rodar sem nenhum sinal operacional — uma pequena lacuna de envelope operacional que vale uma linha na AD-7.
+
+---
+
+## O que a espinha dorsal acerta (pra balancear)
+
+- O Paradigma (integração Shared-Database entre os processos web e cron, nunca chamadas em processo) é um invariante genuinamente útil e é imposto consistentemente através da AD-5/6/7.
+- AD-1/AD-2 (convenção de rename + sequenciamento epic-de-rename-primeiro, usando `RenameModel`/`RenameField` com um passo de backup pré-migration) responde direta e corretamente à Questão Aberta §8.4 do PRD.
+- A tabela de mapeamento de rename foi cruzada com precisão contra os nomes de símbolo reais de `apps/loterias_core/models.py`/`utils.py`/`views.py` — nenhum nome legado obsoleto ou inventado encontrado.
+- A regra "sem segunda fonte de verdade" da AD-3/AD-4 (campos de cache em `GeneratedBet` continuam sendo autoritativos, `HitNotification` nunca os substitui) é uma regra real e exequível que capturaria uma classe comum de bug.
+- A tabela de Convenções de Consistência reaproveita corretamente o histórico de `EmailConfirmation` já existente do django-allauth pro cooldown/rate-limit do FR-11 em vez de inventar um model novo — bom minimalismo, e é uma leitura precisa do que o allauth já rastreia.
+- As afirmações de `requirements.txt`/`Dockerfile`/`docker-compose.yml` sobre o estado atual (celery/redis presentes mas não usados, nenhum serviço de cron hoje, processo único `gunicorn`, nenhum `django-crontab` em requirements) todas se confirmaram exatamente como descritas.

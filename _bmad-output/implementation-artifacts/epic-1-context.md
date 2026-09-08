@@ -12,6 +12,7 @@ Alinhar todo o código legado de `apps/loterias_core` (models, constantes, funç
 - Story 1.2: Renomear funções de domínio em utils.py
 - Story 1.3: Renomear views, admin.py e atualizar urls.py/templates
 - Story 1.4: Cobrir reverse accessors renomeados e validar a migration antes do deploy
+- Story 1.5: Renomear campos remanescentes em português no model User (`tema_preferido`→`preferred_theme`, `telefone`→`phone`) — achado durante a implementação, não fazia parte do mapeamento original da PRD
 
 ## Requisitos e Restrições
 

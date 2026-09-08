@@ -1,12 +1,12 @@
-# Tech-Currency Review — ARCHITECTURE-SPINE.md (Loterias, 2026-09-08)
+# Revisão de Atualidade Técnica — ARCHITECTURE-SPINE.md (Loterias, 2026-09-08)
 
-Scope: verify every committed technical/version claim in the spine was actually checked against reality (repo file or web), not asserted from training data. No other aspect of the spine (decisions, structure, etc.) was reviewed.
+Escopo: verificar se toda afirmação técnica/de versão assumida na espinha dorsal foi de fato checada contra a realidade (arquivo do repositório ou web), e não afirmada a partir de dados de treinamento. Nenhum outro aspecto da espinha dorsal (decisões, estrutura, etc.) foi revisado.
 
-Reviewed: `_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md`, Stack table (lines 100-111) and AD-2 (line 52).
+Revisado: `_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md`, tabela de Stack (linhas 100-111) e AD-2 (linha 52).
 
-## 1. Existing pins (Django, django-allauth, gunicorn, requests) — CONFIRMED
+## 1. Pins existentes (Django, django-allauth, gunicorn, requests) — CONFIRMADO
 
-Read `requirements.txt` directly:
+Lido `requirements.txt` diretamente:
 
 ```
 Django==5.0.6
@@ -15,50 +15,50 @@ requests==2.32.3
 gunicorn==22.0.0
 ```
 
-The spine's Stack table lists exactly these four values for exactly these four packages — it ratifies existing pins, it does not invent or drift from any of them. No issue.
+A tabela de Stack da espinha dorsal lista exatamente esses quatro valores pra exatamente esses quatro pacotes — ela ratifica os pins existentes, não inventa nem diverge de nenhum deles. Sem problema.
 
-## 2. django-crontab 0.7.1 (new dependency) — PARTIALLY WRONG, UNDERSTATES RISK
+## 2. django-crontab 0.7.1 (dependência nova) — PARCIALMENTE ERRADO, SUBESTIMA O RISCO
 
-Checked PyPI's JSON API (`https://pypi.org/pypi/django-crontab/json`) directly.
+Checado a API JSON do PyPI (`https://pypi.org/pypi/django-crontab/json`) diretamente.
 
-- **Latest version claim: CONFIRMED.** 0.7.1 is in fact the newest release on PyPI. This part is accurate.
-- **"No release in 12+ months" claim: TECHNICALLY TRUE BUT MATERIALLY MISLEADING (Medium severity).** Full release history from PyPI:
+- **Afirmação da versão mais recente: CONFIRMADA.** 0.7.1 é de fato o release mais novo no PyPI. Essa parte é precisa.
+- **Afirmação "sem release há mais de 12 meses": TECNICAMENTE VERDADEIRA MAS MATERIALMENTE ENGANOSA (severidade Média).** Histórico completo de releases pelo PyPI:
 
-  | Version | Uploaded |
+  | Versão | Publicado em |
   |---|---|
   | 0.6.0 | 2014-12-07 |
   | 0.7.0 | 2015-12-02 |
   | 0.7.1 | 2016-03-07 |
 
-  0.7.1 was released **2016-03-07** — about **10 years ago**, not "12+ months" ago. Framing a decade of abandonment as "no release in 12+ months" is a defensible-but-weak way to phrase a much bigger fact; a reader skimming the Stack table would reasonably assume "a year or two stale," not "last touched during the Obama administration, before Django 1.10 existed." This looks like the number was asserted/rounded rather than looked up — the actual PyPI data was available and shows something far more severe. Recommend the spine state the actual last-release date (2016) instead of the vaguer "12+ months," so the real level of maintenance risk is visible to whoever reads the Stack table later.
+  A 0.7.1 foi lançada em **07/03/2016** — cerca de **10 anos atrás**, não "12+ meses" atrás. Enquadrar uma década de abandono como "sem release há mais de 12 meses" é um jeito defensável-mas-fraco de frasear um fato muito maior; um leitor passando os olhos pela tabela de Stack razoavelmente assumiria "obsoleto há um ano ou dois," não "sem tocar desde o governo Obama, antes do Django 1.10 existir." Isso parece um número afirmado/arredondado em vez de verificado — o dado real do PyPI estava disponível e mostra algo muito mais grave. Recomendo que a espinha dorsal declare a data real do último release (2016) em vez do mais vago "12+ meses," pra que o nível real de risco de manutenção fique visível pra quem ler a tabela de Stack depois.
 
-- **Django 5.x compatibility / "no known Django 5 breaking issue" claim: NOT DISPROVEN, BUT UNVERIFIABLE AS STATED (Low-Medium severity).** Checked the project's GitHub issues (`kraiz/django-crontab/issues`) via web search — no open issue explicitly reports breakage under Django 4 or 5. However, the package's own documented compatibility statement (per PyPI/README) tops out at "django (1.8+)" with no upper bound and no CI evidence of testing against Django 5 (last commit predates Django 5 by years — Django 5.0 shipped December 2023). "No known Django 5 breaking issue" is technically accurate (nothing found) but reads as more reassuring than "nobody has ever tested this combination and the maintainer stopped responding in 2016." The spine's own fallback plan (drop the package, write crontab lines directly) suggests the author already suspected this, which is good — but the Stack table prose doesn't convey how thin the "no known issue" evidence actually is.
+- **Afirmação de compatibilidade com Django 5.x / "nenhum problema de quebra conhecido no Django 5": NÃO REFUTADA, MAS NÃO VERIFICÁVEL COMO ESTÁ ESCRITA (severidade Baixa-Média).** Checadas as issues do GitHub do projeto (`kraiz/django-crontab/issues`) via busca na web — nenhuma issue aberta relata explicitamente quebra sob Django 4 ou 5. Porém, a própria declaração de compatibilidade documentada do pacote (conforme PyPI/README) vai só até "django (1.8+)" sem limite superior e sem evidência de CI testando contra o Django 5 (o último commit é anos anterior ao Django 5 — o Django 5.0 saiu em dezembro de 2023). "Nenhum problema de quebra conhecido no Django 5" é tecnicamente preciso (nada encontrado) mas soa mais reconfortante do que "ninguém nunca testou essa combinação e o mantenedor parou de responder em 2016." O próprio plano de contingência da espinha dorsal (descartar o pacote, escrever as linhas de crontab diretamente) sugere que o autor já suspeitava disso, o que é bom — mas a prosa da tabela de Stack não transmite o quão rala é de fato a evidência do "nenhum problema conhecido."
 
-## 3. SQLite ALTER TABLE RENAME COLUMN / RENAME TO on version ≥3.25 — CONFIRMED (with one imprecision)
+## 3. SQLite ALTER TABLE RENAME COLUMN / RENAME TO na versão ≥3.25 — CONFIRMADO (com uma imprecisão)
 
-Checked `sqlite.org/releaselog/3_25_0.html` directly.
+Checado `sqlite.org/releaselog/3_25_0.html` diretamente.
 
-- `ALTER TABLE ... RENAME COLUMN ... TO ...` was added in SQLite **3.25.0, released 2018-09-15**. Confirmed accurate — this is exactly what AD-2 and the Stack table claim.
-- Minor imprecision (Low severity, not a correctness bug): the spine's phrasing bundles "RENAME COLUMN/RENAME TO" as if both arrived together at 3.25. `ALTER TABLE ... RENAME TO ...` (renaming a *table*) is much older than 3.25 — it predates that release by a wide margin; what 3.25.0 (and the 3.26.0 follow-up) actually changed for table-rename was fixing it to correctly update references inside triggers and views, not introducing the syntax. The spine's underlying claim ("≥3.25 supports both natively, no table rebuild") is still true, so this doesn't invalidate AD-2's safety argument — it's just loosely worded in a way that overstates how new `RENAME TO` is.
+- `ALTER TABLE ... RENAME COLUMN ... TO ...` foi adicionado no SQLite **3.25.0, lançado em 15/09/2018**. Confirmado e preciso — é exatamente o que a AD-2 e a tabela de Stack afirmam.
+- Imprecisão menor (severidade Baixa, não é um bug de correção): a frase da espinha dorsal agrupa "RENAME COLUMN/RENAME TO" como se ambos tivessem chegado juntos na 3.25. `ALTER TABLE ... RENAME TO ...` (renomear uma *tabela*) é muito mais antigo que a 3.25 — antecede esse release por uma margem enorme; o que a 3.25.0 (e o follow-up da 3.26.0) de fato mudou pro rename de tabela foi corrigir a atualização correta de referências dentro de triggers e views, não introduzir a sintaxe. A afirmação de fundo da espinha dorsal ("≥3.25 suporta ambos nativamente, sem reconstrução de tabela") ainda é verdadeira, então isso não invalida o argumento de segurança da AD-2 — só está frouxamente frasado de um jeito que exagera o quão novo é o `RENAME TO`.
 
-## 4. Python 3.11 bundled SQLite version "well above 3.25" — CONFIRMED
+## 4. SQLite empacotado no Python 3.11 "bem acima da 3.25" — CONFIRMADO
 
-Web-checked Python 3.11.x release changelogs. Python 3.11's bundled/Windows-installer SQLite versions range from **3.39.4** (early 3.11.x) up to **3.45.1** (3.11.9, released 2024-04-02) across the 3.11 patch series. Both bounds are comfortably above 3.25.0 (2018), so the spine's "well above 3.25" claim for Python 3.11's bundled sqlite3 is accurate. (Exact patch-level version depends on which 3.11.x is actually installed/pinned in the project's venv, which wasn't verified locally — no `python3.11` interpreter was found in this environment to check `sqlite3.sqlite_version` directly — but every 3.11.x data point found is well clear of the 3.25 threshold, so the claim holds regardless of exact patch version.)
+Checado na web os changelogs de release do Python 3.11.x. As versões de SQLite empacotadas/do instalador Windows do Python 3.11 variam de **3.39.4** (início da série 3.11.x) até **3.45.1** (3.11.9, lançado em 02/04/2024) ao longo da série de patches 3.11. Os dois limites estão confortavelmente acima da 3.25.0 (2018), então a afirmação "bem acima da 3.25" da espinha dorsal pro sqlite3 empacotado do Python 3.11 é precisa. (A versão exata de patch depende de qual 3.11.x está de fato instalado/pinado no venv do projeto, o que não foi verificado localmente — nenhum interpretador `python3.11` foi encontrado neste ambiente pra checar `sqlite3.sqlite_version` diretamente — mas todo dado de 3.11.x encontrado está bem distante do limite de 3.25, então a afirmação se sustenta independente da versão exata de patch.)
 
-## 5. Other named technologies in the Stack section
+## 5. Outras tecnologias nomeadas na seção de Stack
 
-- **Python 3.11 pin rationale** ("Django 5.0.6 não suporta 3.13+"): not independently re-verified in this pass (out of the four explicitly assigned items plus the crontab/SQLite claims) — flagging as unchecked rather than confirmed. Low priority to chase since it's a widely-documented, easily-falsifiable claim about Django's own support matrix, but it wasn't in this review's explicit checklist and no search was run against it.
-- **celery / redis removal**: stack table just says to remove them per PRD §5 non-objective — no version/currency claim being made here, nothing to verify.
-- No other version numbers appear in the Stack table or surrounding prose beyond the six covered above.
+- **Justificativa do pin do Python 3.11** ("Django 5.0.6 não suporta 3.13+"): não reverificada de forma independente nesta passada (fora dos quatro itens explicitamente atribuídos mais as afirmações de crontab/SQLite) — sinalizando como não checada em vez de confirmada. Prioridade baixa de perseguir já que é uma afirmação amplamente documentada e facilmente refutável sobre a própria matriz de suporte do Django, mas não estava no checklist explícito desta revisão e nenhuma busca foi feita a respeito.
+- **Remoção de celery/redis**: a tabela de stack só diz pra removê-los conforme o não-objetivo do §5 do PRD — nenhuma afirmação de versão/atualidade sendo feita aqui, nada a verificar.
+- Nenhum outro número de versão aparece na tabela de Stack ou na prosa ao redor além dos seis cobertos acima.
 
-## Summary of severities
+## Resumo de severidades
 
-| # | Claim | Verdict | Severity |
+| # | Afirmação | Veredito | Severidade |
 |---|---|---|---|
-| 1 | Django/allauth/gunicorn/requests pins match requirements.txt | Confirmed | — |
-| 2a | django-crontab 0.7.1 is latest on PyPI | Confirmed | — |
-| 2b | "No release in 12+ months" | True but understates a ~10-year-stale package | Medium |
-| 2c | "No known Django 5 breaking issue" | Accurate as stated but evidence is thin (no Django 4/5 CI ever run) | Low-Medium |
-| 3 | SQLite ≥3.25 supports RENAME COLUMN/RENAME TO natively | Confirmed (RENAME TO predates 3.25; wording conflates the two) | Low |
-| 4 | Python 3.11 bundled SQLite "well above 3.25" | Confirmed (3.39.4–3.45.1 across 3.11.x) | — |
-| 5 | Python 3.11 pin rationale (Django 5.0.6 vs 3.13+) | Not checked in this pass | Unverified (out of scope of explicit checklist) |
+| 1 | Pins de Django/allauth/gunicorn/requests batem com requirements.txt | Confirmado | — |
+| 2a | django-crontab 0.7.1 é o mais recente no PyPI | Confirmado | — |
+| 2b | "Sem release há mais de 12 meses" | Verdadeiro mas subestima um pacote obsoleto há ~10 anos | Média |
+| 2c | "Nenhum problema de quebra conhecido no Django 5" | Preciso como está escrito mas a evidência é rala (nenhum CI de Django 4/5 já rodado) | Baixa-Média |
+| 3 | SQLite ≥3.25 suporta RENAME COLUMN/RENAME TO nativamente | Confirmado (RENAME TO antecede a 3.25; a redação confunde os dois) | Baixa |
+| 4 | SQLite empacotado no Python 3.11 "bem acima da 3.25" | Confirmado (3.39.4–3.45.1 ao longo da série 3.11.x) | — |
+| 5 | Justificativa do pin do Python 3.11 (Django 5.0.6 vs 3.13+) | Não checada nesta passada | Não verificado (fora do escopo do checklist explícito) |

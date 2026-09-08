@@ -1,145 +1,145 @@
 ---
-name: 'Adversarial Review — ARCHITECTURE-SPINE.md'
+name: 'Revisão Adversarial — ARCHITECTURE-SPINE.md'
 type: architecture-review
 target: '_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md'
-verdict: 'not-safe-to-split — 7 real divergence gaps, 2 of them build-breaking on day one'
+verdict: 'não-seguro-para-dividir — 7 lacunas de divergência reais, 2 delas quebram o build no primeiro dia'
 created: '2026-09-08'
 ---
 
-# Adversarial Review — Loterias ARCHITECTURE-SPINE.md
+# Revisão Adversarial — Loterias ARCHITECTURE-SPINE.md
 
-**Method:** for each AD, construct two units that each obey the AD's literal text, built by developers/agents who cannot see each other's code, and check whether the result composes. Only reporting gaps that produce actual divergence (data-shape clash, dual ownership, race, dead-end route) — not style nitpicks.
+**Método:** para cada AD, construir duas unidades que obedecem ao texto literal da AD, construídas por desenvolvedores/agentes que não veem o código um do outro, e checar se o resultado compõe. Só reportando lacunas que produzem divergência real (choque de formato de dado, dupla propriedade, corrida, rota sem saída) — não implicâncias de estilo.
 
-**Verdict:** the spine is **not yet safe to split** across independent builders. Two gaps (G1, G2) are severe enough that a literal, good-faith implementation of the stated ADs breaks the product on day one (silent cross-user notification loss; admin/existing-user lockout). Five more (G3–G7) are real incompatibility risks that will surface later, under load or on rename day.
-
----
-
-## G1 — [CRITICAL] Notification generation is coupled to "who wrote the LotteryResult row," not to actual outstanding work
-
-**ADs involved:** AD-4, FR-1, FR-3, the Consistency Conventions row on `LotteryResult`/`HitNotification`.
-
-**The trap:** the spine says `LotteryResult` is written via `update_or_create(game=, contest=)` by **two independent paths** — the existing on-demand path (`check_bet_result_view`, `save_manual_bet_view`) and the new `fetch_daily_results` job — "então não há conflito" (Consistency Conventions table). Separately, FR-3/AD-4 say a `HitNotification` is created **only** inside `fetch_daily_results`, and only "ao gravar um `LotteryResult` novo." FR-1 further scopes the job to only process "Jogo com concursos em aberto (**sem** `LotteryResult` registrado)."
-
-Chain those three sentences together and you get: if *any* user's on-demand click (`check_bet_result_view`) or a manual-bet save (`salvar_jogo_manual`, which already calls `fetch_cef_result`/`capturar_resultado_cef` synchronously today — see `apps/loterias_core/views.py` lines 206–218) writes the `LotteryResult` for a Jogo+Concurso *before* the nightly job gets to it, that Jogo+Concurso is no longer "aberto." The nightly job will never again see it as a "LotteryResult novo" event — so it will **never** create `HitNotification` rows for any *other* user who holds a `GeneratedBet` on that same Jogo+Concurso. `LotteryResult` is global (unique per Jogo+Concurso, not per user), but the notification-creation trigger is a one-shot event on the row's creation, owned by whichever code path got there first.
-
-The same coupling also means: if `fetch_daily_results` itself dies mid-loop (killed, OOM, exception) after `update_or_create`-ing the `LotteryResult` row but before finishing the per-`GeneratedBet` notification/email loop for that concurso, the 3h15/3h30 re-runs (AD-6) will skip it too — it's not "aberto" anymore — and the unfinished users are silently never notified. There is no "ensure every `GeneratedBet` for every existing `LotteryResult` has a `HitNotification`" reconciliation pass anywhere in the spine; notification creation is purely event-driven off the write, never state-driven off the read.
-
-**Two compliant-but-incompatible units:**
-- **Unit A** (implements FR-3/AD-4 literally): `fetch_daily_results` checks `created=True` from its own `update_or_create` call and only then loops `GeneratedBet` → `HitNotification`. Fully spec-compliant.
-- **Unit B** (keeps `check_bet_result_view`/`save_manual_bet_view` "unchanged," as the PRD's own `[NOTE FOR PM]` under FR-9 explicitly says is fine — "continua funcionando em paralelo... não há conflito"): on-demand `update_or_create` on the *same* `LotteryResult` row, zero awareness of `HitNotification`.
-
-Both are individually correct per their own AD. Composed: any single user who clicks "verificar" before 3am (or whose manual-bet save auto-checks) permanently and silently suppresses SM-1 ("Todo Acerto Premiado gerado pela rotina diária resulta em uma Notificação visível") for every other user sharing that Jogo+Concurso — a real prize, with a real `LotteryResult`, that never produces a notification for anyone else. This is exactly the kind of "two different owners writing the same entity" clash the review was asked to hunt for.
-
-**Fix direction:** decouple notification creation from "did I just write this row." Either (a) make notification generation a state-derived pass — for every `LotteryResult` (new or pre-existing) missing `HitNotification` coverage across matching `GeneratedBet` rows, regardless of which path created it — run inside `fetch_daily_results` (and/or on-demand path too, gated so it never sends duplicate email — see G4), or (b) retire the on-demand `LotteryResult`-writing side effect now that the daily job exists, and have `check_bet_result_view` only *read* an existing result rather than fetch/write one. AD-4 needs to pick one and say so explicitly; right now it lets both paths write and assumes that's harmless, which it is only for the single row itself, not for the notification fan-out keyed off it.
+**Veredito:** a espinha dorsal **ainda não é segura para dividir** entre builders independentes. Duas lacunas (G1, G2) são graves o suficiente para que uma implementação literal e de boa-fé das ADs declaradas quebre o produto no primeiro dia (perda silenciosa de notificação entre usuários; bloqueio de admin/usuário existente). Mais cinco (G3–G7) são riscos reais de incompatibilidade que vão aparecer depois, sob carga ou no dia do rename.
 
 ---
 
-## G2 — [CRITICAL] AD-8's allowlist has no `/admin/` or staff exemption, and no grandfather clause for pre-existing users
+## G1 — [CRÍTICO] A geração de notificação está acoplada a "quem escreveu a linha de `LotteryResult`", não ao trabalho pendente real
 
-**AD involved:** AD-8.
+**ADs envolvidas:** AD-4, FR-1, FR-3, a linha de Convenções de Consistência sobre `LotteryResult`/`HitNotification`.
 
-**The trap:** AD-8's rule is "redireciona **qualquer** request autenticado com `first_name`/`last_name` vazio... exceto a própria tela de captura, assets estáticos e logout." This is a blanket rule with a three-item allowlist. Two things it doesn't account for:
+**A armadilha:** a espinha dorsal diz que `LotteryResult` é escrita via `update_or_create(game=, contest=)` por **dois caminhos independentes** — o caminho on-demand já existente (`check_bet_result_view`, `save_manual_bet_view`) e o novo job `fetch_daily_results` — "então não há conflito" (tabela de Convenções de Consistência). Separadamente, FR-3/AD-4 dizem que um `HitNotification` é criado **só** dentro de `fetch_daily_results`, e só "ao gravar um `LotteryResult` novo." O FR-1 ainda escopa o job pra só processar "Jogo com concursos em aberto (**sem** `LotteryResult` registrado)."
 
-1. **Every account that exists today** (this is a live, already-deployed app — see `deploy/lab/docker-compose.yml`, commit `39b4b50 Deploy`) has `first_name`/`last_name` blank, because nothing before this PRD ever asked for them. `AbstractUser.first_name`/`last_name` default to `blank=True`, and `apps/accounts/models.py`'s own `create_user`/`create_superuser` never populate them. FR-14's UJ-2 describes this as a **new-signup** gate ("no primeiro login... obrigatório"), but AD-8's Rule text says "qualquer request autenticado" with no cutover/grandfather condition — nothing distinguishes "first login after the new FR-10–14 flow" from "any pre-existing session."
-2. **`/admin/`** is not in the allowlist. `django.contrib.admin` is installed (`INSTALLED_APPS` in `loterias/settings/base.py`) and is how Ricardo (the Boss/operator) manages the site today.
+Encadeando essas três frases: se o clique on-demand de *qualquer* usuário (`check_bet_result_view`) ou o salvamento de uma aposta manual (`salvar_jogo_manual`, que já chama `fetch_cef_result`/`capturar_resultado_cef` de forma síncrona hoje — ver `apps/loterias_core/views.py` linhas 206–218) escrever o `LotteryResult` daquele Jogo+Concurso *antes* do job noturno chegar até ele, esse Jogo+Concurso deixa de estar "aberto." O job noturno nunca mais vai ver isso como um evento de "LotteryResult novo" — então **nunca** vai criar linhas de `HitNotification` para nenhum *outro* usuário que tenha um `GeneratedBet` no mesmo Jogo+Concurso. `LotteryResult` é global (único por Jogo+Concurso, não por usuário), mas o gatilho de criação de notificação é um evento único na criação da linha, pertencente a qualquer caminho de código que chegue lá primeiro.
 
-**Two compliant-but-incompatible units:**
-- **Unit A** implements the middleware literally: blanket check, allowlist = {capture screen, static, logout}. On deploy, this immediately redirect-locks every existing user — including Ricardo's own admin/staff login, since `/admin/login/` accepts the session but the *next* admin page request gets redirected to the capture screen (which itself isn't part of the admin site and offers no path back into `/admin/`).
-- **Unit B**, building the same middleware from the "obviously this is for new signups" reading, adds an unstated exemption — e.g. `if user.is_staff: return None` or `if user.date_joined < CUTOVER_DATE: return None` — neither of which appears anywhere in the spine, so a reviewer checking Unit B "against the AD" would flag it as scope creep, and a different agent building the companion FR-14 view story has no way to know which exemption (if any) Unit A assumed.
+O mesmo acoplamento também significa: se o próprio `fetch_daily_results` morrer no meio do loop (matado, OOM, exceção) depois de fazer `update_or_create` na linha de `LotteryResult` mas antes de terminar o loop de notificação/e-mail por `GeneratedBet` daquele concurso, as reexecuções de 3h15/3h30 (AD-6) também vão pular ele — não está mais "aberto" — e os usuários não processados nunca são notificados, silenciosamente. Não existe em nenhum lugar da espinha dorsal uma passada de reconciliação do tipo "garantir que todo `GeneratedBet` de todo `LotteryResult` existente tenha um `HitNotification`"; a criação de notificação é puramente orientada a evento na escrita, nunca orientada a estado na leitura.
 
-**Fix direction:** AD-8 needs an explicit statement on (a) whether `/admin/` (or `is_staff`/`is_superuser`) is exempt, and (b) how pre-existing accounts are handled — a data migration that backfills a sentinel/marks them "grandfathered," or an explicit `date_joined`/flag cutover, or a one-time management command. Silence here isn't a detail two builders will independently converge on; it's a coin flip between "gate everyone, including yourself, out of admin" and "gate only new users," decided differently by whoever writes the middleware vs. whoever runs the first production deploy.
+**Duas unidades compatíveis-mas-incompatíveis:**
+- **Unidade A** (implementa FR-3/AD-4 literalmente): `fetch_daily_results` checa `created=True` do próprio `update_or_create` e só então percorre `GeneratedBet` → `HitNotification`. Totalmente conforme a spec.
+- **Unidade B** (mantém `check_bet_result_view`/`save_manual_bet_view` "inalterados," como o próprio `[NOTA PARA O PM]` do PRD sob FR-9 diz explicitamente que é aceitável — "continua funcionando em paralelo... não há conflito"): `update_or_create` on-demand na *mesma* linha de `LotteryResult`, sem nenhum conhecimento de `HitNotification`.
 
----
+Ambas são individualmente corretas em relação à própria AD. Compostas: um único usuário que clique em "verificar" antes das 3h (ou cujo salvamento de aposta manual auto-verifique) suprime permanente e silenciosamente o SM-1 ("Todo Acerto Premiado gerado pela rotina diária resulta em uma Notificação visível") para todo outro usuário que compartilhe aquele Jogo+Concurso — um prêmio real, com um `LotteryResult` real, que nunca produz notificação para mais ninguém. Isso é exatamente o tipo de choque "dois donos diferentes escrevendo a mesma entidade" que esta revisão foi pedida para caçar.
 
-## G3 — [HIGH] AD-8's allowlist doesn't include FR-12's password-creation screen, and the two "the user is authenticated but incomplete" gates fight over the same request
-
-**ADs involved:** AD-8, FR-12, FR-10, existing allauth settings (`ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True`, `ACCOUNT_CONFIRM_EMAIL_ON_GET = True` in `loterias/settings/base.py`).
-
-**The trap:** today, clicking the email-confirmation link both confirms the email **and logs the user in** (that's what `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` does), then redirects to `LOGIN_REDIRECT_URL` ('/'). FR-10/FR-12 layer a new "pending account, no usable password yet" state on top of that same mechanism — the user is expected to land on a password-creation screen next. But at the moment they're logged in via the confirmation link, `first_name`/`last_name` are empty (FR-14 hasn't happened yet) — so AD-8's `RequireProfileCompletionMiddleware`, whose allowlist is only "a própria tela de captura, assets estáticos e logout," will intercept that very first authenticated request and redirect to the name-capture screen *before the password-creation screen (FR-12) is ever reached*. The password is never set; the user "completes" the name-capture form and is now sitting inside the app fully authenticated with no password ever having been chosen — silently breaking FR-12's contract.
-
-**Two compliant-but-incompatible units:**
-- **Unit A** (AD-8 middleware, built to the letter): allowlist = {capture screen, static, logout}. Doesn't know FR-12's screen needs to run first.
-- **Unit B** (FR-10–13 signup flow, built to the letter): assumes the standard allauth "confirm → authenticated → land on my custom password-set view" flow works as it does today, unaware a colleague's middleware will intercept that redirect first.
-
-Neither AD says which screen has precedence when both conditions are true (empty password *and* empty name), or that FR-12's URL must be added to AD-8's allowlist.
-
-**Fix direction:** AD-8's allowlist must explicitly include the password-creation view's URL name, and the spine should state the ordering invariant directly: "password-incomplete gates password-complete gates name-complete" (or fold both gates into one middleware with an explicit precedence list), not leave two independently-built gates to race for the same redirect.
+**Direção de correção:** desacoplar a criação de notificação de "eu acabei de escrever essa linha." Ou (a) transformar a geração de notificação numa passada derivada de estado — para todo `LotteryResult` (novo ou pré-existente) sem cobertura de `HitNotification` nos `GeneratedBet` correspondentes, independente de qual caminho o criou — rodando dentro de `fetch_daily_results` (e/ou também no caminho on-demand, protegido pra nunca disparar e-mail duplicado — ver G4), ou (b) aposentar o efeito colateral de escrita de `LotteryResult` no caminho on-demand agora que o job diário existe, e fazer `check_bet_result_view` só *ler* um resultado já existente em vez de buscar/escrever um. A AD-4 precisa escolher uma opção e declará-la explicitamente; hoje ela deixa os dois caminhos escreverem e assume que isso é inofensivo, o que só é verdade pra linha em si, não pro leque de notificações amarrado a ela.
 
 ---
 
-## G4 — [HIGH] No mandated uniqueness/atomicity for `HitNotification`, combined with AD-6's independent cron triggers and AD-7's dual-writer container, opens a duplicate-email race
+## G2 — [CRÍTICO] A allowlist da AD-8 não tem isenção pra `/admin/`/staff, nem cláusula de "avô" pra usuários pré-existentes
 
-**ADs involved:** AD-3, AD-4, AD-6, AD-7.
+**AD envolvida:** AD-8.
 
-**The trap:** AD-6 puts three independent `CRONJOBS` entries (3h00/3h15/3h30) on the same idempotent job, relying on `LotteryResult`'s `update_or_create` + "no longer open" filtering to make re-runs safe. That's sound *for the `LotteryResult` row itself*. But nothing in AD-3/AD-4/the Consistency Conventions table requires a DB-level uniqueness constraint (e.g. `unique_together`/`UniqueConstraint` on `(bet, result)`) on `HitNotification`, nor mandates `get_or_create`/`update_or_create` as its write pattern — FR-3's "no máximo uma vez... idempotente" is stated only as a testable consequence, not as an enforced invariant. `django-crontab` (per the Stack section) doesn't itself guarantee non-overlapping runs; if a 3h00 invocation is still scraping (network stalls against `loterias.caixa.gov.br` are the documented normal failure mode) when 3h15 fires, you can get two OS processes — potentially split across the same `loterias-cron` container or, worse, no barrier at all if `loterias-web` also happens to run `check_bet_result_view` concurrently — evaluating "does this `GeneratedBet`+`LotteryResult` pair already have a `HitNotification`" at the same instant, both getting "no," and both creating a row. FR-7 fires an email per premiada notification created — so this is a duplicate-email bug in exactly the case the PRD calls out as a non-negotiable contra-metric (SM-C1: "nunca reenviado por reexecução da rotina").
+**A armadilha:** a regra da AD-8 é "redireciona **qualquer** request autenticado com `first_name`/`last_name` vazio... exceto a própria tela de captura, assets estáticos e logout." Isso é uma regra geral com uma allowlist de três itens. Duas coisas que ela não considera:
 
-**Two compliant-but-incompatible units:**
-- **Unit A**'s model for `HitNotification` has no unique constraint (spine doesn't require one); job logic does a plain `.exists()` check then `.create()` — correct under sequential execution, racy under overlap.
-- **Unit B** independently adds `unique_together = ('bet', 'result')` as a defensive modeling choice (also not prohibited) and writes via `.create()` inside a `try/except IntegrityError` — different failure mode (constraint violation swallowed) than Unit A (silent duplicate row + duplicate email).
+1. **Toda conta que existe hoje** (isso é um app real, já em produção — ver `deploy/lab/docker-compose.yml`, commit `39b4b50 Deploy`) tem `first_name`/`last_name` em branco, porque nada antes deste PRD nunca pediu esses dados. `AbstractUser.first_name`/`last_name` têm `blank=True` por padrão, e os próprios `create_user`/`create_superuser` de `apps/accounts/models.py` nunca os preenchem. O UJ-2 do FR-14 descreve isso como um gate de **novo cadastro** ("no primeiro login... obrigatório"), mas o texto da Regra da AD-8 diz "qualquer request autenticado" sem nenhuma condição de corte/avô — nada distingue "primeiro login depois do novo fluxo FR-10–14" de "qualquer sessão pré-existente."
+2. **`/admin/`** não está na allowlist. `django.contrib.admin` está instalado (`INSTALLED_APPS` em `loterias/settings/base.py`) e é como o Ricardo (o Boss/operador) administra o site hoje.
 
-Both "obey" AD-3/AD-4's text; the actual behavior under a real overlap is different depending purely on which developer happened to add the constraint.
+**Duas unidades compatíveis-mas-incompatíveis:**
+- **Unidade A** implementa o middleware literalmente: checagem geral, allowlist = {tela de captura, estáticos, logout}. No deploy, isso trava imediatamente todo usuário existente por redirecionamento — inclusive o próprio login de admin/staff do Ricardo, porque `/admin/login/` aceita a sessão mas a *próxima* página de admin é redirecionada pra tela de captura (que por sua vez não faz parte do site de admin e não oferece caminho de volta pro `/admin/`).
+- **Unidade B**, construindo o mesmo middleware a partir da leitura "obviamente isso é pra novos cadastros," adiciona uma isenção não declarada — ex.: `if user.is_staff: return None` ou `if user.date_joined < CUTOVER_DATE: return None` — nenhuma das quais aparece em nenhum lugar da espinha dorsal, então um revisor checando a Unidade B "contra a AD" a marcaria como scope creep, e um agente diferente construindo a story companheira do FR-14 não tem como saber qual isenção (se alguma) a Unidade A assumiu.
 
-**Fix direction:** AD-3 or AD-4 should mandate a DB-level `UniqueConstraint`/`unique_together` on `(bet, result)` for `HitNotification` (matching the ER diagram's own "gera no máximo 1" cardinality, which is currently only a diagram annotation, not an enforced rule) and mandate `get_or_create`/`update_or_create` as the write path — turning a possible race into a guaranteed-idempotent no-op instead of leaving the outcome to whichever builder happened to think of it.
-
----
-
-## G5 — [MEDIUM-HIGH] Nothing specifies how `fetch_daily_results()` knows it's the "3h30 = final attempt" run that should email the operator
-
-**ADs involved:** AD-5, AD-6, FR-9.
-
-**The trap:** AD-5 mandates jobs as pure functions with a management command that "só chama a função," and `CRONJOBS` pointing at `call_command` with the command name — "nunca a função direta." AD-6 then requires that **only** the 3h30 invocation emails the operator alert (FR-9), and only for Jogo/Concurso still without a `LotteryResult` after all three tries. But `fetch_daily_results()` is specified as a single, parameterless-sounding pure function, invoked identically by all three `CRONJOBS` entries — nothing says how the function (or its management-command wrapper) distinguishes "I am the 3rd invocation of the day" from "I am the 1st."
-
-**Two compliant-but-incompatible units:**
-- **Unit A** (jobs.py author) implements clock introspection inside the function: `if timezone.localtime().minute >= 30: send_alerts()`. Fragile (a cron fired a minute late from container CPU contention silently skips the alert, or double-fires it if the previous run overran past :30), but matches "the function needs no external signal."
-- **Unit B** (settings/CRONJOBS author) assumes the natural Django idiom instead: three `CRONJOBS` entries calling the *same* management command with a different `--attempt=1/2/3` argument, which the command threads into `fetch_daily_results(attempt=N)`.
-
-If Unit A ships `fetch_daily_results()` with no `attempt` parameter and Unit B's `CRONJOBS`/command wrapper passes one, that's a `TypeError` at every single nightly run. If Unit A ships clock-based detection and Unit B never wires an argument, it "works" by accident but is exactly the kind of implicit coupling a spine should have foreclosed.
-
-**Fix direction:** AD-6 (or AD-5) should fix the actual interface: either the management command accepts an explicit `--attempt`/`--final` flag and the spine states that in the Structural Seed, or the spine states clock-based detection is the intended mechanism and specifies the exact boundary (e.g., "invocation is final iff `>= 03:25` local time," with a rationale for why that's robust to a few minutes of scheduler jitter).
+**Direção de correção:** a AD-8 precisa de uma declaração explícita sobre (a) se `/admin/` (ou `is_staff`/`is_superuser`) é isento, e (b) como contas pré-existentes são tratadas — uma migration de dados que preenche um marcador/sinaliza como "avô," ou um corte explícito por `date_joined`/flag, ou um management command único. Silêncio aqui não é um detalhe em que dois builders vão convergir independentemente; é uma moeda no ar entre "bloquear todo mundo, inclusive você mesmo, do admin" e "bloquear só usuários novos," decidida de formas diferentes por quem escreve o middleware versus quem roda o primeiro deploy de produção.
 
 ---
 
-## G6 — [MEDIUM] AD-2's rename mapping (PRD §3.1) is silent on identifiers shared *across* the three renamed models, inviting divergent translations mid-rename
+## G3 — [ALTO] A allowlist da AD-8 não inclui a tela de criação de senha do FR-12, e os dois gates de "usuário autenticado mas incompleto" disputam a mesma request
 
-**ADs involved:** AD-2, AD-1, PRD §3.1.
+**ADs envolvidas:** AD-8, FR-12, FR-10, configurações já existentes do allauth (`ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True`, `ACCOUNT_CONFIRM_EMAIL_ON_GET = True` em `loterias/settings/base.py`).
 
-**The trap:** the mapping table (PRD §3.1) is thorough for field names and function names, but misses at least two symbols that are referenced *across* class boundaries in `apps/loterias_core/models.py` today:
-- `related_name='jogos'` (on `JogoGerado.usuario`) and `related_name='estatisticas'` (on `EstatisticaJogo.usuario`) — these are code identifiers under AD-1's own rule ("todo identificador de código... é em inglês"), used as `user.jogos`/`user.estatisticas` reverse accessors, but they don't appear anywhere in the §3.1 table.
-- `ResultadoLoteria.JOGOS_CHOICES = JogoGerado.JOGOS_CHOICES` and `EstatisticaJogo.jogo = models.CharField(..., choices=JogoGerado.JOGOS_CHOICES, ...)` — `LotteryResult` and `GameStatistics` reference `GeneratedBet`'s class attribute `JOGOS_CHOICES` directly, but that attribute name is also absent from the §3.1 table (only the module-level `JOGOS_CONFIG`/`JOGOS_COM_REGRA_SEQUENCIA`/`INTERVALO_MIN_SEQUENCIA` constants are listed).
+**A armadilha:** hoje, clicar no link de confirmação de e-mail confirma o e-mail **e loga o usuário** (é isso que `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` faz), e então redireciona pra `LOGIN_REDIRECT_URL` ('/'). FR-10/FR-12 sobrepõem um novo estado de "conta pendente, ainda sem senha utilizável" nesse mesmo mecanismo — espera-se que o usuário caia na tela de criação de senha a seguir. Mas no momento em que ele é logado via o link de confirmação, `first_name`/`last_name` estão vazios (o FR-14 ainda não aconteceu) — então o `RequireProfileCompletionMiddleware` da AD-8, cuja allowlist é só "a própria tela de captura, assets estáticos e logout," intercepta justamente essa primeira request autenticada e redireciona pra tela de captura de nome *antes que a tela de criação de senha (FR-12) seja alcançada*. A senha nunca é definida, o usuário "completa" o formulário de captura de nome e agora está sentado dentro do app totalmente autenticado sem nunca ter escolhido uma senha — quebrando silenciosamente o contrato do FR-12.
 
-**Two compliant-but-incompatible units:** AD-2 says the rename is "um epic isolado," not necessarily one atomic PR — nothing prevents it being split model-by-model between two developers/agents (e.g., one doing `GeneratedBet`, another doing `LotteryResult`/`GameStatistics`, both "renaming per §3.1"). If the `GeneratedBet` renamer picks `GAME_CHOICES` for the old `JOGOS_CHOICES` (a reasonable English name, not contradicted by §3.1) while the `LotteryResult`/`GameStatistics` renamer — working from the same table, seeing no entry for it — independently writes `GamesChoices` or keeps referencing `GeneratedBet.JOGOS_CHOICES` (not yet renamed on their branch), the file fails to import. Same risk for `related_name`: one picks `generated_bets`, the unrelated admin/template code (or a test) expecting the old `jogos` accessor breaks with no compile-time signal — only a runtime `AttributeError`, easy to miss if AD-2's "passa 100% na suite de testes" gate doesn't happen to cover every reverse-accessor usage (the current `tests.py` does not exercise `user.jogos`/`user.estatisticas` directly).
+**Duas unidades compatíveis-mas-incompatíveis:**
+- **Unidade A** (middleware da AD-8, construído à letra): allowlist = {tela de captura, estáticos, logout}. Não sabe que a tela do FR-12 precisa rodar primeiro.
+- **Unidade B** (fluxo de cadastro do FR-10–13, construído à letra): assume que o fluxo padrão do allauth "confirma → autenticado → cai na minha tela customizada de definição de senha" funciona como funciona hoje, sem saber que o middleware de um colega vai interceptar esse redirecionamento primeiro.
 
-**Fix direction:** either extend the PRD §3.1 table (owned by the PRD, but the spine's AD-2 is the thing that should flag this as a completeness requirement before the rename epic is considered "done") to include `related_name` values and cross-referenced class attributes, or have AD-2 state a stronger rule: "the rename epic is a single PR/commit across all three models, reviewed as one unit, specifically because cross-model references (shared `choices=`, `related_name`) can't be safely split across independent renamers."
+Nenhuma AD diz qual tela tem precedência quando as duas condições são verdadeiras (senha vazia *e* nome vazio), nem que a URL do FR-12 precisa ser adicionada à allowlist da AD-8.
 
----
-
-## G7 — [MEDIUM] AD-7 puts two containers on one SQLite file with no mandated concurrency setting
-
-**ADs involved:** AD-7, Stack section.
-
-**The trap:** before this spine, `loterias-web` was the only writer to `db.sqlite3`. AD-7 adds `loterias-cron` as a second, routinely-writing process against the same file via the shared `loterias_data` volume — explicitly by design ("os dois containers só se comunicam através do arquivo SQLite... nunca por HTTP"). Django's sqlite3 backend defaults to no `timeout` in `DATABASES[...]['OPTIONS']` (i.e., `sqlite3`'s own default, effectively immediate failure on lock contention) and the repo's `loterias/settings/base.py` sets no `OPTIONS` at all. Nothing in the Stack table or AD-7 mandates WAL journal mode or a busy-timeout, even though AD-7 is precisely the change that makes sustained concurrent writers (a nightly job doing potentially dozens of `update_or_create`/`create` calls across many Jogos over multiple minutes, per FR-1/FR-3) newly routine, at the same time real users are generating/checking bets during business hours (less likely at 3am specifically, but the job's retries under AD-6 can span 3h00–3h30+, and nothing constrains `update_monthly_prize_values` — FR-8 — to a specific off-peak hour at all).
-
-**Two compliant-but-incompatible units:** the developer wiring `loterias-cron` (AD-7) and the developer touching `loterias/settings/base.py` for an unrelated reason (e.g. FR-6/FR-14 changes) both leave `DATABASES[...]['OPTIONS']` untouched — neither AD requires either of them to add it, so it's equally likely nobody does, and equally possible one dev "fixes" it locally in a way the other doesn't know about (e.g. adding `'timeout': 20` only when debugging a `database is locked` error they hit personally, without it being recorded as a project-wide convention).
-
-**Fix direction:** AD-7 (or a new small AD) should mandate `DATABASES['default']['OPTIONS'] = {'timeout': N}` (and/or WAL mode via a startup `PRAGMA`) as part of introducing the second writer, stated once in the spine so it isn't left to whichever developer happens to hit the lock error first in production.
+**Direção de correção:** a allowlist da AD-8 precisa incluir explicitamente o nome de URL da tela de criação de senha, e a espinha dorsal precisa declarar diretamente o invariante de ordem: "senha-incompleta bloqueia senha-completa bloqueia nome-completo" (ou dobrar os dois gates num único middleware com uma lista de precedência explícita), em vez de deixar dois gates construídos independentemente disputarem o mesmo redirecionamento.
 
 ---
 
-## Lower-confidence / worth a look but not written up in full
+## G4 — [ALTO] Nenhuma exigência de unicidade/atomicidade pra `HitNotification`, combinada com os gatilhos cron independentes da AD-6 e o container de escrita dupla da AD-7, abre uma corrida de e-mail duplicado
 
-- **NotificationPreference default-row ownership (AD-3):** "`NotificationPreference` só é escrita pela própria tela de preferências" reads as forbidding any other write path, but FR-7's email-gating check in `fetch_daily_results` needs *some* answer for users who never visited the preferences screen (no row exists yet). A read-side default-fallback (`site_enabled=True, email_enabled=False` when no row) is consistent with the AD; a `get_or_create` call from the job is a plausible, idiomatic implementation that technically violates the AD's literal wording. Worth AD-3 stating explicitly which one is intended, and whether `user` is enforced unique (`OneToOneField`) since that isn't stated either.
-- **Middleware allowlist granularity vs. same-page ancillary endpoints:** the profile-completion screen almost certainly renders the site's shared template chrome (theme toggle, etc.); `accounts/theme/toggle/` isn't in AD-8's stated allowlist ("captura, estáticos, logout"), so a legitimate in-page action from the capture screen itself gets redirected back to the same screen instead of executing. Minor (no infinite loop, just a silently-broken toggle), but it's the same root cause as G2/G3 — the allowlist is enumerated by guessing at what an authenticated-incomplete user might click, not derived from an actual list of exempt URL names fixed in the spine.
+**ADs envolvidas:** AD-3, AD-4, AD-6, AD-7.
+
+**A armadilha:** a AD-6 coloca três entradas independentes de `CRONJOBS` (3h00/3h15/3h30) no mesmo job idempotente, contando com o `update_or_create` do `LotteryResult` + a filtragem de "não está mais aberto" pra tornar reexecuções seguras. Isso é sólido *pra linha de `LotteryResult` em si*. Mas nada na AD-3/AD-4/tabela de Convenções de Consistência exige uma constraint de unicidade no nível do banco (ex.: `unique_together`/`UniqueConstraint` em `(bet, result)`) sobre `HitNotification`, nem exige `get_or_create`/`update_or_create` como padrão de escrita — o "no máximo uma vez... idempotente" do FR-3 é declarado só como uma consequência testável, não como um invariante imposto. O `django-crontab` (pela seção de Stack) não garante por si só execuções sem sobreposição; se uma invocação das 3h00 ainda estiver raspando (travamentos de rede contra `loterias.caixa.gov.br` são o modo de falha normal documentado) quando a das 3h15 disparar, dois processos do sistema operacional podem — possivelmente entre o mesmo container `loterias-cron` ou, pior, sem nenhuma barreira caso o `loterias-web` também rode `check_bet_result_view` concorrentemente — avaliar "esse par `GeneratedBet`+`LotteryResult` já tem um `HitNotification`" no mesmo instante, ambos recebendo "não," e ambos criando uma linha. O FR-7 dispara um e-mail por notificação premiada criada — então isso é um bug de e-mail duplicado exatamente no caso que o PRD chama de contra-métrica inegociável (SM-C1: "nunca reenviado por reexecução da rotina").
+
+**Duas unidades compatíveis-mas-incompatíveis:**
+- O modelo de `HitNotification` da **Unidade A** não tem constraint de unicidade (a espinha dorsal não exige uma); a lógica do job faz um `.exists()` simples e depois `.create()` — correto sob execução sequencial, sujeito a corrida sob sobreposição.
+- A **Unidade B** independentemente adiciona `unique_together = ('bet', 'result')` como escolha defensiva de modelagem (também não proibida) e escreve via `.create()` dentro de um `try/except IntegrityError` — modo de falha diferente (violação de constraint engolida) do da Unidade A (linha duplicada silenciosa + e-mail duplicado).
+
+Ambas "obedecem" ao texto da AD-3/AD-4; o comportamento real sob uma sobreposição de fato é diferente dependendo puramente de qual desenvolvedor calhou de adicionar a constraint.
+
+**Direção de correção:** a AD-3 ou a AD-4 deveria exigir uma `UniqueConstraint`/`unique_together` no nível do banco em `(bet, result)` pra `HitNotification` (batendo com a cardinalidade "gera no máximo 1" do próprio diagrama ER, que hoje é só uma anotação de diagrama, não uma regra imposta) e exigir `get_or_create`/`update_or_create` como caminho de escrita — transformando uma possível corrida num no-op garantidamente idempotente em vez de deixar o resultado pra quem calhar de pensar nisso.
 
 ---
 
-## Summary Table
+## G5 — [MÉDIO-ALTO] Nada especifica como `fetch_daily_results()` sabe que é a execução "3h30 = tentativa final" que deveria alertar o operador
 
-| ID | Severity | AD(s) to tighten | One-line gap |
+**ADs envolvidas:** AD-5, AD-6, FR-9.
+
+**A armadilha:** a AD-5 exige que jobs sejam funções puras com um management command que "só chama a função," e o `CRONJOBS` apontando pra `call_command` com o nome do comando — "nunca a função direta." A AD-6 então exige que **só** a invocação das 3h30 envie o alerta por e-mail ao operador (FR-9), e só pra Jogo/Concurso ainda sem `LotteryResult` depois das três tentativas. Mas `fetch_daily_results()` é especificada como uma única função de aparência sem parâmetros, invocada de forma idêntica pelas três entradas de `CRONJOBS` — nada diz como a função (ou seu wrapper de management command) distingue "eu sou a 3ª invocação do dia" de "eu sou a 1ª."
+
+**Duas unidades compatíveis-mas-incompatíveis:**
+- A **Unidade A** (autor de jobs.py) implementa introspecção de relógio dentro da função: `if timezone.localtime().minute >= 30: send_alerts()`. Frágil (um cron que dispara um minuto atrasado por contenção de CPU do container pula o alerta silenciosamente, ou dispara duas vezes se a execução anterior passar das :30), mas bate com "a função não precisa de nenhum sinal externo."
+- A **Unidade B** (autor de settings/CRONJOBS) assume em vez disso o idioma natural do Django: três entradas de `CRONJOBS` chamando o *mesmo* management command com um argumento `--attempt=1/2/3` diferente, que o comando passa pra `fetch_daily_results(attempt=N)`.
+
+Se a Unidade A entregar `fetch_daily_results()` sem parâmetro `attempt` e o wrapper de comando/`CRONJOBS` da Unidade B passar um, isso é um `TypeError` em toda execução noturna. Se a Unidade A entregar detecção baseada em relógio e a Unidade B nunca conectar um argumento, isso "funciona" por acidente mas é exatamente o tipo de acoplamento implícito que uma espinha dorsal deveria ter eliminado.
+
+**Direção de correção:** a AD-6 (ou a AD-5) deveria fixar a interface real: ou o management command aceita uma flag explícita `--attempt`/`--final` e a espinha dorsal declara isso na Semente Estrutural, ou a espinha dorsal declara que detecção baseada em relógio é o mecanismo pretendido e especifica o limite exato (ex.: "a invocação é final se e somente se `>= 03:25` no horário local," com uma justificativa de por que isso é robusto a alguns minutos de variação do agendador).
+
+---
+
+## G6 — [MÉDIO] O mapeamento de rename da AD-2 (PRD §3.1) é silencioso sobre identificadores compartilhados *entre* os três models renomeados, convidando a traduções divergentes no meio do rename
+
+**ADs envolvidas:** AD-2, AD-1, PRD §3.1.
+
+**A armadilha:** a tabela de mapeamento (PRD §3.1) é minuciosa pra nomes de campo e de função, mas deixa passar pelo menos dois símbolos referenciados *entre* as fronteiras de classe em `apps/loterias_core/models.py` hoje:
+- `related_name='jogos'` (em `JogoGerado.usuario`) e `related_name='estatisticas'` (em `EstatisticaJogo.usuario`) — são identificadores de código sob a própria regra da AD-1 ("todo identificador de código... é em inglês"), usados como reverse accessors `user.jogos`/`user.estatisticas`, mas não aparecem em nenhum lugar da tabela do §3.1.
+- `ResultadoLoteria.JOGOS_CHOICES = JogoGerado.JOGOS_CHOICES` e `EstatisticaJogo.jogo = models.CharField(..., choices=JogoGerado.JOGOS_CHOICES, ...)` — `LotteryResult` e `GameStatistics` referenciam diretamente o atributo de classe `JOGOS_CHOICES` de `GeneratedBet`, mas esse nome de atributo também está ausente da tabela do §3.1 (só as constantes de módulo `JOGOS_CONFIG`/`JOGOS_COM_REGRA_SEQUENCIA`/`INTERVALO_MIN_SEQUENCIA` estão listadas).
+
+**Duas unidades compatíveis-mas-incompatíveis:** a AD-2 diz que o rename é "um epic isolado," não necessariamente um único PR atômico — nada impede que seja dividido model-por-model entre dois desenvolvedores/agentes (ex.: um fazendo `GeneratedBet`, outro fazendo `LotteryResult`/`GameStatistics`, ambos "renomeando conforme o §3.1"). Se quem renomeia `GeneratedBet` escolher `GAME_CHOICES` pro antigo `JOGOS_CHOICES` (um nome em inglês razoável, não contrariado pelo §3.1) enquanto quem renomeia `LotteryResult`/`GameStatistics` — trabalhando a partir da mesma tabela, sem ver nenhuma entrada pra isso — independentemente escrever `GamesChoices` ou continuar referenciando `GeneratedBet.JOGOS_CHOICES` (ainda não renomeado no branch dele), o arquivo falha ao importar. Mesmo risco pro `related_name`: um escolhe `generated_bets`, o código não relacionado de admin/template (ou um teste) esperando o antigo accessor `jogos` quebra sem nenhum sinal em tempo de compilação — só um `AttributeError` em tempo de execução, fácil de passar batido se o gate "passa 100% na suíte de testes" da AD-2 não cobrir por acaso todo uso de reverse accessor (o `tests.py` atual não exercita `user.jogos`/`user.estatisticas` diretamente).
+
+**Direção de correção:** ou estender a tabela do PRD §3.1 (de propriedade do PRD, mas a AD-2 da espinha dorsal é a coisa que deveria marcar isso como um requisito de completude antes do epic de rename ser considerado "concluído") pra incluir valores de `related_name` e atributos de classe referenciados entre models, ou fazer a AD-2 declarar uma regra mais forte: "o epic de rename é um único PR/commit entre os três models, revisado como uma unidade, especificamente porque referências entre models (`choices=` compartilhado, `related_name`) não podem ser divididas com segurança entre renomeadores independentes."
+
+---
+
+## G7 — [MÉDIO] A AD-7 coloca dois containers num único arquivo SQLite sem exigir nenhuma configuração de concorrência
+
+**ADs envolvidas:** AD-7, seção de Stack.
+
+**A armadilha:** antes desta espinha dorsal, `loterias-web` era o único escritor de `db.sqlite3`. A AD-7 adiciona `loterias-cron` como um segundo processo, escrevendo rotineiramente no mesmo arquivo via o volume compartilhado `loterias_data` — explicitamente por design ("os dois containers só se comunicam através do arquivo SQLite... nunca por HTTP"). O backend sqlite3 do Django, por padrão, não define `timeout` em `DATABASES[...]['OPTIONS']` (ou seja, o padrão do próprio `sqlite3`, efetivamente falha imediata sob contenção de lock) e o `loterias/settings/base.py` do repositório não define nenhum `OPTIONS`. Nada na tabela de Stack ou na AD-7 exige o modo de journal WAL ou um busy-timeout, mesmo a AD-7 sendo precisamente a mudança que torna rotina escritores concorrentes sustentados (um job noturno fazendo potencialmente dezenas de chamadas `update_or_create`/`create` em vários Jogos ao longo de vários minutos, pelo FR-1/FR-3), ao mesmo tempo em que usuários reais geram/verificam apostas durante o horário comercial (menos provável especificamente às 3h, mas as retentativas do job sob a AD-6 podem se estender de 3h00 a 3h30+, e nada restringe o `update_monthly_prize_values` — FR-8 — a um horário específico de baixo movimento).
+
+**Duas unidades compatíveis-mas-incompatíveis:** o desenvolvedor conectando o `loterias-cron` (AD-7) e o desenvolvedor tocando `loterias/settings/base.py` por um motivo não relacionado (ex.: mudanças do FR-6/FR-14) ambos deixam `DATABASES[...]['OPTIONS']` intocado — nenhuma AD exige que qualquer um dos dois adicione isso, então é igualmente provável que ninguém faça, e igualmente possível que um deles "conserte" localmente de um jeito que o outro não saiba (ex.: adicionando `'timeout': 20` só ao debugar um erro de `database is locked` que ele mesmo bateu, sem isso ser registrado como convenção do projeto).
+
+**Direção de correção:** a AD-7 (ou uma nova AD pequena) deveria exigir `DATABASES['default']['OPTIONS'] = {'timeout': N}` (e/ou modo WAL via um `PRAGMA` de inicialização) como parte de introduzir o segundo escritor, declarado uma vez na espinha dorsal pra não ficar dependendo de qual desenvolvedor bater no erro de lock primeiro em produção.
+
+---
+
+## Confiança mais baixa / vale um olhar mas não escrito por completo
+
+- **Propriedade da linha padrão de `NotificationPreference` (AD-3):** "`NotificationPreference` só é escrita pela própria tela de preferências" lê como proibindo qualquer outro caminho de escrita, mas a checagem de bloqueio de e-mail do FR-7 em `fetch_daily_results` precisa de *alguma* resposta pra usuários que nunca visitaram a tela de preferências (nenhuma linha existe ainda). Um fallback padrão do lado da leitura (`site_enabled=True, email_enabled=False` quando não há linha) é consistente com a AD; uma chamada `get_or_create` a partir do job é uma implementação plausível e idiomática que tecnicamente viola o texto literal da AD. Vale a AD-3 declarar explicitamente qual das duas é a pretendida, e se `user` é exigido único (`OneToOneField`), já que isso também não está declarado.
+- **Granularidade da allowlist do middleware vs. endpoints auxiliares da mesma página:** a tela de completar perfil quase certamente renderiza o chrome de template compartilhado do site (alternador de tema, etc.); `accounts/theme/toggle/` não está na allowlist declarada da AD-8 ("captura, estáticos, logout"), então uma ação legítima dentro da própria página, a partir da tela de captura, é redirecionada de volta pra mesma tela em vez de executar. Menor (sem loop infinito, só um alternador silenciosamente quebrado), mas é a mesma causa raiz de G2/G3 — a allowlist é enumerada chutando no que um usuário autenticado-incompleto poderia clicar, não derivada de uma lista real de nomes de URL isentos fixada na espinha dorsal.
+
+---
+
+## Tabela-Resumo
+
+| ID | Severidade | AD(s) a reforçar | Lacuna em uma linha |
 |----|----------|-------------------|---------------|
-| G1 | Critical | AD-4 (FR-3 trigger) | Notification creation fires on "I wrote this row," not "this row needs coverage" — on-demand writes silently starve other users' notifications |
-| G2 | Critical | AD-8 | Allowlist has no `/admin/`/staff exemption and no grandfather clause — blanket rule locks out every pre-existing account, including the operator, on deploy |
-| G3 | High | AD-8 (+ FR-12) | Password-creation screen not in the allowlist — profile-completion gate wins the race and password is never set |
-| G4 | High | AD-3 / AD-4 | No mandated uniqueness constraint on `HitNotification` — overlapping cron runs (AD-6) can double-create notifications and duplicate emails (violates SM-C1) |
-| G5 | Medium-High | AD-5 / AD-6 | No specified mechanism for `fetch_daily_results()` to know it's the "final" (3h30) invocation that should alert the operator |
-| G6 | Medium | AD-2 / PRD §3.1 | Rename mapping omits cross-model identifiers (`related_name`, shared `JOGOS_CHOICES`) — splitting the rename by model risks import-breaking divergence |
-| G7 | Medium | AD-7 | Two containers now write one SQLite file with no mandated timeout/WAL setting |
+| G1 | Crítica | AD-4 (gatilho do FR-3) | Criação de notificação dispara em "eu escrevi essa linha," não em "essa linha precisa de cobertura" — escritas on-demand suprimem silenciosamente notificações de outros usuários |
+| G2 | Crítica | AD-8 | Allowlist sem isenção pra `/admin/`/staff e sem cláusula de avô — regra geral bloqueia toda conta pré-existente, inclusive o operador, no deploy |
+| G3 | Alta | AD-8 (+ FR-12) | Tela de criação de senha fora da allowlist — o gate de completar perfil ganha a corrida e a senha nunca é definida |
+| G4 | Alta | AD-3 / AD-4 | Nenhuma constraint de unicidade exigida em `HitNotification` — execuções de cron sobrepostas (AD-6) podem criar notificações em duplicidade e e-mails duplicados (viola SM-C1) |
+| G5 | Média-Alta | AD-5 / AD-6 | Nenhum mecanismo especificado pra `fetch_daily_results()` saber que é a invocação "final" (3h30) que deveria alertar o operador |
+| G6 | Média | AD-2 / PRD §3.1 | Mapeamento de rename omite identificadores entre models (`related_name`, `JOGOS_CHOICES` compartilhado) — dividir o rename por model arrisca divergência que quebra import |
+| G7 | Média | AD-7 | Dois containers agora escrevem num único arquivo SQLite sem timeout/WAL exigido |
