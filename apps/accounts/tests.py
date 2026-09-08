@@ -154,3 +154,33 @@ class ProfileViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['user'].bets.count(), 2)
         self.assertContains(response, '2')
+
+
+class ToggleThemeViewTests(TestCase):
+    """Regressao do rename User.tema_preferido->preferred_theme (Story 1.5)."""
+
+    def test_usuario_autenticado_alterna_de_light_para_dark(self):
+        user = User.objects.create_user(email='tema@example.com', password='SenhaForte123')
+        self.assertEqual(user.preferred_theme, 'light')
+        self.client.force_login(user)
+
+        self.client.get(reverse('toggle_theme'), HTTP_REFERER='/')
+
+        user.refresh_from_db()
+        self.assertEqual(user.preferred_theme, 'dark')
+
+    def test_usuario_autenticado_alterna_de_dark_para_light(self):
+        user = User.objects.create_user(email='tema2@example.com', password='SenhaForte123')
+        user.preferred_theme = 'dark'
+        user.save(update_fields=['preferred_theme'])
+        self.client.force_login(user)
+
+        self.client.get(reverse('toggle_theme'), HTTP_REFERER='/')
+
+        user.refresh_from_db()
+        self.assertEqual(user.preferred_theme, 'light')
+
+    def test_usuario_anonimo_usa_sessao_sem_tocar_model(self):
+        response = self.client.get(reverse('toggle_theme'), HTTP_REFERER='/', follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session.get('theme'), 'dark')

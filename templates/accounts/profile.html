@@ -23,7 +23,7 @@
                             {% endif %}
                             <h5>{{ user.get_full_name }}</h5>
                             <p class="text-secondary">{{ user.email }}</p>
-                            <span class="badge bg-primary">{{ user.tema_preferido|title }} Mode</span>
+                            <span class="badge bg-primary">{{ user.preferred_theme|title }} Mode</span>
                         </div>
                         <div class="col-md-8">
                             <form method="post" enctype="multipart/form-data">

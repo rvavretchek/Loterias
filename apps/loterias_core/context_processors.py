@@ -1,7 +1,7 @@
 def theme_context(request):
     """Adiciona informacao de tema ao contexto de todas as views."""
     if request.user.is_authenticated:
-        theme = request.user.tema_preferido
+        theme = request.user.preferred_theme
     else:
         theme = request.session.get('theme', 'light')
 
