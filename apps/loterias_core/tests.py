@@ -8,69 +8,69 @@ from django.urls import reverse
 from apps.accounts.models import User
 from apps.loterias_core.models import GeneratedBet, LotteryResult, GAMES_CONFIG
 from apps.loterias_core.utils import (
-    calcular_estatisticas,
-    calcular_premiacao_jogo,
-    capturar_resultado_cef,
-    contar_pares_sequenciais,
-    gerar_aposta,
-    normalizar_numeros,
-    verificar_jogo_repetido,
+    calculate_statistics,
+    calculate_bet_prize,
+    fetch_cef_result,
+    count_sequential_pairs,
+    generate_bet,
+    normalize_numbers,
+    check_duplicate_bet,
 )
 
 
-class NormalizarNumerosTests(TestCase):
+class NormalizeNumbersTests(TestCase):
     def test_aceita_string_separada_por_virgula(self):
-        self.assertEqual(normalizar_numeros('1, 2, 3, 4, 5, 6'), [1, 2, 3, 4, 5, 6])
+        self.assertEqual(normalize_numbers('1, 2, 3, 4, 5, 6'), [1, 2, 3, 4, 5, 6])
 
     def test_aceita_string_separada_por_ponto_e_virgula(self):
-        self.assertEqual(normalizar_numeros('1;2;3'), [1, 2, 3])
+        self.assertEqual(normalize_numbers('1;2;3'), [1, 2, 3])
 
     def test_aceita_lista(self):
-        self.assertEqual(normalizar_numeros([1, 2, 3, 4]), [1, 2, 3, 4])
+        self.assertEqual(normalize_numbers([1, 2, 3, 4]), [1, 2, 3, 4])
 
     def test_aceita_inteiro_unico(self):
-        self.assertEqual(normalizar_numeros(7), [7])
+        self.assertEqual(normalize_numbers(7), [7])
 
     def test_none_retorna_lista_vazia(self):
-        self.assertEqual(normalizar_numeros(None), [])
+        self.assertEqual(normalize_numbers(None), [])
 
     def test_string_vazia_retorna_lista_vazia(self):
-        self.assertEqual(normalizar_numeros(''), [])
+        self.assertEqual(normalize_numbers(''), [])
 
 
-class ContarParesSequenciaisTests(TestCase):
+class CountSequentialPairsTests(TestCase):
     def test_lista_vazia_sem_pares(self):
-        self.assertEqual(contar_pares_sequenciais([]), 0)
+        self.assertEqual(count_sequential_pairs([]), 0)
 
     def test_lista_com_um_elemento_sem_pares(self):
-        self.assertEqual(contar_pares_sequenciais([5]), 0)
+        self.assertEqual(count_sequential_pairs([5]), 0)
 
     def test_sem_numeros_consecutivos(self):
-        self.assertEqual(contar_pares_sequenciais([1, 5, 10, 20]), 0)
+        self.assertEqual(count_sequential_pairs([1, 5, 10, 20]), 0)
 
     def test_um_par_consecutivo(self):
-        self.assertEqual(contar_pares_sequenciais([1, 5, 10, 11]), 1)
+        self.assertEqual(count_sequential_pairs([1, 5, 10, 11]), 1)
 
     def test_dois_pares_consecutivos_nao_sobrepostos(self):
-        self.assertEqual(contar_pares_sequenciais([1, 2, 10, 11]), 2)
+        self.assertEqual(count_sequential_pairs([1, 2, 10, 11]), 2)
 
     def test_ordena_antes_de_contar(self):
-        self.assertEqual(contar_pares_sequenciais([11, 1, 10, 2]), 2)
+        self.assertEqual(count_sequential_pairs([11, 1, 10, 2]), 2)
 
     def test_tres_consecutivos_conta_um_par_e_sobra_um(self):
         # 1,2,3 -> par (1,2) consumido, 3 fica isolado
-        self.assertEqual(contar_pares_sequenciais([1, 2, 3]), 1)
+        self.assertEqual(count_sequential_pairs([1, 2, 3]), 1)
 
 
-class GerarApostaTests(TestCase):
+class GenerateBetTests(TestCase):
     def test_jogo_invalido_retorna_none(self):
-        nums, trevos = gerar_aposta('Jogo-Inexistente')
+        nums, trevos = generate_bet('Jogo-Inexistente')
         self.assertIsNone(nums)
         self.assertIsNone(trevos)
 
     def test_mega_sena_gera_quantidade_e_intervalo_corretos(self):
         for _ in range(20):
-            nums, trevos = gerar_aposta('Mega-sena')
+            nums, trevos = generate_bet('Mega-sena')
             self.assertEqual(len(nums), 6)
             self.assertEqual(len(set(nums)), 6, 'numeros nao podem se repetir')
             self.assertTrue(all(1 <= n <= 60 for n in nums))
@@ -78,7 +78,7 @@ class GerarApostaTests(TestCase):
 
     def test_milionaria_gera_numeros_e_trevos(self):
         for _ in range(20):
-            nums, trevos = gerar_aposta('Milionaria')
+            nums, trevos = generate_bet('Milionaria')
             self.assertEqual(len(nums), 6)
             self.assertTrue(all(1 <= n <= 50 for n in nums))
             self.assertEqual(len(trevos), 2)
@@ -86,13 +86,13 @@ class GerarApostaTests(TestCase):
             self.assertTrue(all(1 <= t <= 6 for t in trevos))
 
     def test_lotomania_gera_50_numeros_ate_100(self):
-        nums, trevos = gerar_aposta('Lotomania')
+        nums, trevos = generate_bet('Lotomania')
         self.assertEqual(len(nums), 50)
         self.assertTrue(all(1 <= n <= 100 for n in nums))
 
     def test_numeros_gerados_sempre_ordenados(self):
         for _ in range(10):
-            nums, _ = gerar_aposta('Quina')
+            nums, _ = generate_bet('Quina')
             self.assertEqual(nums, sorted(nums))
 
     def test_bloqueia_sequencia_apos_historico_recente_com_par(self):
@@ -102,17 +102,17 @@ class GerarApostaTests(TestCase):
             numbers=[1, 2, 10, 20, 30, 40], clovers=[], sequential_pairs=1,
         )
         for _ in range(30):
-            nums, _ = gerar_aposta('Mega-sena', usuario)
-            self.assertEqual(contar_pares_sequenciais(nums), 0)
+            nums, _ = generate_bet('Mega-sena', usuario)
+            self.assertEqual(count_sequential_pairs(nums), 0)
 
 
-class VerificarJogoRepetidoTests(TestCase):
+class CheckDuplicateBetTests(TestCase):
     def setUp(self):
         self.usuario = User.objects.create_user(email='rep@example.com', password='SenhaForte123')
 
     def test_jogo_nao_existente_nao_e_repetido(self):
         self.assertFalse(
-            verificar_jogo_repetido(self.usuario, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
+            check_duplicate_bet(self.usuario, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
         )
 
     def test_jogo_identico_e_repetido(self):
@@ -121,14 +121,14 @@ class VerificarJogoRepetidoTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=2,
         )
         self.assertTrue(
-            verificar_jogo_repetido(self.usuario, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
+            check_duplicate_bet(self.usuario, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
         )
 
 
-class CalcularEstatisticasTests(TestCase):
+class CalculateStatisticsTests(TestCase):
     def test_sem_jogos_retorna_none(self):
         usuario = User.objects.create_user(email='stats1@example.com', password='SenhaForte123')
-        self.assertIsNone(calcular_estatisticas(usuario, 'Mega-sena'))
+        self.assertIsNone(calculate_statistics(usuario, 'Mega-sena'))
 
     def test_calcula_totais_e_frequencia(self):
         usuario = User.objects.create_user(email='stats2@example.com', password='SenhaForte123')
@@ -140,7 +140,7 @@ class CalcularEstatisticasTests(TestCase):
             user=usuario, game='Mega-sena', contest='2',
             numbers=[1, 2, 7, 8, 9, 10], clovers=[], sequential_pairs=0,
         )
-        stats = calcular_estatisticas(usuario, 'Mega-sena')
+        stats = calculate_statistics(usuario, 'Mega-sena')
         self.assertEqual(stats['total'], 2)
         self.assertEqual(stats['com_sequencia'], 1)
         self.assertEqual(stats['sem_sequencia'], 1)
@@ -149,9 +149,9 @@ class CalcularEstatisticasTests(TestCase):
         self.assertEqual(frequencia[2], 2)
 
 
-class CalcularPremiacaoJogoTests(TestCase):
+class CalculateBetPrizeTests(TestCase):
     def test_sem_resultado_oficial_nao_ganha(self):
-        premio = calcular_premiacao_jogo('Mega-sena', [1, 2, 3, 4, 5, 6], [], None)
+        premio = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], None)
         self.assertFalse(premio['ganhou'])
         self.assertEqual(premio['acertos'], 0)
         self.assertEqual(premio['categoria'], 'Sem resultado')
@@ -162,7 +162,7 @@ class CalcularPremiacaoJogoTests(TestCase):
             'trevos': [],
             'premiacoes': {'sena': {'valor': 'R$ 500.000,00'}},
         }
-        premio = calcular_premiacao_jogo('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
+        premio = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
         self.assertTrue(premio['ganhou'])
         self.assertEqual(premio['acertos'], 6)
         self.assertIn('R$', premio['valor'])
@@ -173,28 +173,28 @@ class CalcularPremiacaoJogoTests(TestCase):
             'trevos': [],
             'premiacoes': {'sena': {'valor': 'R$ 500.000,00'}},
         }
-        premio = calcular_premiacao_jogo('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
+        premio = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
         self.assertFalse(premio['ganhou'])
         self.assertEqual(premio['acertos'], 3)
         self.assertEqual(premio['categoria'], 'Sem premio')
 
     def test_premiacao_ausente_para_faixa_nao_gera_erro(self):
         resultado = {'numeros': [1, 2, 3, 4, 5, 6], 'trevos': [], 'premiacoes': {}}
-        premio = calcular_premiacao_jogo('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
+        premio = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], resultado)
         self.assertFalse(premio['ganhou'])
         self.assertEqual(premio['valor'], 'R$ 0,00')
 
 
-class CapturarResultadoCefTests(TestCase):
-    """capturar_resultado_cef faz scraping externo -- sempre mockar requests.get."""
+class FetchCefResultTests(TestCase):
+    """fetch_cef_result faz scraping externo -- sempre mockar requests.get."""
 
     def test_jogo_desconhecido_retorna_none(self):
-        self.assertIsNone(capturar_resultado_cef('Jogo-Inexistente', '2500'))
+        self.assertIsNone(fetch_cef_result('Jogo-Inexistente', '2500'))
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_erro_de_rede_retorna_none_sem_levantar_excecao(self, mock_get):
         mock_get.side_effect = Exception('timeout')
-        self.assertIsNone(capturar_resultado_cef('Mega-sena', '2500'))
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_pagina_sem_numeros_reconheciveis_retorna_none(self, mock_get):
@@ -202,7 +202,7 @@ class CapturarResultadoCefTests(TestCase):
         mock_response.text = '<html><body>Sem concurso hoje</body></html>'
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
-        self.assertIsNone(capturar_resultado_cef('Mega-sena', '2500'))
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_pagina_com_numeros_retorna_resultado(self, mock_get):
@@ -211,7 +211,7 @@ class CapturarResultadoCefTests(TestCase):
         mock_response.text = html
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
-        resultado = capturar_resultado_cef('Mega-sena', '2500')
+        resultado = fetch_cef_result('Mega-sena', '2500')
         self.assertIsNotNone(resultado)
         self.assertEqual(resultado['jogo'], 'Mega-sena')
         self.assertEqual(resultado['numeros'], [4, 8, 15, 16, 23, 42])

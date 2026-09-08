@@ -4,10 +4,10 @@ from decimal import Decimal
 
 import requests
 
-from .models import JogoGerado, JOGOS_CONFIG, JOGOS_COM_REGRA_SEQUENCIA, INTERVALO_MIN_SEQUENCIA, ResultadoLoteria
+from .models import GeneratedBet, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL
 
 
-def normalizar_numeros(numeros):
+def normalize_numbers(numeros):
     """Normaliza entradas em lista de inteiros para uso em validação e tabela."""
     if numeros is None:
         return []
@@ -23,7 +23,7 @@ def normalizar_numeros(numeros):
     return [int(numeros)]
 
 
-def contar_pares_sequenciais(numeros):
+def count_sequential_pairs(numeros):
     """Conta quantos pares de numeros consecutivos existem na lista ordenada."""
     if len(numeros) < 2:
         return 0
@@ -39,29 +39,29 @@ def contar_pares_sequenciais(numeros):
     return pares
 
 
-def ultimos_jogos_tiveram_sequencia(usuario, jogo_nome, intervalo=INTERVALO_MIN_SEQUENCIA):
+def recent_bets_had_sequence(usuario, jogo_nome, intervalo=MIN_SEQUENCE_INTERVAL):
     """Verifica se nos ultimos N jogos do mesmo tipo houve algum par sequencial."""
-    ultimos = JogoGerado.objects.filter(
-        usuario=usuario,
-        jogo=jogo_nome
-    ).order_by('-criado_em')[:intervalo]
+    ultimos = GeneratedBet.objects.filter(
+        user=usuario,
+        game=jogo_nome
+    ).order_by('-created_at')[:intervalo]
 
     for jogo in ultimos:
-        if contar_pares_sequenciais(jogo.numeros) > 0:
+        if count_sequential_pairs(jogo.numbers) > 0:
             return True
     return False
 
 
-def gerar_aposta(nome_jogo, usuario=None):
+def generate_bet(nome_jogo, usuario=None):
     """Gera uma aposta valida respeitando as regras de sequencia."""
-    config = JOGOS_CONFIG.get(nome_jogo)
+    config = GAMES_CONFIG.get(nome_jogo)
     if not config:
         return None, None
 
-    aplica_regra_sequencia = nome_jogo in JOGOS_COM_REGRA_SEQUENCIA
+    aplica_regra_sequencia = nome_jogo in GAMES_WITH_SEQUENCE_RULE
 
     if aplica_regra_sequencia and usuario is not None:
-        bloquear_sequencias = ultimos_jogos_tiveram_sequencia(usuario, nome_jogo)
+        bloquear_sequencias = recent_bets_had_sequence(usuario, nome_jogo)
     else:
         bloquear_sequencias = False
 
@@ -71,15 +71,15 @@ def gerar_aposta(nome_jogo, usuario=None):
     while tentativa < max_tentativas:
         tentativa += 1
         resultado_jogo = []
-        while len(resultado_jogo) < config['apostas']:
-            numero = random.randint(1, config['numeros'])
+        while len(resultado_jogo) < config['bets_count']:
+            numero = random.randint(1, config['numbers_count'])
             if numero not in resultado_jogo:
                 resultado_jogo.append(numero)
 
         resultado_jogo.sort()
 
         if aplica_regra_sequencia:
-            pares = contar_pares_sequenciais(resultado_jogo)
+            pares = count_sequential_pairs(resultado_jogo)
 
             if bloquear_sequencias:
                 if pares > 0:
@@ -91,9 +91,9 @@ def gerar_aposta(nome_jogo, usuario=None):
         break
 
     resultado_trevos = []
-    if config['qtd_trevos'] > 0:
-        while len(resultado_trevos) < config['trevos']:
-            trevo = random.randint(1, config['qtd_trevos'])
+    if config['clovers_count'] > 0:
+        while len(resultado_trevos) < config['clovers']:
+            trevo = random.randint(1, config['clovers_count'])
             if trevo not in resultado_trevos:
                 resultado_trevos.append(trevo)
         resultado_trevos.sort()
@@ -101,29 +101,29 @@ def gerar_aposta(nome_jogo, usuario=None):
     return resultado_jogo, resultado_trevos
 
 
-def verificar_jogo_repetido(usuario, jogo_nome, numeros, trevos):
+def check_duplicate_bet(usuario, jogo_nome, numeros, trevos):
     """Verifica se um jogo identico ja foi gerado pelo usuario."""
-    return JogoGerado.objects.filter(
-        usuario=usuario,
-        jogo=jogo_nome,
-        numeros=numeros,
-        trevos=trevos if trevos else []
+    return GeneratedBet.objects.filter(
+        user=usuario,
+        game=jogo_nome,
+        numbers=numeros,
+        clovers=trevos if trevos else []
     ).exists()
 
 
-def calcular_estatisticas(usuario, jogo_nome):
+def calculate_statistics(usuario, jogo_nome):
     """Calcula estatisticas para um tipo de jogo especifico."""
-    jogos = JogoGerado.objects.filter(usuario=usuario, jogo=jogo_nome)
+    jogos = GeneratedBet.objects.filter(user=usuario, game=jogo_nome)
     total = jogos.count()
 
     if total == 0:
         return None
 
-    com_sequencia = jogos.filter(pares_sequenciais__gt=0).count()
+    com_sequencia = jogos.filter(sequential_pairs__gt=0).count()
 
     frequencia = {}
     for jogo in jogos:
-        for num in jogo.numeros:
+        for num in jogo.numbers:
             frequencia[num] = frequencia.get(num, 0) + 1
 
     mais_frequentes = sorted(frequencia.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -137,13 +137,13 @@ def calcular_estatisticas(usuario, jogo_nome):
     }
 
 
-def calcular_premiacao_jogo(jogo, numeros_usuario, trevos_usuario=None, resultado_oficial=None):
+def calculate_bet_prize(jogo, numeros_usuario, trevos_usuario=None, resultado_oficial=None):
     """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e status."""
     if resultado_oficial is None:
         return {'ganhou': False, 'acertos': 0, 'valor': 'R$ 0,00', 'categoria': 'Sem resultado'}
 
-    numeros_usuario = set(normalizar_numeros(numeros_usuario))
-    numeros_resultado = set(normalizar_numeros(resultado_oficial.get('numeros', [])))
+    numeros_usuario = set(normalize_numbers(numeros_usuario))
+    numeros_resultado = set(normalize_numbers(resultado_oficial.get('numeros', [])))
     acertos = len(numeros_usuario & numeros_resultado)
 
     premio = resultado_oficial.get('premiacoes', {})
@@ -182,7 +182,7 @@ def calcular_premiacao_jogo(jogo, numeros_usuario, trevos_usuario=None, resultad
     }
 
 
-def capturar_resultado_cef(jogo, concurso):
+def fetch_cef_result(jogo, concurso):
     """Busca o resultado oficial do jogo e concurso na CEF. Se a pagina da Caixa estiver indisponivel, retorna None."""
     jogo_slug = {
         'Mega-sena': 'mega-sena',
@@ -235,23 +235,23 @@ def capturar_resultado_cef(jogo, concurso):
     }
 
 
-def verificar_resultados_usuarios(usuario=None):
+def check_user_results(usuario=None):
     """Valida jogos do usuario contra resultados oficiais da CEF e atualiza o status de premio."""
-    queryset = JogoGerado.objects.all()
+    queryset = GeneratedBet.objects.all()
     if usuario is not None:
-        queryset = queryset.filter(usuario=usuario)
+        queryset = queryset.filter(user=usuario)
 
     for jogo in queryset:
-        if jogo.resultado_verificado:
+        if jogo.result_checked:
             continue
-        resultado = capturar_resultado_cef(jogo.jogo, jogo.concurso)
+        resultado = fetch_cef_result(jogo.game, jogo.contest)
         if not resultado:
             continue
-        premio = calcular_premiacao_jogo(jogo.jogo, jogo.numeros, jogo.trevos, resultado)
-        jogo.resultado_verificado = True
-        jogo.acertos = premio['acertos']
-        jogo.premio = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        jogo.premio_descricao = premio['categoria']
-        jogo.save(update_fields=['resultado_verificado', 'acertos', 'premio', 'premio_descricao', 'atualizado_em'])
+        premio = calculate_bet_prize(jogo.game, jogo.numbers, jogo.clovers, resultado)
+        jogo.result_checked = True
+        jogo.hits = premio['acertos']
+        jogo.prize = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
+        jogo.prize_description = premio['categoria']
+        jogo.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
 
     return True
