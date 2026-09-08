@@ -138,16 +138,16 @@ class ProfileViewTests(TestCase):
     a contagem exibida no perfil (user.bets.count) precisa continuar correta."""
 
     def setUp(self):
-        self.usuario = User.objects.create_user(email='perfil@example.com', password='SenhaForte123')
-        self.client.force_login(self.usuario)
+        self.user = User.objects.create_user(email='perfil@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
 
-    def test_perfil_mostra_contagem_correta_de_jogos_gerados(self):
+    def test_profile_shows_correct_count_of_generated_bets(self):
         GeneratedBet.objects.create(
-            user=self.usuario, game='Mega-sena', contest='1',
+            user=self.user, game='Mega-sena', contest='1',
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
         GeneratedBet.objects.create(
-            user=self.usuario, game='Quina', contest='1',
+            user=self.user, game='Quina', contest='1',
             numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
         )
         response = self.client.get(reverse('profile'))
@@ -159,7 +159,7 @@ class ProfileViewTests(TestCase):
 class ToggleThemeViewTests(TestCase):
     """Regressao do rename User.tema_preferido->preferred_theme (Story 1.5)."""
 
-    def test_usuario_autenticado_alterna_de_light_para_dark(self):
+    def test_authenticated_user_toggles_from_light_to_dark(self):
         user = User.objects.create_user(email='tema@example.com', password='SenhaForte123')
         self.assertEqual(user.preferred_theme, 'light')
         self.client.force_login(user)
@@ -169,7 +169,7 @@ class ToggleThemeViewTests(TestCase):
         user.refresh_from_db()
         self.assertEqual(user.preferred_theme, 'dark')
 
-    def test_usuario_autenticado_alterna_de_dark_para_light(self):
+    def test_authenticated_user_toggles_from_dark_to_light(self):
         user = User.objects.create_user(email='tema2@example.com', password='SenhaForte123')
         user.preferred_theme = 'dark'
         user.save(update_fields=['preferred_theme'])
@@ -180,7 +180,7 @@ class ToggleThemeViewTests(TestCase):
         user.refresh_from_db()
         self.assertEqual(user.preferred_theme, 'light')
 
-    def test_usuario_anonimo_usa_sessao_sem_tocar_model(self):
+    def test_anonymous_user_uses_session_without_touching_model(self):
         response = self.client.get(reverse('toggle_theme'), HTTP_REFERER='/', follow=False)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.client.session.get('theme'), 'dark')
