@@ -153,11 +153,11 @@ Para que rotas, páginas e o painel de administração continuem funcionando com
 **E** uma navegação manual pelas páginas principais (home, gerar jogo, detalhes, histórico) funciona sem erro novo de 500/404
 **E** `apps/loterias_core/admin.py` é renomeado junto (`JogoGeradoAdmin`→`GeneratedBetAdmin`, `EstatisticaJogoAdmin`→`GameStatisticsAdmin`), incluindo `list_display`/`list_filter`/`search_fields`/`readonly_fields` que hoje referenciam os campos antigos — o painel de administração continua funcionando sem erro
 
-### Story 1.4: Cobrir reverse accessors renomeados e validar a migration antes do deploy
+### Story 1.4: Cobrir reverse accessors renomeados e documentar o runbook de migration para produção futura
 
 Como desenvolvedor do Loterias,
-Eu quero testes cobrindo user.bets/user.statistics e um backup do SQLite de produção documentado,
-Para que a renomeação não vire uma regressão silenciosa nem um risco de perda de dados.
+Eu quero testes cobrindo user.bets/user.statistics e o runbook de backup documentado para quando existir produção real,
+Para que a renomeação não vire uma regressão silenciosa hoje, nem um risco de perda de dados no dia em que houver produção.
 
 **Critérios de Aceite:**
 
@@ -165,9 +165,8 @@ Para que a renomeação não vire uma regressão silenciosa nem um risco de perd
 **Quando** a suite roda
 **Então** existem casos de teste exercitando explicitamente `user.bets` e `user.statistics` (que a suite atual não cobre)
 **E** `python manage.py test` retorna 100% de sucesso
-**E** o runbook de deploy documenta copiar o arquivo do volume `loterias_data` antes de aplicar a migration em produção
-**E** antes do deploy real, a migration é rodada contra uma **cópia do `db.sqlite3` de produção** (não só o banco de teste vazio do Django) — contagem de linhas antes/depois confere e uma amostra de registros é conferida manualmente
-**E** as 4 stories deste épico são mergeadas como um único PR/commit (AD-2) — não incrementalmente
+**E** o runbook de deploy (`deploy/lab/README.md`) documenta o procedimento de backup do volume `loterias_data` e de validação de migration contra uma cópia real do `db.sqlite3`, a ser seguido **quando** o ambiente for declarado produção pelo Boss — hoje (2026-09-08) o lab é confirmadamente um ambiente de teste descartável, sem dados reais a proteger (ver [[project-loterias-dev-db-and-english-code-premise]] na memória), então não há backup/validação de dados reais a executar nesta story
+**E** as 5 stories deste épico (1.1 a 1.5) são mergeadas em `main` como um único PR quando a última (1.5) estiver concluída (AD-2) — não incrementalmente; Story 1.4 não abre esse PR sozinha
 
 ### Story 1.5: Renomear campos remanescentes em português no model User
 

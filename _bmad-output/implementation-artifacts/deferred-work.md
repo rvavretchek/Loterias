@@ -1,8 +1,4 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-renomear-models-e-constantes.md`
-  summary: Confirmar se o deploy do lab (`deploy/lab/docker-compose.yml`) já aplicou a migration `0001_initial` de `loterias_core` com o schema antigo (português) antes desta renomeação.
-  evidence: A Story 1.1 editou `0001_initial.py` no lugar (nomes novos direto na `CreateModel`) em vez de gerar uma `0002` com `RenameModel`/`RenameField`, sancionado pela spec só para bancos de dev sem essa migration ainda aplicada. Se o ambiente do lab já rodou `migrate` com o schema antigo, aplicar essa mesma migration lá seria um no-op do Django (mesmo nome de migration), deixando as colunas reais divergentes dos nomes que o código agora espera — um `OperationalError: no such column` em produção. Não dá pra confirmar isso só pelo repo local; precisa de uma decisão/checagem do Boss antes do deploy do Epic 1 completo.
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-renomear-models-e-constantes.md`
   summary: Atualizar a seção "Lottery domain logic" do CLAUDE.md pros nomes novos em inglês, depois que as 4 stories do Epic 1 estiverem todas aplicadas.
   evidence: CLAUDE.md hoje documenta `JogoGerado`, `ResultadoLoteria`, `EstatisticaJogo`, `JOGOS_CONFIG`, `gerar_aposta()` etc. como a arquitetura atual — desatualizado assim que Story 1.1 renomeia `models.py`. Atualizar agora seria documentar um estado transitório pela metade (já que `utils.py`/`views.py` ainda estão em português até 1.2/1.3); faz mais sentido corrigir de uma vez quando o Epic 1 inteiro fechar (natural pra Story 1.4, que já é a story de fechamento/validação do épico).
 

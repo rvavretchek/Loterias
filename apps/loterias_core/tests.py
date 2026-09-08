@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.models import User
-from apps.loterias_core.models import GeneratedBet, LotteryResult, GAMES_CONFIG
+from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, GAMES_CONFIG
 from apps.loterias_core.utils import (
     calculate_statistics,
     calculate_bet_prize,
@@ -515,3 +515,37 @@ class AdminSmokeTests(TestCase):
     def test_gamestatistics_admin_lista(self):
         response = self.client.get('/admin/loterias_core/gamestatistics/')
         self.assertEqual(response.status_code, 200)
+
+
+class ReverseAccessorTests(TestCase):
+    """Cobre user.bets e user.statistics (related_name renomeados na Story 1.1), sem teste ate aqui."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='reverse@example.com', password='SenhaForte123')
+
+    def test_user_bets_retorna_jogos_do_usuario(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        self.assertEqual(list(self.user.bets.all()), [bet])
+
+    def test_user_bets_nao_inclui_jogo_de_outro_usuario(self):
+        outro_usuario = User.objects.create_user(email='outro@example.com', password='SenhaForte123')
+        GeneratedBet.objects.create(
+            user=outro_usuario, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        self.assertEqual(self.user.bets.count(), 0)
+
+    def test_user_statistics_retorna_estatisticas_do_usuario(self):
+        stats = GameStatistics.objects.create(
+            user=self.user, game='Quina', total_bets=3,
+            total_with_sequence=1, total_without_sequence=2,
+        )
+        self.assertEqual(list(self.user.statistics.all()), [stats])
+
+    def test_user_statistics_nao_inclui_estatistica_de_outro_usuario(self):
+        outro_usuario = User.objects.create_user(email='outro2@example.com', password='SenhaForte123')
+        GameStatistics.objects.create(user=outro_usuario, game='Quina', total_bets=1)
+        self.assertEqual(self.user.statistics.count(), 0)

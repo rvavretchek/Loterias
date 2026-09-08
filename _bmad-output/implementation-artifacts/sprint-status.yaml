@@ -39,7 +39,7 @@ development_status:
   1-1-renomear-models-e-constantes-de-loterias_core-para-inglês: review
   1-2-renomear-funções-de-domínio-em-utils-py: review
   1-3-renomear-views-admin-py-e-atualizar-urls-py-templates: review
-  1-4-cobrir-reverse-accessors-renomeados-e-validar-a-migration-an: backlog
+  1-4-cobrir-reverse-accessors-renomeados-e-validar-a-migration-an: review
   1-5-renomear-campos-remanescentes-em-português-no-model-user: backlog
   epic-1-retrospective: optional
 
