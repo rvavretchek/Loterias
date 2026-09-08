@@ -7,197 +7,197 @@ import requests
 from .models import GeneratedBet, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL
 
 
-def normalize_numbers(numeros):
+def normalize_numbers(numbers):
     """Normaliza entradas em lista de inteiros para uso em validação e tabela."""
-    if numeros is None:
+    if numbers is None:
         return []
-    if isinstance(numeros, str):
-        numeros = numeros.replace(' ', '').replace(';', ',').replace('.', ',')
-        if ',' in numeros:
-            lista = numeros.split(',')
+    if isinstance(numbers, str):
+        numbers = numbers.replace(' ', '').replace(';', ',').replace('.', ',')
+        if ',' in numbers:
+            parts = numbers.split(',')
         else:
-            lista = [numeros]
-        return [int(item) for item in lista if item]
-    if isinstance(numeros, (list, tuple, set)):
-        return [int(item) for item in numeros]
-    return [int(numeros)]
+            parts = [numbers]
+        return [int(item) for item in parts if item]
+    if isinstance(numbers, (list, tuple, set)):
+        return [int(item) for item in numbers]
+    return [int(numbers)]
 
 
-def count_sequential_pairs(numeros):
+def count_sequential_pairs(numbers):
     """Conta quantos pares de numeros consecutivos existem na lista ordenada."""
-    if len(numeros) < 2:
+    if len(numbers) < 2:
         return 0
-    pares = 0
+    pairs = 0
     i = 0
-    nums_sorted = sorted(numeros)
+    nums_sorted = sorted(numbers)
     while i < len(nums_sorted) - 1:
         if nums_sorted[i + 1] == nums_sorted[i] + 1:
-            pares += 1
+            pairs += 1
             i += 2
         else:
             i += 1
-    return pares
+    return pairs
 
 
-def recent_bets_had_sequence(usuario, jogo_nome, intervalo=MIN_SEQUENCE_INTERVAL):
+def recent_bets_had_sequence(user, game_name, interval=MIN_SEQUENCE_INTERVAL):
     """Verifica se nos ultimos N jogos do mesmo tipo houve algum par sequencial."""
-    ultimos = GeneratedBet.objects.filter(
-        user=usuario,
-        game=jogo_nome
-    ).order_by('-created_at')[:intervalo]
+    recent_bets = GeneratedBet.objects.filter(
+        user=user,
+        game=game_name
+    ).order_by('-created_at')[:interval]
 
-    for jogo in ultimos:
-        if count_sequential_pairs(jogo.numbers) > 0:
+    for bet in recent_bets:
+        if count_sequential_pairs(bet.numbers) > 0:
             return True
     return False
 
 
-def generate_bet(nome_jogo, usuario=None):
+def generate_bet(game_name, user=None):
     """Gera uma aposta valida respeitando as regras de sequencia."""
-    config = GAMES_CONFIG.get(nome_jogo)
+    config = GAMES_CONFIG.get(game_name)
     if not config:
         return None, None
 
-    aplica_regra_sequencia = nome_jogo in GAMES_WITH_SEQUENCE_RULE
+    applies_sequence_rule = game_name in GAMES_WITH_SEQUENCE_RULE
 
-    if aplica_regra_sequencia and usuario is not None:
-        bloquear_sequencias = recent_bets_had_sequence(usuario, nome_jogo)
+    if applies_sequence_rule and user is not None:
+        block_sequences = recent_bets_had_sequence(user, game_name)
     else:
-        bloquear_sequencias = False
+        block_sequences = False
 
-    max_tentativas = 10000
-    tentativa = 0
+    max_attempts = 10000
+    attempt = 0
 
-    while tentativa < max_tentativas:
-        tentativa += 1
-        resultado_jogo = []
-        while len(resultado_jogo) < config['bets_count']:
-            numero = random.randint(1, config['numbers_count'])
-            if numero not in resultado_jogo:
-                resultado_jogo.append(numero)
+    while attempt < max_attempts:
+        attempt += 1
+        bet_numbers = []
+        while len(bet_numbers) < config['bets_count']:
+            number = random.randint(1, config['numbers_count'])
+            if number not in bet_numbers:
+                bet_numbers.append(number)
 
-        resultado_jogo.sort()
+        bet_numbers.sort()
 
-        if aplica_regra_sequencia:
-            pares = count_sequential_pairs(resultado_jogo)
+        if applies_sequence_rule:
+            pairs = count_sequential_pairs(bet_numbers)
 
-            if bloquear_sequencias:
-                if pares > 0:
+            if block_sequences:
+                if pairs > 0:
                     continue
             else:
-                if pares > 1:
+                if pairs > 1:
                     continue
 
         break
 
-    resultado_trevos = []
+    bet_clovers = []
     if config['clovers_count'] > 0:
-        while len(resultado_trevos) < config['clovers']:
-            trevo = random.randint(1, config['clovers_count'])
-            if trevo not in resultado_trevos:
-                resultado_trevos.append(trevo)
-        resultado_trevos.sort()
+        while len(bet_clovers) < config['clovers']:
+            clover = random.randint(1, config['clovers_count'])
+            if clover not in bet_clovers:
+                bet_clovers.append(clover)
+        bet_clovers.sort()
 
-    return resultado_jogo, resultado_trevos
+    return bet_numbers, bet_clovers
 
 
-def check_duplicate_bet(usuario, jogo_nome, numeros, trevos):
+def check_duplicate_bet(user, game_name, numbers, clovers):
     """Verifica se um jogo identico ja foi gerado pelo usuario."""
     return GeneratedBet.objects.filter(
-        user=usuario,
-        game=jogo_nome,
-        numbers=numeros,
-        clovers=trevos if trevos else []
+        user=user,
+        game=game_name,
+        numbers=numbers,
+        clovers=clovers if clovers else []
     ).exists()
 
 
-def calculate_statistics(usuario, jogo_nome):
+def calculate_statistics(user, game_name):
     """Calcula estatisticas para um tipo de jogo especifico."""
-    jogos = GeneratedBet.objects.filter(user=usuario, game=jogo_nome)
-    total = jogos.count()
+    bets = GeneratedBet.objects.filter(user=user, game=game_name)
+    total = bets.count()
 
     if total == 0:
         return None
 
-    com_sequencia = jogos.filter(sequential_pairs__gt=0).count()
+    with_sequence = bets.filter(sequential_pairs__gt=0).count()
 
-    frequencia = {}
-    for jogo in jogos:
-        for num in jogo.numbers:
-            frequencia[num] = frequencia.get(num, 0) + 1
+    frequency = {}
+    for bet in bets:
+        for num in bet.numbers:
+            frequency[num] = frequency.get(num, 0) + 1
 
-    mais_frequentes = sorted(frequencia.items(), key=lambda x: x[1], reverse=True)[:10]
+    most_frequent = sorted(frequency.items(), key=lambda x: x[1], reverse=True)[:10]
 
     return {
         'total': total,
-        'com_sequencia': com_sequencia,
-        'sem_sequencia': total - com_sequencia,
-        'mais_frequentes': mais_frequentes,
-        'percentual_sequencia': (com_sequencia / total * 100) if total > 0 else 0
+        'com_sequencia': with_sequence,
+        'sem_sequencia': total - with_sequence,
+        'mais_frequentes': most_frequent,
+        'percentual_sequencia': (with_sequence / total * 100) if total > 0 else 0
     }
 
 
-def calculate_bet_prize(jogo, numeros_usuario, trevos_usuario=None, resultado_oficial=None):
+def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=None):
     """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e status."""
-    if resultado_oficial is None:
+    if official_result is None:
         return {'ganhou': False, 'acertos': 0, 'valor': 'R$ 0,00', 'categoria': 'Sem resultado'}
 
-    numeros_usuario = set(normalize_numbers(numeros_usuario))
-    numeros_resultado = set(normalize_numbers(resultado_oficial.get('numeros', [])))
-    acertos = len(numeros_usuario & numeros_resultado)
+    user_numbers = set(normalize_numbers(user_numbers))
+    result_numbers = set(normalize_numbers(official_result.get('numeros', [])))
+    hits = len(user_numbers & result_numbers)
 
-    premio = resultado_oficial.get('premiacoes', {})
-    premio_chave = None
-    valor = Decimal('0')
+    prizes = official_result.get('premiacoes', {})
+    prize_key = None
+    amount = Decimal('0')
 
-    if jogo == 'Mega-sena':
-        premio_chave = 'sena' if acertos >= 4 else None
-    elif jogo == 'Quina':
-        premio_chave = 'quina' if acertos >= 3 else None
-    elif jogo == 'Lotofacil':
-        premio_chave = 'lotofacil' if acertos >= 11 else None
-    elif jogo == 'Lotomania':
-        premio_chave = 'lotomania' if acertos >= 0 else 'lotomania'
-    elif jogo == 'Milionaria':
-        premio_chave = 'milionaria' if acertos >= 4 else None
-    elif jogo == 'Dupla-Sena':
-        premio_chave = 'dupla_sena' if acertos >= 4 else None
+    if game == 'Mega-sena':
+        prize_key = 'sena' if hits >= 4 else None
+    elif game == 'Quina':
+        prize_key = 'quina' if hits >= 3 else None
+    elif game == 'Lotofacil':
+        prize_key = 'lotofacil' if hits >= 11 else None
+    elif game == 'Lotomania':
+        prize_key = 'lotomania' if hits >= 0 else 'lotomania'
+    elif game == 'Milionaria':
+        prize_key = 'milionaria' if hits >= 4 else None
+    elif game == 'Dupla-Sena':
+        prize_key = 'dupla_sena' if hits >= 4 else None
 
-    if premio_chave and isinstance(premio, dict):
-        premio_info = premio.get(premio_chave, {})
-        valor_raw = premio_info.get('valor', 'R$ 0,00')
-        valor_raw = str(valor_raw).replace('R$', '').replace('.', '').replace(',', '.')
+    if prize_key and isinstance(prizes, dict):
+        prize_info = prizes.get(prize_key, {})
+        raw_amount = prize_info.get('valor', 'R$ 0,00')
+        raw_amount = str(raw_amount).replace('R$', '').replace('.', '').replace(',', '.')
         try:
-            valor = Decimal(valor_raw.strip())
+            amount = Decimal(raw_amount.strip())
         except Exception:
-            valor = Decimal('0')
+            amount = Decimal('0')
 
-    ganhou = bool(premio_chave and acertos > 0 and valor > 0)
+    won = bool(prize_key and hits > 0 and amount > 0)
     return {
-        'ganhou': ganhou,
-        'acertos': acertos,
-        'valor': f'R$ {valor:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-        'categoria': premio_chave or 'Sem premio',
-        'resultado': resultado_oficial,
+        'ganhou': won,
+        'acertos': hits,
+        'valor': f'R$ {amount:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+        'categoria': prize_key or 'Sem premio',
+        'resultado': official_result,
     }
 
 
-def fetch_cef_result(jogo, concurso):
+def fetch_cef_result(game, contest):
     """Busca o resultado oficial do jogo e concurso na CEF. Se a pagina da Caixa estiver indisponivel, retorna None."""
-    jogo_slug = {
+    game_slug = {
         'Mega-sena': 'mega-sena',
         'Milionaria': 'mais-milionaria',
         'Lotomania': 'lotomania',
         'Lotofacil': 'lotofacil',
         'Quina': 'quina',
         'Dupla-Sena': 'dupla-sena',
-    }.get(jogo)
+    }.get(game)
 
-    if not jogo_slug:
+    if not game_slug:
         return None
 
-    nome_pagina = jogo_slug.replace('-', ' ').title().replace(' ', '-')
-    url = f'https://loterias.caixa.gov.br/Paginas/{nome_pagina}.aspx'
+    page_name = game_slug.replace('-', ' ').title().replace(' ', '-')
+    url = f'https://loterias.caixa.gov.br/Paginas/{page_name}.aspx'
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
@@ -205,53 +205,53 @@ def fetch_cef_result(jogo, concurso):
         return None
 
     html = response.text
-    bloco = None
+    block = None
     markers = [
         'Concurso', 'Sorteio', 'Concurso', 'ACUMULOU', 'GANHADOR', 'Trevos sorteados', '1º sorteio', '2º sorteio'
     ]
     for marker in markers:
         idx = html.lower().find(marker.lower())
         if idx != -1:
-            bloco = html[idx: idx + 2500]
+            block = html[idx: idx + 2500]
             break
-    if not bloco:
+    if not block:
         return None
 
-    numeros = []
-    for match in re.findall(r'>(\d{1,2})<', bloco):
-        numero = int(match)
-        if 1 <= numero <= 100:
-            numeros.append(numero)
-    numeros = sorted(set(numeros))[:15]
-    if not numeros:
+    numbers = []
+    for match in re.findall(r'>(\d{1,2})<', block):
+        number = int(match)
+        if 1 <= number <= 100:
+            numbers.append(number)
+    numbers = sorted(set(numbers))[:15]
+    if not numbers:
         return None
 
     return {
-        'jogo': jogo,
-        'concurso': concurso,
-        'numeros': numeros,
+        'jogo': game,
+        'concurso': contest,
+        'numeros': numbers,
         'trevos': [],
         'premiacoes': {'sena': {'valor': 'R$ 0,00'}}
     }
 
 
-def check_user_results(usuario=None):
+def check_user_results(user=None):
     """Valida jogos do usuario contra resultados oficiais da CEF e atualiza o status de premio."""
     queryset = GeneratedBet.objects.all()
-    if usuario is not None:
-        queryset = queryset.filter(user=usuario)
+    if user is not None:
+        queryset = queryset.filter(user=user)
 
-    for jogo in queryset:
-        if jogo.result_checked:
+    for bet in queryset:
+        if bet.result_checked:
             continue
-        resultado = fetch_cef_result(jogo.game, jogo.contest)
-        if not resultado:
+        result = fetch_cef_result(bet.game, bet.contest)
+        if not result:
             continue
-        premio = calculate_bet_prize(jogo.game, jogo.numbers, jogo.clovers, resultado)
-        jogo.result_checked = True
-        jogo.hits = premio['acertos']
-        jogo.prize = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        jogo.prize_description = premio['categoria']
-        jogo.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
+        prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
+        bet.result_checked = True
+        bet.hits = prize['acertos']
+        bet.prize = Decimal(str(prize['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
+        bet.prize_description = prize['categoria']
+        bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
 
     return True
