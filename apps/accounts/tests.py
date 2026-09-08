@@ -3,9 +3,11 @@ import os
 from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 
 from apps.accounts.hashers import PepperedArgon2PasswordHasher
 from apps.accounts.models import User
+from apps.loterias_core.models import GeneratedBet
 
 
 class PasswordHasherTests(SimpleTestCase):
@@ -129,3 +131,26 @@ class WelcomeEmailSignalTests(TestCase):
         user.bio = 'Atualizando perfil'
         user.save()
         self.assertEqual(len(mail.outbox), 0)
+
+
+class ProfileViewTests(TestCase):
+    """Regressao do rename de related_name 'jogos'->'bets' (GeneratedBet.user):
+    a contagem exibida no perfil (user.bets.count) precisa continuar correta."""
+
+    def setUp(self):
+        self.usuario = User.objects.create_user(email='perfil@example.com', password='SenhaForte123')
+        self.client.force_login(self.usuario)
+
+    def test_perfil_mostra_contagem_correta_de_jogos_gerados(self):
+        GeneratedBet.objects.create(
+            user=self.usuario, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        GeneratedBet.objects.create(
+            user=self.usuario, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.get(reverse('profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['user'].bets.count(), 2)
+        self.assertContains(response, '2')

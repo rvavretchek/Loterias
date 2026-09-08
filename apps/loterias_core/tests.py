@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.models import User
-from apps.loterias_core.models import JogoGerado, ResultadoLoteria, JOGOS_CONFIG
+from apps.loterias_core.models import GeneratedBet, LotteryResult, GAMES_CONFIG
 from apps.loterias_core.utils import (
     calcular_estatisticas,
     calcular_premiacao_jogo,
@@ -97,9 +97,9 @@ class GerarApostaTests(TestCase):
 
     def test_bloqueia_sequencia_apos_historico_recente_com_par(self):
         usuario = User.objects.create_user(email='seq@example.com', password='SenhaForte123')
-        JogoGerado.objects.create(
-            usuario=usuario, jogo='Mega-sena', concurso='1',
-            numeros=[1, 2, 10, 20, 30, 40], trevos=[], pares_sequenciais=1,
+        GeneratedBet.objects.create(
+            user=usuario, game='Mega-sena', contest='1',
+            numbers=[1, 2, 10, 20, 30, 40], clovers=[], sequential_pairs=1,
         )
         for _ in range(30):
             nums, _ = gerar_aposta('Mega-sena', usuario)
@@ -116,9 +116,9 @@ class VerificarJogoRepetidoTests(TestCase):
         )
 
     def test_jogo_identico_e_repetido(self):
-        JogoGerado.objects.create(
-            usuario=self.usuario, jogo='Mega-sena', concurso='100',
-            numeros=[1, 2, 3, 4, 5, 6], trevos=[], pares_sequenciais=2,
+        GeneratedBet.objects.create(
+            user=self.usuario, game='Mega-sena', contest='100',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=2,
         )
         self.assertTrue(
             verificar_jogo_repetido(self.usuario, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
@@ -132,13 +132,13 @@ class CalcularEstatisticasTests(TestCase):
 
     def test_calcula_totais_e_frequencia(self):
         usuario = User.objects.create_user(email='stats2@example.com', password='SenhaForte123')
-        JogoGerado.objects.create(
-            usuario=usuario, jogo='Mega-sena', concurso='1',
-            numeros=[1, 2, 3, 4, 5, 6], trevos=[], pares_sequenciais=1,
+        GeneratedBet.objects.create(
+            user=usuario, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=1,
         )
-        JogoGerado.objects.create(
-            usuario=usuario, jogo='Mega-sena', concurso='2',
-            numeros=[1, 2, 7, 8, 9, 10], trevos=[], pares_sequenciais=0,
+        GeneratedBet.objects.create(
+            user=usuario, game='Mega-sena', contest='2',
+            numbers=[1, 2, 7, 8, 9, 10], clovers=[], sequential_pairs=0,
         )
         stats = calcular_estatisticas(usuario, 'Mega-sena')
         self.assertEqual(stats['total'], 2)
@@ -227,24 +227,24 @@ class GerarJogoViewTests(TestCase):
 
     def test_gerar_jogo_cria_registro_no_banco(self):
         response = self.client.post(reverse('gerar_jogo'), {'jogo': 'Mega-sena', 'concurso': '2500'})
-        self.assertEqual(JogoGerado.objects.filter(usuario=self.usuario).count(), 1)
-        jogo = JogoGerado.objects.get(usuario=self.usuario)
-        self.assertEqual(len(jogo.numeros), JOGOS_CONFIG['Mega-sena']['apostas'])
+        self.assertEqual(GeneratedBet.objects.filter(user=self.usuario).count(), 1)
+        jogo = GeneratedBet.objects.get(user=self.usuario)
+        self.assertEqual(len(jogo.numbers), GAMES_CONFIG['Mega-sena']['bets_count'])
         self.assertRedirects(response, reverse('detalhes_jogo', args=[jogo.pk]))
 
     def test_gerar_jogo_exige_login(self):
         self.client.logout()
         response = self.client.post(reverse('gerar_jogo'), {'jogo': 'Mega-sena', 'concurso': '2500'})
         self.assertNotEqual(response.status_code, 200)
-        self.assertEqual(JogoGerado.objects.count(), 0)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
 
     def test_gerar_jogo_sem_concurso_nao_cria_registro(self):
         self.client.post(reverse('gerar_jogo'), {'jogo': 'Mega-sena', 'concurso': ''})
-        self.assertEqual(JogoGerado.objects.count(), 0)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
 
     def test_gerar_jogo_invalido_nao_cria_registro(self):
         self.client.post(reverse('gerar_jogo'), {'jogo': 'Nao-Existe', 'concurso': '2500'})
-        self.assertEqual(JogoGerado.objects.count(), 0)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
 
     def test_api_gerar_jogo_retorna_json(self):
         response = self.client.post(
@@ -254,7 +254,7 @@ class GerarJogoViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(len(payload['numeros']), JOGOS_CONFIG['Quina']['apostas'])
+        self.assertEqual(len(payload['numeros']), GAMES_CONFIG['Quina']['bets_count'])
 
 
 class HistoricoViewTests(TestCase):
@@ -264,19 +264,19 @@ class HistoricoViewTests(TestCase):
         self.client.force_login(self.usuario)
 
     def test_historico_mostra_apenas_jogos_do_usuario_logado(self):
-        JogoGerado.objects.create(
-            usuario=self.usuario, jogo='Mega-sena', concurso='1',
-            numeros=[1, 2, 3, 4, 5, 6], trevos=[], pares_sequenciais=0,
+        GeneratedBet.objects.create(
+            user=self.usuario, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
-        JogoGerado.objects.create(
-            usuario=self.outro_usuario, jogo='Mega-sena', concurso='1',
-            numeros=[10, 20, 30, 40, 50, 60], trevos=[], pares_sequenciais=0,
+        GeneratedBet.objects.create(
+            user=self.outro_usuario, game='Mega-sena', contest='1',
+            numbers=[10, 20, 30, 40, 50, 60], clovers=[], sequential_pairs=0,
         )
         response = self.client.get(reverse('historico'))
         self.assertEqual(response.status_code, 200)
         jogos = list(response.context['jogos'])
         self.assertEqual(len(jogos), 1)
-        self.assertEqual(jogos[0].usuario, self.usuario)
+        self.assertEqual(jogos[0].user, self.usuario)
 
 
 class ExcluirJogoViewTests(TestCase):
@@ -286,36 +286,36 @@ class ExcluirJogoViewTests(TestCase):
         self.client.force_login(self.usuario)
 
     def test_nao_exclui_jogo_de_outro_usuario(self):
-        jogo_alheio = JogoGerado.objects.create(
-            usuario=self.outro_usuario, jogo='Mega-sena', concurso='1',
-            numeros=[1, 2, 3, 4, 5, 6], trevos=[], pares_sequenciais=0,
+        jogo_alheio = GeneratedBet.objects.create(
+            user=self.outro_usuario, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
         response = self.client.post(reverse('excluir_jogo', args=[jogo_alheio.pk]))
         self.assertEqual(response.status_code, 404)
-        self.assertTrue(JogoGerado.objects.filter(pk=jogo_alheio.pk).exists())
+        self.assertTrue(GeneratedBet.objects.filter(pk=jogo_alheio.pk).exists())
 
 
-class JogoGeradoModelTests(TestCase):
+class GeneratedBetModelTests(TestCase):
     def setUp(self):
         self.usuario = User.objects.create_user(email='model@example.com', password='SenhaForte123')
 
-    def test_get_numeros_formatados(self):
-        jogo = JogoGerado.objects.create(
-            usuario=self.usuario, jogo='Quina', concurso='1',
-            numeros=[1, 22, 33, 44, 55], trevos=[], pares_sequenciais=0,
+    def test_get_formatted_numbers(self):
+        jogo = GeneratedBet.objects.create(
+            user=self.usuario, game='Quina', contest='1',
+            numbers=[1, 22, 33, 44, 55], clovers=[], sequential_pairs=0,
         )
-        self.assertEqual(jogo.get_numeros_formatados(), '01   22   33   44   55')
+        self.assertEqual(jogo.get_formatted_numbers(), '01   22   33   44   55')
 
-    def test_get_trevos_formatados_vazio_retorna_none(self):
-        jogo = JogoGerado.objects.create(
-            usuario=self.usuario, jogo='Quina', concurso='1',
-            numeros=[1, 2, 3, 4, 5], trevos=[], pares_sequenciais=0,
+    def test_get_formatted_clovers_vazio_retorna_none(self):
+        jogo = GeneratedBet.objects.create(
+            user=self.usuario, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
         )
-        self.assertIsNone(jogo.get_trevos_formatados())
+        self.assertIsNone(jogo.get_formatted_clovers())
 
-    def test_tem_sequencia(self):
-        jogo = JogoGerado.objects.create(
-            usuario=self.usuario, jogo='Quina', concurso='1',
-            numeros=[1, 2, 3, 4, 5], trevos=[], pares_sequenciais=1,
+    def test_has_sequence(self):
+        jogo = GeneratedBet.objects.create(
+            user=self.usuario, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=1,
         )
-        self.assertTrue(jogo.tem_sequencia())
+        self.assertTrue(jogo.has_sequence())
