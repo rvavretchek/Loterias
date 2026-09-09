@@ -222,9 +222,9 @@ Para que eu não precise comparar número por número manualmente.
 
 **Dado** um `LotteryResult` sem `HitNotification` correspondente pra algum `GeneratedBet` daquele Jogo+Concurso (de qualquer usuário)
 **Quando** a rotina `fetch_daily_results` roda
-**Então** o sistema cria uma `HitNotification` pra cada `GeneratedBet` com interseção não vazia, marcada como premiada ou não conforme `calculate_bet_prize`
+**Então** o sistema cria uma `HitNotification` pra cada `GeneratedBet` com interseção não vazia **ou com prêmio real** (`won=True` segundo `calculate_bet_prize` — cobre a Lotomania, que paga por 0 acertos), marcada como premiada ou não
 **E** a varredura considera todo `GeneratedBet` ainda sem cobertura, não só o que a rotina gravou nesta execução — cobre também `LotteryResult` escrito pelo caminho sob demanda
-**E** `GeneratedBet` sem interseção nenhuma não gera Notificação
+**E** `GeneratedBet` sem interseção nenhuma e sem prêmio real não gera Notificação
 **E** uma execução concorrente ou repetida nunca cria uma segunda `HitNotification` pro mesmo `GeneratedBet` (unicidade garantida no banco via `get_or_create`)
 
 ### Story 2.4: Exibição da notificação ao logar

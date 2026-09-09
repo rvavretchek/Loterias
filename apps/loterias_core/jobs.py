@@ -54,7 +54,9 @@ def fetch_daily_results(final=False):
 def _notify_covered_bets():
     """Varredura por estado (AD-4, Story 2.3): todo GeneratedBet ainda sem HitNotification cujo
     Jogo+Concurso ja tem LotteryResult (gravado agora ou antes, por qualquer caminho) ganha os
-    campos-cache atualizados e, se houve interseccao (hits > 0), uma HitNotification."""
+    campos-cache atualizados e, se houve interseccao (hits > 0) OU premio real (won -- cobre a
+    Lotomania, que paga por 0 acertos), uma HitNotification. Nunca usar so `hits > 0` aqui: isso
+    excluiria justamente o unico caso em que 0 acertos e um premio de verdade."""
     candidates = GeneratedBet.objects.filter(notification__isnull=True)
     results_by_pair = {
         (r.game, r.contest): r
@@ -77,7 +79,7 @@ def _notify_covered_bets():
             }
             prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, official_result)
             apply_prize_to_bet(bet, prize)
-            if prize['hits'] > 0:
+            if prize['hits'] > 0 or prize['won']:
                 _, created = HitNotification.objects.get_or_create(bet=bet, defaults={'won': prize['won']})
                 if created:
                     notified += 1

@@ -150,10 +150,10 @@ Ao gerar (automático ou manual) um GeneratedBet, o sistema pré-preenche o camp
 
 #### FR-3: Geração de Notificação de Acerto
 
-Sempre que a rotina diária grava um LotteryResult novo, o sistema compara com todos os GeneratedBet existentes daquele Jogo+Concurso e cria uma Notificação de Acerto (`HitNotification`) para cada GeneratedBet com interseção não vazia — marcada como premiada ou não, conforme `calculate_bet_prize`. Realiza UJ-1, passo 5.
+Sempre que a rotina diária grava um LotteryResult novo, o sistema compara com todos os GeneratedBet existentes daquele Jogo+Concurso e cria uma Notificação de Acerto (`HitNotification`) para cada GeneratedBet com interseção não vazia **ou com prêmio real segundo `calculate_bet_prize`** (`won=True`) — marcada como premiada ou não. A ressalva existe porque a Lotomania paga por 0 acertos (regra real do jogo): uma regra de negócio que não reflete esse caso não está modelando a realidade, e a exceção precisa estar aqui, não só no código. Realiza UJ-1, passo 5.
 
 **Consequências (testáveis):**
-- GeneratedBet sem interseção nenhuma não gera Notificação.
+- GeneratedBet sem interseção nenhuma **e sem prêmio real** não gera Notificação — mas 0 acertos com prêmio (Lotomania) gera normalmente.
 - Uma Notificação de Acerto é criada no máximo uma vez por GeneratedBet+LotteryResult (idempotente — reexecutar a rotina não duplica).
 
 #### FR-4: Exibição da notificação ao logar

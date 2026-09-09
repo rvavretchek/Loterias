@@ -898,6 +898,25 @@ class HitNotificationGenerationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='notif@example.com', password='SenhaForte123')
 
+    def test_lotomania_zero_hits_prize_generates_notification(self):
+        """Regra corrigida a pedido do Boss: 0 acertos na Lotomania e um premio real,
+        entao TEM que gerar HitNotification mesmo sem nenhuma intersecao de numeros."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Lotomania', contest='9020',
+            numbers=list(range(1, 51)), clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Lotomania', contest='9020', numbers=list(range(51, 71)), clovers=[],
+            prizes={'0': {'value': 'R$ 500,00', 'winners': 3}},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertEqual(bet.hits, 0)
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
     def test_bet_with_hits_and_existing_result_generates_notification(self):
         bet = GeneratedBet.objects.create(
             user=self.user, game='Quina', contest='9000',
@@ -918,8 +937,8 @@ class HitNotificationGenerationTests(TestCase):
         self.assertFalse(notification.is_read)
 
     def test_bet_with_hits_but_below_prize_threshold_generates_unwon_notification(self):
-        """hits > 0 e o gatilho de notificacao (nao prize['won']) -- um acerto parcial sem
-        atingir o piso de premio do Jogo ainda gera HitNotification, so que com won=False."""
+        """O gatilho de notificacao e `hits > 0 or won` -- um acerto parcial sem atingir o piso
+        de premio do Jogo (won=False) ainda gera HitNotification, so que marcada como nao premiada."""
         bet = GeneratedBet.objects.create(
             user=self.user, game='Quina', contest='9010',
             numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
