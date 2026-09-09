@@ -789,6 +789,10 @@ class AdminSmokeTests(TestCase):
         self.assertContains(response, 'Pelo menos um canal')
         self.assertFalse(NotificationPreference.objects.filter(user=target_user).exists())
 
+    def test_lotteryresult_admin_list_loads(self):
+        response = self.client.get('/admin/loterias_core/lotteryresult/')
+        self.assertEqual(response.status_code, 200)
+
 
 class ReverseAccessorTests(TestCase):
     """Cobre user.bets e user.statistics (related_name renomeados na Story 1.1), sem teste ate aqui."""
@@ -2247,3 +2251,234 @@ class CaptureFailureAlertTests(TestCase):
         mock_fetch.return_value = None
         call_command('fetch_daily_results', '--final')
         self.assertEqual(len(mail.outbox), 1)
+
+
+class LotteryResultPurgeAdminTests(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            email='admin-purge@example.com', password='SenhaForte123'
+        )
+        self.client.force_login(self.admin_user)
+        self.changelist_url = '/admin/loterias_core/lotteryresult/'
+
+    def _create_result(self, game='Quina', contest='1', days_old=0):
+        result = LotteryResult.objects.create(
+            game=game, contest=contest, numbers=[1, 2, 3, 4, 5], clovers=[], prizes={},
+        )
+        if days_old:
+            LotteryResult.objects.filter(pk=result.pk).update(
+                captured_at=timezone.now() - timedelta(days=days_old)
+            )
+        return result
+
+    def test_action_without_apply_shows_confirmation_and_deletes_nothing(self):
+        old = self._create_result(days_old=400)
+        response = self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="cutoff_date"')
+        self.assertContains(response, 'name="action" value="purge_until_date"')
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_full_two_step_browser_flow_actually_purges(self):
+        """Reproduz o fluxo real do navegador em 2 requests HTTP separados -- POST1 sem apply
+        pra pegar a tela de confirmacao renderizada de verdade, extrai dela os campos ocultos
+        (action + _selected_action) exatamente como um navegador leria do HTML, e so entao faz o
+        POST2 com esses campos + a data escolhida. Achado empirico da revisao: sem os campos
+        ocultos certos no template, esse fluxo real nunca purgava nada (respondia 200 sem erro
+        nenhum) -- um teste que manda tudo (action+apply+cutoff_date) num unico POST, como os
+        demais desta classe, nao pegava essa quebra."""
+        old = self._create_result(days_old=400)
+        step1 = self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+        })
+        html = step1.content.decode()
+        selected_pks = re.findall(r'name="_selected_action" value="([^"]+)"', html)
+        self.assertEqual(selected_pks, [str(old.pk)])
+
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': selected_pks,
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_staff_without_delete_permission_cannot_purge(self):
+        """A acao precisa exigir permissao de delete -- staff so com view/change nao pode
+        disparar uma exclusao em massa."""
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+
+        viewer = User.objects.create_user(
+            email='viewer-purge@example.com', password='SenhaForte123', is_staff=True,
+        )
+        content_type = ContentType.objects.get_for_model(LotteryResult)
+        viewer.user_permissions.add(
+            Permission.objects.get(codename='view_lotteryresult', content_type=content_type)
+        )
+        self.client.force_login(viewer)
+
+        old = self._create_result(days_old=400)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_cutoff_date_today_or_future_is_rejected(self):
+        """Sem teto, uma data de hoje ou futura apagaria resultados recem-capturados junto --
+        a validacao do form recusa isso antes de qualquer exclusao acontecer."""
+        old = self._create_result(days_old=400)
+        response = self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': timezone.now().date().isoformat(),
+        })
+        self.assertContains(response, 'precisa ser anterior a hoje')
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_success_message_reports_the_real_deleted_count(self):
+        first = self._create_result(contest='1', days_old=400)
+        self._create_result(contest='2', days_old=400)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        response = self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [first.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        }, follow=True)
+        self.assertContains(response, '2 resultado(s) oficial(is) purgado(s) com sucesso.')
+
+    def test_purge_deletes_only_results_older_than_cutoff(self):
+        old = self._create_result(contest='1', days_old=400)
+        recent = self._create_result(contest='2', days_old=0)
+        cutoff = (timezone.now() - timedelta(days=200)).date()
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk=old.pk).exists())
+        self.assertTrue(LotteryResult.objects.filter(pk=recent.pk).exists())
+
+    def test_purge_protects_result_with_hit_notification(self):
+        """Um LotteryResult com um GeneratedBet (mesmo game+contest) premiado com
+        HitNotification nunca e apagado, mesmo mais antigo que a data de corte."""
+        user = User.objects.create_user(email='purgeuser@example.com', password='SenhaForte123')
+        old = self._create_result(contest='1', days_old=400)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=True, is_read=False)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_purge_protects_regardless_of_notification_read_status(self):
+        user = User.objects.create_user(email='purgeuser2@example.com', password='SenhaForte123')
+        old = self._create_result(contest='1', days_old=400)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=True, is_read=True)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_purge_protects_pair_even_when_only_one_of_several_bets_has_a_notification(self):
+        """A protecao e por PAR (game+contest via Exists), nao por bet individual -- um segundo
+        GeneratedBet do mesmo par sem notificacao nao enfraquece a protecao do par inteiro."""
+        user = User.objects.create_user(email='purgeuser4@example.com', password='SenhaForte123')
+        other_user = User.objects.create_user(email='purgeuser5@example.com', password='SenhaForte123')
+        old = self._create_result(contest='1', days_old=400)
+        winning_bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=winning_bet, won=True, is_read=False)
+        GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='1', numbers=[6, 7, 8, 9, 10], clovers=[], sequential_pairs=0,
+        )
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_pair_with_no_generatedbet_at_all_is_eligible_for_purge(self):
+        old = self._create_result(contest='1', days_old=400)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk=old.pk).exists())
+
+    def test_purge_ignores_selection_and_applies_to_all_eligible_pairs(self):
+        """A acao e por data de corte, nao por linha selecionada -- so 1 pk selecionado (pra
+        habilitar o botao do admin), mas ambos os resultados elegiveis sao apagados."""
+        old1 = self._create_result(game='Quina', contest='1', days_old=400)
+        old2 = self._create_result(game='Lotofacil', contest='2', days_old=400)
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old1.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk=old1.pk).exists())
+        self.assertFalse(LotteryResult.objects.filter(pk=old2.pk).exists())
+
+    def test_purge_does_not_touch_prizetier_or_generatedbet(self):
+        user = User.objects.create_user(email='purgeuser3@example.com', password='SenhaForte123')
+        old = self._create_result(contest='1', days_old=400)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        tier = PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=timezone.now().date().replace(day=1),
+            value=Decimal('1.00'), winners=1,
+        )
+        cutoff = timezone.now().date() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk=old.pk).exists())
+        self.assertTrue(GeneratedBet.objects.filter(pk=bet.pk).exists())
+        self.assertTrue(PrizeTier.objects.filter(pk=tier.pk).exists())
+
+    def test_no_purge_happens_without_running_the_action(self):
+        """Confirma especificamente que as rotinas de cron (fetch_daily_results,
+        update_monthly_prize_values) nunca purgam LotteryResult por conta propria -- nao cobre
+        qualquer outro caminho hipotetico, so esses dois."""
+        old = self._create_result(days_old=3650)
+        update_monthly_prize_values()
+        fetch_daily_results()
+        self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())

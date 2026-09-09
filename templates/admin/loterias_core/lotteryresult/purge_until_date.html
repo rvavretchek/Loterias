@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<p>Existem <strong>{{ total_count }}</strong> resultado(s) oficial(is) no total.</p>
+
+<p>
+  Esta ação apaga <strong>todo</strong> resultado oficial capturado antes da data informada abaixo
+  — não apenas os que estiverem marcados na lista. Um resultado que tiver pelo menos um jogo do
+  usuário com Notificação de Acerto associada é protegido e nunca é apagado, mesmo sendo mais
+  antigo que a data de corte.
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="purge_until_date">
+  <input type="hidden" name="apply" value="apply">
+  {% for pk in selected_pks %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">
+  {% endfor %}
+  {{ form.as_p }}
+  <input type="submit" value="Purgar" class="default" style="margin-top: 10px;">
+  <a href="{% url 'admin:loterias_core_lotteryresult_changelist' %}" class="button cancel-link" style="margin-left: 10px;">Cancelar</a>
+</form>
+{% endblock %}
