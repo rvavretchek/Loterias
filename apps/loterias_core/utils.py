@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import requests
 
-from .models import GeneratedBet, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL
+from .models import GeneratedBet, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL
 
 
 def normalize_numbers(numbers):
@@ -109,6 +109,21 @@ def check_duplicate_bet(user, game_name, numbers, clovers):
         numbers=numbers,
         clovers=clovers if clovers else []
     ).exists()
+
+
+def suggest_next_contest(game_name):
+    """Sugere o proximo numero de concurso pro Jogo, a partir do maior concurso numerico ja
+    conhecido em LotteryResult (+1). Concursos nao numericos (especiais/comemorativos) sao
+    ignorados. Retorna None se nao houver nenhum LotteryResult conhecido pro Jogo ainda."""
+    known_contests = []
+    for contest in LotteryResult.objects.filter(game=game_name).values_list('contest', flat=True):
+        try:
+            known_contests.append(int(contest))
+        except (TypeError, ValueError):
+            continue
+    if not known_contests:
+        return None
+    return str(max(known_contests) + 1)
 
 
 def calculate_statistics(user, game_name):

@@ -11,8 +11,17 @@ from .models import GeneratedBet, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUEN
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
-    fetch_cef_result
+    fetch_cef_result, suggest_next_contest
 )
+
+
+def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', **redirect_kwargs):
+    """Bloqueia com mensagem clara se o Jogo+Concurso ja tem resultado oficial (de qualquer
+    usuario) -- devolve um redirect pronto se bloqueado, ou None se pode seguir."""
+    if LotteryResult.objects.filter(game=game, contest=contest).exists():
+        messages.error(request, f'O concurso {contest} de {game} ja foi sorteado. Escolha outro concurso.')
+        return redirect(redirect_to, **redirect_kwargs)
+    return None
 
 
 def home(request):
@@ -24,12 +33,16 @@ def home(request):
         ).order_by('-total')
 
         recent_bets = GeneratedBet.objects.filter(user=request.user)[:10]
+        suggested_contests = {
+            game_name: suggest_next_contest(game_name) for game_name in GAMES_CONFIG
+        }
 
         context = {
             'total_jogos': total_bets,
             'jogos_por_tipo': bets_by_type,
             'ultimos_jogos': recent_bets,
             'jogos_disponiveis': GAMES_CONFIG,
+            'concursos_sugeridos': suggested_contests,
         }
     else:
         context = {
@@ -55,6 +68,10 @@ def create_bet_view(request):
     if selected_game not in GAMES_CONFIG:
         messages.error(request, 'Jogo invalido.')
         return redirect('home')
+
+    blocked = _block_if_contest_already_drawn(request, selected_game, contest)
+    if blocked:
+        return blocked
 
     # Verificar se concurso ja existe para este usuario e jogo
     if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
@@ -192,6 +209,10 @@ def save_manual_bet_view(request):
         messages.error(request, f'Os numeros devem estar entre {minimum} e {maximum} para {selected_game}.')
         return redirect('home')
 
+    blocked = _block_if_contest_already_drawn(request, selected_game, contest)
+    if blocked:
+        return blocked
+
     if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
         messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
 
@@ -274,6 +295,10 @@ def check_bet_result_view(request, pk):
 def regenerate_bet_view(request, pk):
     """Refaz um jogo existente gerando novos numeros."""
     original_bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
+
+    blocked = _block_if_contest_already_drawn(request, original_bet.game, original_bet.contest, redirect_to='bet_detail', pk=pk)
+    if blocked:
+        return blocked
 
     attempts = 0
     max_attempts = 1000

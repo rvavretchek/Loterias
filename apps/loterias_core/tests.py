@@ -18,6 +18,7 @@ from apps.loterias_core.utils import (
     generate_bet,
     normalize_numbers,
     check_duplicate_bet,
+    suggest_next_contest,
 )
 
 
@@ -126,6 +127,25 @@ class CheckDuplicateBetTests(TestCase):
         self.assertTrue(
             check_duplicate_bet(self.user, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
         )
+
+
+class SuggestNextContestTests(TestCase):
+    def test_no_lottery_result_returns_none(self):
+        self.assertIsNone(suggest_next_contest('Mega-sena'))
+
+    def test_returns_max_numeric_contest_plus_one(self):
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        LotteryResult.objects.create(game='Mega-sena', contest='2498', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        self.assertEqual(suggest_next_contest('Mega-sena'), '2501')
+
+    def test_ignores_non_numeric_special_contest(self):
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        LotteryResult.objects.create(game='Mega-sena', contest='ESPECIAL-2026', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        self.assertEqual(suggest_next_contest('Mega-sena'), '2501')
+
+    def test_does_not_mix_contests_from_other_games(self):
+        LotteryResult.objects.create(game='Quina', contest='9000', numbers=[1, 2, 3, 4, 5], clovers=[], prizes={})
+        self.assertIsNone(suggest_next_contest('Mega-sena'))
 
 
 class CalculateStatisticsTests(TestCase):
@@ -363,6 +383,42 @@ class CreateBetViewTests(TestCase):
         self.client.post(reverse('create_bet'), {'jogo': 'Nao-Existe', 'concurso': '2500'})
         self.assertEqual(GeneratedBet.objects.count(), 0)
 
+    def test_blocks_contest_that_already_has_lottery_result(self):
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '2500'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('O concurso 2500 de Mega-sena ja foi sorteado. Escolha outro concurso.', 'error'), mensagens)
+
+    def test_blocks_even_when_user_also_has_duplicate_bet(self):
+        """As duas checagens coexistem: mesmo com um GeneratedBet duplicado do proprio usuario,
+        o bloqueio de concurso ja sorteado vence e nenhum segundo registro e criado."""
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='2500',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '2500'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+        mensagens = [m.level_tag for m in response.context['messages']]
+        self.assertEqual(mensagens, ['error'])
+
+    def test_allows_special_contest_without_lottery_result(self):
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': 'ESPECIAL-2026'})
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+
+    def test_api_create_bet_is_not_blocked_by_already_drawn_contest(self):
+        """Fora do escopo desta story: api_create_bet_view continua gerando normalmente mesmo
+        pra um concurso que ja tem LotteryResult -- decisao explicita das Fronteiras."""
+        LotteryResult.objects.create(game='Quina', contest='2500', numbers=[1, 2, 3, 4, 5], clovers=[], prizes={})
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': 'Quina', 'concurso': '2500'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_api_generate_bet_returns_json(self):
         response = self.client.post(
             reverse('api_create_bet'),
@@ -465,6 +521,26 @@ class SaveManualBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
         self.assertFalse(bet.result_checked)
 
+    def test_blocks_contest_that_already_has_lottery_result(self):
+        LotteryResult.objects.create(game='Lotofacil', contest='3000', numbers=self.numbers, clovers=[], prizes={})
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': '3000',
+            'numeros': self.numeros_str,
+        })
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+
+    @patch('apps.loterias_core.views.fetch_cef_result')
+    def test_allows_special_contest_without_lottery_result(self, mock_fetch):
+        mock_fetch.return_value = None
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': 'ESPECIAL-2026',
+            'numeros': self.numeros_str,
+        })
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+
     @patch('apps.loterias_core.views.fetch_cef_result')
     def test_manual_bet_with_cef_result_updates_prize(self, mock_fetch):
         mock_fetch.return_value = {
@@ -535,6 +611,12 @@ class RegenerateBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[new_bet.pk]))
         self.assertNotEqual(new_bet.pk, self.bet.pk)
 
+    def test_blocks_regenerating_for_contest_that_already_has_lottery_result(self):
+        LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1)
+        self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
+
 
 class StatisticsViewTests(TestCase):
     def test_statistics_contains_game_with_history(self):
@@ -566,6 +648,15 @@ class HomeViewTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['total_jogos'], 2)
+
+    def test_home_context_exposes_suggested_contests_rendered_in_html(self):
+        user = User.objects.create_user(email='sugestao@example.com', password='SenhaForte123')
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['concursos_sugeridos']['Mega-sena'], '2501')
+        self.assertContains(response, 'id="concursos-sugeridos-data"')
+        self.assertContains(response, '"Mega-sena": "2501"')
 
 
 class BetDetailViewTests(TestCase):

@@ -93,8 +93,9 @@
                                     <label for="concurso" class="form-label fw-semibold">
                                         <i class="bi bi-hash me-1"></i>Numero do Concurso
                                     </label>
-                                    <input type="text" class="form-control form-control-lg" id="concurso" 
+                                    <input type="text" class="form-control form-control-lg" id="concurso"
                                            name="concurso" placeholder="Ex: 2500" required>
+                                    <small class="text-secondary" id="concurso-sugestao-info"></small>
                                 </div>
                             </div>
                         </div>
@@ -121,7 +122,7 @@
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Jogo</label>
-                                <select name="jogo" class="form-select" required>
+                                <select name="jogo" id="jogo-manual" class="form-select" required>
                                     {% for key, config in jogos_disponiveis.items %}
                                     <option value="{{ key }}">{{ config.name }}</option>
                                     {% endfor %}
@@ -129,7 +130,7 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Concurso</label>
-                                <input type="text" name="concurso" class="form-control" placeholder="Ex: 2500" required>
+                                <input type="text" name="concurso" id="concurso-manual" class="form-control" placeholder="Ex: 2500" required>
                             </div>
                             <div class="col-md-5">
                                 <label class="form-label">Números</label>
@@ -267,6 +268,7 @@
     {% endif %}
 </div>
 
+{% if concursos_sugeridos %}{{ concursos_sugeridos|json_script:"concursos-sugeridos-data" }}{% endif %}
 <script>
 function selectGame(element, gameName) {
     // Remove active de todos
@@ -278,6 +280,63 @@ function selectGame(element, gameName) {
     // Adiciona active ao clicado
     element.classList.add('active');
     element.querySelector('input[type="radio"]').checked = true;
+
+    preencherConcursoSugerido(gameName);
+}
+
+function getConcursosSugeridos() {
+    var el = document.getElementById('concursos-sugeridos-data');
+    if (!el) {
+        return {};
+    }
+    return JSON.parse(el.textContent);
+}
+
+function preencherCampoComSugestao(campo, sugestao) {
+    if (!campo) {
+        return;
+    }
+    // So sobrescreve se o valor atual esta vazio ou foi ele mesmo quem preencheu antes
+    // (troca de jogo) -- nunca sobrescreve o que o usuario digitou manualmente.
+    if (!campo.value || campo.dataset.autofilled === 'true') {
+        if (sugestao) {
+            campo.value = sugestao;
+            campo.dataset.autofilled = 'true';
+        } else {
+            campo.value = '';
+            delete campo.dataset.autofilled;
+        }
+    }
+}
+
+function preencherConcursoSugerido(gameName) {
+    var sugestoes = getConcursosSugeridos();
+    var sugestao = sugestoes[gameName];
+    var campoConcurso = document.getElementById('concurso');
+    var infoConcurso = document.getElementById('concurso-sugestao-info');
+    preencherCampoComSugestao(campoConcurso, sugestao);
+    if (infoConcurso) {
+        infoConcurso.textContent = sugestao ? ('Sugestao: concurso ' + sugestao) : '';
+    }
+}
+
+function preencherConcursoManualSugerido(gameName) {
+    var sugestoes = getConcursosSugeridos();
+    var sugestao = sugestoes[gameName];
+    var campoConcursoManual = document.getElementById('concurso-manual');
+    preencherCampoComSugestao(campoConcursoManual, sugestao);
+}
+
+var jogoManualSelect = document.getElementById('jogo-manual');
+if (jogoManualSelect) {
+    jogoManualSelect.addEventListener('change', function () {
+        preencherConcursoManualSugerido(this.value);
+    });
+    // Preenche a sugestao da opcao ja selecionada por padrao ao carregar a pagina,
+    // sem esperar o usuario trocar o select.
+    if (jogoManualSelect.value) {
+        preencherConcursoManualSugerido(jogoManualSelect.value);
+    }
 }
 </script>
 {% endblock %}
