@@ -4,6 +4,8 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.conf import settings
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
@@ -13,6 +15,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference, GAMES_CONFIG
+from apps.loterias_core.emails import send_hit_notification_email
 from apps.loterias_core.jobs import fetch_daily_results
 from apps.loterias_core.utils import (
     calculate_statistics,
@@ -1064,6 +1067,171 @@ class HitNotificationGenerationTests(TestCase):
 
         self.assertTrue(HitNotification.objects.filter(bet=bet_ok).exists())
         self.assertFalse(HitNotification.objects.filter(bet=bet_broken).exists())
+
+
+class HitNotificationEmailTests(TestCase):
+    """Story 2.7: envio de e-mail de acerto premiado, disparado dentro de _notify_covered_bets."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='email@example.com', password='SenhaForte123')
+        mail.outbox.clear()  # limpa o e-mail de boas-vindas disparado pela criacao do usuario
+
+    def _bet_with_prize(self, contest, numbers=None, prizes=None):
+        numbers = numbers or [1, 2, 3, 4, 5]
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest=contest,
+            numbers=numbers, clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest=contest, numbers=numbers, clovers=[],
+            prizes=prizes if prizes is not None else {'5': {'value': 'R$ 5.000,00', 'winners': 1}},
+        )
+        return bet
+
+    def _run_job(self):
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+
+    def test_sends_email_when_won_and_email_enabled(self):
+        self._bet_with_prize('40')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('email@example.com', mail.outbox[0].to)
+
+    def test_does_not_send_email_without_any_preference_row(self):
+        """Ausencia de NotificationPreference e lida como email_enabled=False (default, AD-3)."""
+        self._bet_with_prize('41')
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_does_not_send_email_when_email_disabled(self):
+        self._bet_with_prize('42')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=False)
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_does_not_send_email_for_unwon_hit_even_with_email_enabled(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='43',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='43', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        self.assertTrue(HitNotification.objects.filter(bet=bet, won=False).exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_does_not_send_email_for_unwon_hit_with_email_disabled(self):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='43b',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='43b', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=False)
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_does_not_send_email_for_unwon_hit_without_any_preference_row(self):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='43c',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='43c', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_rerun_does_not_resend_email(self):
+        """A rotina nao reenvia porque o bet ja notificado sai do candidate set
+        (`notification__isnull=True`, Story 2.3) antes mesmo de chegar no get_or_create/envio --
+        e nao especificamente por causa do `if created:` isolado (esse branch so seria alcancado
+        se um bet ja notificado voltasse a ser candidato, o que a varredura por estado nao permite
+        hoje). O teste confirma o resultado observavel (nao reenvia) via a API publica do job."""
+        self._bet_with_prize('44')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_email_failure_does_not_prevent_notification_creation_or_block_others(self):
+        bet_ok = self._bet_with_prize('45')
+        bet_also_ok = self._bet_with_prize('46', numbers=[10, 11, 12, 13, 14])
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        with patch('apps.loterias_core.jobs.send_hit_notification_email', side_effect=Exception('smtp fora do ar')):
+            self._run_job()
+        self.assertTrue(HitNotification.objects.filter(bet=bet_ok, won=True).exists())
+        self.assertTrue(HitNotification.objects.filter(bet=bet_also_ok, won=True).exists())
+
+    def test_send_mail_failure_inside_emails_module_does_not_propagate(self):
+        """Testa o try/except REAL de emails.py (nao o wrapper de jobs.py) -- chama
+        send_hit_notification_email diretamente, mockando o send_mail que ela mesma importa."""
+        bet = self._bet_with_prize('45b')
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        with patch('apps.loterias_core.emails.send_mail', side_effect=Exception('smtp fora do ar')):
+            try:
+                send_hit_notification_email(notification)
+            except Exception:
+                self.fail('send_hit_notification_email nao deveria propagar excecao do send_mail')
+
+    def test_message_construction_failure_does_not_propagate(self):
+        """A montagem da mensagem (nao so o send_mail) tambem fica dentro do try/except."""
+        bet = self._bet_with_prize('45c')
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        with patch('apps.loterias_core.emails.number_format', side_effect=Exception('formatacao quebrada')):
+            try:
+                send_hit_notification_email(notification)
+            except Exception:
+                self.fail('send_hit_notification_email nao deveria propagar excecao de formatacao')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_does_not_send_when_user_email_is_empty(self):
+        bet = self._bet_with_prize('45d')
+        self.user.email = ''
+        self.user.save(update_fields=['email'])
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        send_hit_notification_email(notification)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_email_content_includes_game_contest_hits_category_and_formatted_prize(self):
+        self._bet_with_prize('47')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(sent.from_email, settings.DEFAULT_FROM_EMAIL)
+        self.assertIn('Quina', sent.subject)
+        self.assertIn('47', sent.subject)
+        self.assertIn('Quina', sent.body)
+        self.assertIn('concurso 47', sent.body)
+        self.assertIn('Acertos: 5', sent.body)
+        self.assertIn('Categoria: quina', sent.body)
+        self.assertIn('5000,00', sent.body)
+
+    def test_multiple_winners_in_the_same_run_each_get_their_own_email(self):
+        other_user = User.objects.create_user(email='outroemail@example.com', password='SenhaForte123')
+        mail.outbox.clear()
+        self._bet_with_prize('48')
+        other_bet = GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='49',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='49', numbers=[1, 2, 3, 4, 5], clovers=[],
+            prizes={'5': {'value': 'R$ 1.000,00', 'winners': 1}},
+        )
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        NotificationPreference.objects.create(user=other_user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        self.assertEqual(len(mail.outbox), 2)
+        recipients = {tuple(m.to) for m in mail.outbox}
+        self.assertEqual(recipients, {('email@example.com',), ('outroemail@example.com',)})
 
 
 class ApplyPrizeToBetTests(TestCase):

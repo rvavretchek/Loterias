@@ -90,3 +90,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-6-preferencia-de-canal-de-notificacao.md`
   summary: "Uma linha de `NotificationPreference` materializada por um GET incidental (visita à tela sem nunca clicar em salvar) não se distingue, olhando só a tabela, de uma escolha real e consciente do usuário -- não há `created_at`/`updated_at` nem flag de origem."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.6. Decisão de design já aceita explicitamente pelo spec original ("Nunca: não criar um segundo model/campo pra 'conta pendente'/estado"). Só vira um problema real se uma feature futura (ex. auditoria, ou a Story 2.7 decidindo se o usuário "escolheu" e-mail de propósito) precisar distinguir os dois casos -- revisitar se isso surgir.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7-envio-de-email-de-acerto-premiado.md`
+  summary: "O envio de e-mail é síncrono, dentro do próprio loop de `_notify_covered_bets` -- cada acerto premiado bloqueia a rotina de cron até o SMTP responder (até o timeout configurado). Sem fila assíncrona (Celery foi removido do projeto na Story 2.1, decisão explícita)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.7. Comportamento aceito conscientemente pela própria fronteira desta story ("Não implementar... fila assíncrona -- Celery já foi removido do projeto"), não uma omissão -- revisitar só se o volume de acertos premiados por execução crescer o suficiente pra tornar isso um problema prático de duração do job.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7-envio-de-email-de-acerto-premiado.md`
+  summary: "`bet.prize_description` expõe a chave interna de `calculate_bet_prize` (ex. `'dupla_sena'`, `'milionaria'` sem acento/formatação) diretamente no corpo do e-mail, como 'Categoria: dupla_sena' -- destoa da linha 'Jogo:' logo acima, que usa `bet.game` com capitalização/acentuação de exibição."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.7. Mesma causa raiz já registrada como rótulo pouco preciso na Story 2.1 (`category` colapsado numa faixa ampla) -- agora também visível no e-mail, não só na tela. Resolver exigiria uma tabela de rótulos amigáveis por categoria, fora do escopo de uma story de envio de e-mail.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7-envio-de-email-de-acerto-premiado.md`
+  summary: "O corpo do e-mail não inclui os números da aposta nem um link/URL clicável pro detalhe do jogo -- só um texto genérico 'Acesse o site para ver os detalhes completos', sem endereço (diferente do welcome e-mail, que tem uma URL fixa pro localhost)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.7. Nenhuma FR exige link/CTA concreto; o projeto não tem hoje um domínio configurado de forma reutilizável fora do `ALLOWED_HOSTS` (não usa `django.contrib.sites` pra isso) -- adicionar um link real exigiria decidir essa configuração primeiro, fora do escopo desta story.

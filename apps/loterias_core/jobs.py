@@ -1,6 +1,7 @@
 import logging
 
-from .models import GeneratedBet, HitNotification, LotteryResult
+from .emails import send_hit_notification_email
+from .models import GeneratedBet, HitNotification, LotteryResult, NotificationPreference
 from .utils import apply_prize_to_bet, calculate_bet_prize, fetch_cef_result
 
 logger = logging.getLogger(__name__)
@@ -57,14 +58,18 @@ def _notify_covered_bets():
     campos-cache atualizados e, se houve interseccao (hits > 0) OU premio real (won -- cobre a
     Lotomania, que paga por 0 acertos), uma HitNotification. Nunca usar so `hits > 0` aqui: isso
     excluiria justamente o unico caso em que 0 acertos e um premio de verdade."""
-    candidates = GeneratedBet.objects.filter(notification__isnull=True)
+    candidates = list(GeneratedBet.objects.filter(notification__isnull=True))
     results_by_pair = {
         (r.game, r.contest): r
         for r in LotteryResult.objects.filter(
-            game__in=candidates.values_list('game', flat=True),
-            contest__in=candidates.values_list('contest', flat=True),
+            game__in=[bet.game for bet in candidates],
+            contest__in=[bet.contest for bet in candidates],
         )
-    }
+    } if candidates else {}
+    preferences_by_user_id = {
+        p.user_id: p
+        for p in NotificationPreference.objects.filter(user__in=[bet.user_id for bet in candidates])
+    } if candidates else {}
 
     notified = 0
     for bet in candidates:
@@ -80,9 +85,15 @@ def _notify_covered_bets():
             prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, official_result)
             apply_prize_to_bet(bet, prize)
             if prize['hits'] > 0 or prize['won']:
-                _, created = HitNotification.objects.get_or_create(bet=bet, defaults={'won': prize['won']})
+                notification, created = HitNotification.objects.get_or_create(
+                    bet=bet, defaults={'won': prize['won']}
+                )
                 if created:
                     notified += 1
+                    if prize['won']:
+                        preference = preferences_by_user_id.get(bet.user_id)
+                        if preference is not None and preference.email_enabled:
+                            send_hit_notification_email(notification)
         except Exception:
             logger.exception('fetch_daily_results: falha ao processar o bet %s pra notificacao', bet.pk)
             continue
