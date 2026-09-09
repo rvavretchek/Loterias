@@ -54,7 +54,7 @@ development_status:
   2-8-rotina-mensal-de-valores-de-premiação-por-faixa: review
   2-9-tratamento-de-falha-da-captura-de-resultado: review
   2-10-purge-manual-de-resultados-oficiais-antigos: review
-  2-11-extração-real-de-valor-e-quantidade-de-ganhadores-por-faixa: backlog
+  2-11-extração-real-de-valor-e-quantidade-de-ganhadores-por-faixa: review
   epic-2-retrospective: optional
 
   epic-3: backlog

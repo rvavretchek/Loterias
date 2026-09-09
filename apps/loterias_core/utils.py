@@ -282,8 +282,21 @@ def _extract_prize_tiers(tiers):
     diferentes.
 
     Nao resolve o caso da Dupla-Sena ter 2 sorteios com faixas repetidas (mesma quantidade de acertos
-    aparece 2x, uma por sorteio) -- fica com a primeira ocorrencia (1o sorteio); extracao completa por
-    sorteio e a Story 2.11."""
+    aparece 2x, uma por sorteio) -- fica com a primeira ocorrencia (1o sorteio); registrado em
+    deferred-work.md, sem story dedicada ainda (aguarda decisao de produto). Importante pra essa
+    dedup: uma faixa SEMPRE reserva `hits_key` em `result` na primeira ocorrencia que casar o
+    regex (mesmo quando `winners` fica None por falha de extracao, ver abaixo) -- nunca "pula" a
+    faixa inteira, senao a 2a ocorrencia (2o sorteio) silenciosamente tomaria o lugar da 1a.
+
+    `winners` vira None (Story 2.11) quando a faixa tem valor de premio positivo mas a API nao
+    informou a quantidade de ganhadores (None, nao simplesmente 0) -- e tratado como falha de
+    extracao SO daquele campo, nao fabrica um "0" que pareceria um concurso acumulado legitimo.
+    O `value` (que veio correto da API) e sempre preservado nesse caso -- descartar a faixa
+    inteira jogaria fora justamente o dado usado por calculate_bet_prize pra decidir o premio
+    (que nunca le `winners`), negando ou subestimando um premio real por causa de um campo que
+    nem influencia esse calculo. Uma faixa genuinamente sem premio (valor E ganhadores
+    zerados/ausentes, ex. concurso acumulado) continua sendo extraida normalmente com winners=0.
+    Um `valorPremio` negativo ou de tipo invalido descarta a faixa (dado corrompido, sem uso)."""
     result = {}
     for tier in tiers or []:
         match = PRIZE_TIER_PATTERN.match(tier.get('descricaoFaixa') or '')
@@ -292,9 +305,17 @@ def _extract_prize_tiers(tiers):
         hits_key = match.group(1)
         if hits_key in result:
             continue
+        try:
+            raw_value = float(tier.get('valorPremio') or 0)
+        except (TypeError, ValueError):
+            continue
+        if raw_value < 0:
+            continue
+        raw_winners = tier.get('numeroDeGanhadores')
+        winners = None if (raw_value and raw_winners is None) else (raw_winners or 0)
         result[hits_key] = {
-            'value': _format_currency(tier.get('valorPremio') or 0),
-            'winners': tier.get('numeroDeGanhadores') or 0,
+            'value': _format_currency(raw_value),
+            'winners': winners,
         }
     return result
 

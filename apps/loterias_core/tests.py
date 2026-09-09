@@ -388,6 +388,154 @@ class FetchCefResultTests(TestCase):
         result = fetch_cef_result('Milionaria', '50')
         self.assertEqual(result['clovers'], [1, 6])
 
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_tier_with_positive_value_and_missing_winners_keeps_value_with_winners_none(self, mock_get):
+        """Story 2.11: uma faixa premiada (valorPremio > 0) sem numeroDeGanhadores informado
+        (chave ausente, None -- nao simplesmente 0) e uma inconsistencia de dado -- winners fica
+        None (falha de extracao isolada a esse campo), mas a faixa NAO e descartada por inteiro:
+        o value (unico campo que calculate_bet_prize realmente usa) tem que ser preservado,
+        senao um premio real seria negado ou subestimado por causa de um campo que nem influencia
+        o calculo do premio."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'valorPremio': 50000000.0},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['prizes']['6']['value'], 'R$ 50.000.000,00')
+        self.assertIsNone(result['prizes']['6']['winners'])
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_tier_with_zero_value_and_missing_winners_is_still_extracted(self, mock_get):
+        """Diferente do caso acima: valor zerado (concurso acumulado, sem premio real naquela
+        faixa) e um dado legitimo, mesmo sem numeroDeGanhadores explicito -- nao e falha."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'valorPremio': 0.0},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['prizes']['6'], {'value': 'R$ 0,00', 'winners': 0})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_tier_with_explicit_zero_winners_and_positive_value_is_kept_as_is(self, mock_get):
+        """Documenta uma decisao de escopo (nao um bug): a Story 2.11 so trata como falha o caso
+        de numeroDeGanhadores AUSENTE (None) -- um valor explicito de 0 ganhadores com premio
+        positivo (inconsistencia no sentido oposto, ex. erro de digitacao da API) nao e coberto
+        por esta story e passa direto, gravado como veio."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 50000000.0},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['prizes']['6'], {'value': 'R$ 50.000.000,00', 'winners': 0})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_negative_or_invalid_prize_value_discards_the_tier(self, mock_get):
+        """valorPremio negativo ou de tipo invalido (string nao numerica) e dado corrompido --
+        descarta a faixa inteira, ao contrario do caso de winners ausente (onde o value ainda e
+        confiavel)."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 1, 'valorPremio': -100.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 1, 'valorPremio': 'nao-e-numero'},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['prizes'], {})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_first_draw_winners_failure_does_not_get_overwritten_by_second_draw(self, mock_get):
+        """Regressao encontrada na revisao: a dedup por hits_key precisa reservar a chave na
+        PRIMEIRA ocorrencia mesmo quando winners fica None -- senao a 2a ocorrencia (2o sorteio
+        da Dupla-Sena) substituiria silenciosamente a 1a, quebrando 'fica com a primeira
+        ocorrencia' (comportamento ja estabelecido desde a Story 2.1)."""
+        self._mock_response(mock_get, {
+            'numero': 2600,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'valorPremio': 999999.0},
+                {'descricaoFaixa': '6 acertos', 'faixa': 5, 'numeroDeGanhadores': 1, 'valorPremio': 111111.0},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '2600')
+        self.assertEqual(result['prizes']['6']['value'], 'R$ 999.999,00')
+        self.assertIsNone(result['prizes']['6']['winners'])
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_extracts_real_value_and_winners_for_multiple_tiers_of_the_same_game(self, mock_get):
+        """Story 2.11, AC principal -- teste nominal pra fechar a rastreabilidade epics.md<->codigo,
+        ainda que o mecanismo em si (extracao de valor+ganhadores reais por faixa via a API
+        oficial) exista desde a Story 2.1 (ver tambem test_matching_contest_returns_result_with_numbers)."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 1, 'valorPremio': 50000000.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 25, 'valorPremio': 40000.0},
+                {'descricaoFaixa': '4 acertos', 'faixa': 3, 'numeroDeGanhadores': 5000, 'valorPremio': 900.0},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['prizes']['6'], {'value': 'R$ 50.000.000,00', 'winners': 1})
+        self.assertEqual(result['prizes']['5'], {'value': 'R$ 40.000,00', 'winners': 25})
+        self.assertEqual(result['prizes']['4'], {'value': 'R$ 900,00', 'winners': 5000})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_extraction_completely_empty_still_saves_numbers_and_falls_back_to_prizetier(self, mock_get):
+        """Story 2.11 AC: se a pagina nao trouxer faixa nenhuma (listaRateioPremio vazio -- caso
+        independente do mecanismo novo de winners=None desta story), o resultado ainda e salvo
+        com os numeros sorteados, e calculate_bet_prize cai pro PrizeTier vigente -- comportamento
+        ja existente desde a Story 2.8/AD-10, confirmado aqui na integracao real com
+        fetch_cef_result."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['numbers'], [4, 8, 15, 16, 23, 42])
+        self.assertEqual(result['prizes'], {})
+
+        PrizeTier.objects.create(
+            game='Mega-sena', hits=6, reference_month=timezone.now().date().replace(day=1),
+            value=Decimal('50000000.00'), winners=1,
+        )
+        prize = calculate_bet_prize('Mega-sena', [4, 8, 15, 16, 23, 42], [], result)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 50.000.000,00')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_prize_value_traceability_uses_the_real_concurso_value_over_generic_prizetier(self, mock_get):
+        """Story 2.11 AC: quando o concurso especifico tem o valor real (ex. jackpot acumulado
+        maior que o PrizeTier generico do mes), esse valor tem prioridade. Mecanismo ja existente
+        desde a correcao da Story 2.8 (test_concurso_specific_prizes_remain_ground_truth_...) --
+        este teste so fecha a rastreabilidade nominal do AC desta story via fetch_cef_result."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 1, 'valorPremio': 123456789.0},
+            ],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        PrizeTier.objects.create(
+            game='Mega-sena', hits=6, reference_month=timezone.now().date().replace(day=1),
+            value=Decimal('50000000.00'), winners=1,
+        )
+        prize = calculate_bet_prize('Mega-sena', [4, 8, 15, 16, 23, 42], [], result)
+        self.assertEqual(prize['value'], 'R$ 123.456.789,00')
+
 
 class CreateBetViewTests(TestCase):
     """Regressao direta do bug documentado em docs/diagnostico-projeto.md:
