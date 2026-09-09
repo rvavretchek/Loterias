@@ -11,5 +11,6 @@ urlpatterns = [
     path('jogo/<int:pk>/verificar/', views.check_bet_result_view, name='check_bet_result'),
     path('historico/', views.history_view, name='history'),
     path('estatisticas/', views.statistics_view, name='statistics'),
+    path('notificacoes/', views.notifications_view, name='notifications'),
     path('api/gerar/', views.api_create_bet_view, name='api_create_bet'),
 ]

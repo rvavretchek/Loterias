@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -6,6 +7,7 @@ from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, GAMES_CONFIG
@@ -1071,3 +1073,163 @@ class HitNotificationModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 HitNotification.objects.create(bet=bet, won=False)
+
+
+class NotificationsContextProcessorTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='ctxnotif@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def _bet(self, contest):
+        return GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest=contest,
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+
+    def test_no_notifications_returns_zero(self):
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 0)
+        self.assertFalse(response.context['has_unread_won_notification'])
+
+    def test_unread_notification_is_counted(self):
+        HitNotification.objects.create(bet=self._bet('1'), won=False)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 1)
+        self.assertFalse(response.context['has_unread_won_notification'])
+
+    def test_won_notification_sets_flag(self):
+        HitNotification.objects.create(bet=self._bet('2'), won=True)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 1)
+        self.assertTrue(response.context['has_unread_won_notification'])
+
+    def test_read_notification_is_not_counted(self):
+        HitNotification.objects.create(bet=self._bet('3'), won=True, is_read=True)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 0)
+        self.assertFalse(response.context['has_unread_won_notification'])
+
+    def test_another_users_notification_is_not_counted(self):
+        other_user = User.objects.create_user(email='outrousuario@example.com', password='SenhaForte123')
+        other_bet = GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='4',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=other_bet, won=True)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 0)
+
+
+class NotificationBadgeTemplateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='badge@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_badge_not_shown_without_unread_notification(self):
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'bi-bell-fill')
+
+    def test_badge_shown_with_unread_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='5',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=False)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'bi-bell-fill')
+        self.assertContains(response, reverse('notifications'))
+        self.assertEqual(response.context['unread_notifications_count'], 1)
+        self.assertContains(response, 'bg-secondary')
+
+    def test_badge_uses_success_color_when_won_notification_pending(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='6',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'bg-success')
+
+    def test_badge_appears_on_other_pages_too(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='7',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=False)
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, 'bi-bell-fill')
+
+
+class NotificationsViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='notiflist@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_requires_login(self):
+        self.client.logout()
+        response = self.client.get(reverse('notifications'))
+        self.assertRedirects(response, f"/accounts/login/?next={reverse('notifications')}")
+
+    def test_lists_only_current_users_unread_notifications(self):
+        own_bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='6',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        own_notification = HitNotification.objects.create(bet=own_bet, won=True)
+
+        other_user = User.objects.create_user(email='outronotiflist@example.com', password='SenhaForte123')
+        other_bet = GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='7',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=other_bet, won=True)
+
+        read_bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='8',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=read_bet, won=True, is_read=True)
+
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['notificacoes']), [own_notification])
+
+    def test_renders_bet_details_and_ordering_for_multiple_notifications(self):
+        older_bet = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='100',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        older = HitNotification.objects.create(bet=older_bet, won=True)
+
+        newer_bet = GeneratedBet.objects.create(
+            user=self.user, game='Lotofacil', contest='200',
+            numbers=list(range(1, 16)), clovers=[], sequential_pairs=0,
+        )
+        newer = HitNotification.objects.create(bet=newer_bet, won=False)
+
+        # created_at e auto_now_add -- forca timestamps distintos pra testar a ordenacao
+        # (-created_at) sem depender da resolucao do relogio entre 2 creates seguidos.
+        HitNotification.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=1))
+
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(list(response.context['notificacoes']), [newer, older])
+        self.assertContains(response, 'Mega-sena')
+        self.assertContains(response, 'Lotofacil')
+        self.assertContains(response, '>100<')
+        self.assertContains(response, '>200<')
+        self.assertContains(response, 'Premiado')
+        self.assertContains(response, 'Sem premio')
+
+    def test_empty_state_message_shown_when_no_pending_notifications(self):
+        response = self.client.get(reverse('notifications'))
+        self.assertContains(response, 'Nenhuma notificacao pendente')
+
+    def test_viewing_the_list_does_not_mark_notifications_as_read(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        self.client.get(reverse('notifications'))
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)

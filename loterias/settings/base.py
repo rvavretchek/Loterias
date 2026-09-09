@@ -67,6 +67,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.loterias_core.context_processors.theme_context',
+                'apps.loterias_core.context_processors.notifications_context',
             ],
         },
     },

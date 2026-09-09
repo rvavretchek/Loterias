@@ -62,3 +62,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-geracao-de-notificacao-de-acerto.md`
   summary: "Primeiro deploy real do Epic 2 vai gerar uma enxurrada de `HitNotification` novas (`is_read=False`) pra todo `GeneratedBet` histórico que já tinha `hits > 0` verificado há muito tempo via caminho sob demanda -- usuários veriam 'notificações novas' de acertos que já sabiam há semanas."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.3. Não é um bug de código (a varredura por estado faz exatamente o que a story pede), é uma consequência operacional do primeiro rollout -- vale um passo manual no runbook de deploy (ex. marcar como lida toda notificação gerada no backfill inicial) quando o Epic 2 for pra produção de verdade. Baixa urgência agora (ainda não há produção real, ver decisão registrada em memória sobre isso).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
+  summary: "O badge de notificação some completamente quando a contagem chega a 0 (por design, AC explícito) -- mas isso significa que, depois da Story 2.5 permitir marcar como lida, não sobra nenhum link permanente na navbar pra revisitar notificações já lidas/histórico."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.4. Não é um bug desta story (o AC pede exatamente esse comportamento -- "sem sino vazio, sem contador zerado"), mas fica sem solução até a Story 2.5 decidir se um link permanente de histórico faz sentido (ex. um item fixo "Notificações" na navbar, distinto do badge, ou uma seção na tela de perfil).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
+  summary: "O contador do badge não tem teto visual (ex. '99+') -- um usuário com centenas de notificações não lidas acumuladas veria um número de 3+ dígitos dentro do pill circular, arriscando quebrar o layout do cabeçalho."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.4. Baixo risco prático hoje (poucos usuários, e a Story 2.5 vai permitir marcar como lida, reduzindo o acúmulo) -- revisitar se o volume real se mostrar um problema.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
+  summary: "Sem índice composto cobrindo a consulta real do badge/lista (`bet__user` + `is_read` juntos) -- só `is_read` tem índice próprio (Story 2.3)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.4. Baixo impacto no volume atual; revisitar se o número de `GeneratedBet`/`HitNotification` por usuário crescer o suficiente pra tornar essa junção uma consulta lenta.

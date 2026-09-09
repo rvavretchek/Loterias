@@ -47,7 +47,7 @@ development_status:
   2-1-rotina-diária-de-resultados: review
   2-2-bloqueio-de-concurso-já-sorteado: review
   2-3-geração-de-notificação-de-acerto: review
-  2-4-exibição-da-notificação-ao-logar: backlog
+  2-4-exibição-da-notificação-ao-logar: review
   2-5-detalhe-e-leitura-da-notificação: backlog
   2-6-preferência-de-canal-de-notificação: backlog
   2-7-envio-de-e-mail-de-acerto-premiado: backlog

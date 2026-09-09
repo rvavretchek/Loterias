@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db.models import Count
-from .models import GeneratedBet, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
+from .models import GeneratedBet, HitNotification, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
@@ -388,3 +388,21 @@ def api_create_bet_view(request):
         'pares_sequenciais': sequential_pairs_count,
         'repetido': is_duplicate,
     })
+
+
+@login_required
+def notifications_view(request):
+    """Lista as notificacoes de acerto nao lidas do usuario (versao minima -- Story 2.5
+    adiciona o detalhe completo por item e a acao de marcar como lida)."""
+    notifications = HitNotification.objects.filter(
+        bet__user=request.user, is_read=False
+    ).select_related('bet')
+
+    paginator = Paginator(notifications, 20)
+    page_number = request.GET.get('page')
+    page = paginator.get_page(page_number)
+
+    context = {
+        'notificacoes': page,
+    }
+    return render(request, 'loterias_core/notificacoes.html', context)
