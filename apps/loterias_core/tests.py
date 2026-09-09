@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
@@ -1217,7 +1218,7 @@ class NotificationsViewTests(TestCase):
         self.assertContains(response, 'Lotofacil')
         self.assertContains(response, '>100<')
         self.assertContains(response, '>200<')
-        self.assertContains(response, 'Premiado')
+        self.assertContains(response, 'bi-trophy-fill')
         self.assertContains(response, 'Sem premio')
 
     def test_empty_state_message_shown_when_no_pending_notifications(self):
@@ -1233,3 +1234,204 @@ class NotificationsViewTests(TestCase):
         self.client.get(reverse('notifications'))
         notification.refresh_from_db()
         self.assertFalse(notification.is_read)
+
+    def test_matched_numbers_shown_for_each_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='10',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='10', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        HitNotification.objects.create(bet=bet, won=False)
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(response.context['notificacoes'][0].matched_numbers, [1, 2])
+        self.assertContains(response, 'class="numero-bola"', count=2)
+        rendered_numbers = re.findall(
+            r'class="numero-bola"[^>]*>\s*(\d{2})\s*<', response.content.decode()
+        )
+        self.assertEqual(rendered_numbers, ['01', '02'])
+
+    def test_matched_numbers_normalizes_string_numbers_like_calculate_bet_prize_does(self):
+        """Regressao: bet.numbers/LotteryResult.numbers ja sao sempre int na pratica, mas a
+        comparacao usa normalize_numbers() (mesma funcao que calculate_bet_prize usa pra gerar
+        bet.hits) em vez de comparar os JSONFields crus -- garante que os dois nunca divirjam."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='12',
+            numbers=['1', '2', 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='12', numbers=[1, '2', 60, 61, 62], clovers=[], prizes={},
+        )
+        HitNotification.objects.create(bet=bet, won=False)
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(response.context['notificacoes'][0].matched_numbers, [1, 2])
+
+    def test_two_notifications_sharing_the_same_lottery_result(self):
+        bet_a = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='13',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        bet_b = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='13',
+            numbers=[1, 60, 61, 62, 63], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='13', numbers=[1, 2, 70, 71, 72], clovers=[], prizes={},
+        )
+        HitNotification.objects.create(bet=bet_a, won=False)
+        HitNotification.objects.create(bet=bet_b, won=False)
+
+        response = self.client.get(reverse('notifications'))
+        by_bet = {n.bet.pk: n.matched_numbers for n in response.context['notificacoes']}
+        self.assertEqual(by_bet[bet_a.pk], [1, 2])
+        self.assertEqual(by_bet[bet_b.pk], [1])
+
+    def test_two_notifications_with_different_lottery_results_on_same_page(self):
+        bet_mega = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='14',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        bet_quina = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='14',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Mega-sena', contest='14', numbers=[1, 2, 40, 41, 42, 43], clovers=[], prizes={},
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='14', numbers=[1, 50, 51, 52, 53], clovers=[], prizes={},
+        )
+        HitNotification.objects.create(bet=bet_mega, won=False)
+        HitNotification.objects.create(bet=bet_quina, won=False)
+
+        response = self.client.get(reverse('notifications'))
+        by_bet = {n.bet.pk: n.matched_numbers for n in response.context['notificacoes']}
+        self.assertEqual(by_bet[bet_mega.pk], [1, 2])
+        self.assertEqual(by_bet[bet_quina.pk], [1])
+
+    def test_missing_lottery_result_falls_back_to_empty_and_shows_placeholder(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='15',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=False)
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(response.context['notificacoes'][0].matched_numbers, [])
+        self.assertNotContains(response, 'class="numero-bola"')
+
+    def test_prize_value_shown_when_won(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='11',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+            hits=3, prize=Decimal('50.00'), prize_description='quina',
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        response = self.client.get(reverse('notifications'))
+        self.assertContains(response, '50,00')
+
+    def test_mark_as_read_form_is_rendered_for_each_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='16',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        response = self.client.get(reverse('notifications'))
+        self.assertContains(response, reverse('mark_notification_read', args=[notification.pk]))
+        self.assertContains(response, 'bi-check2')
+
+
+class MarkNotificationReadViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='marcarlida@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        self.bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='20',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        self.notification = HitNotification.objects.create(bet=self.bet, won=True)
+
+    def test_marks_only_the_clicked_notification_as_read(self):
+        other_bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='21',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        other_notification = HitNotification.objects.create(bet=other_bet, won=True)
+
+        response = self.client.post(reverse('mark_notification_read', args=[self.notification.pk]))
+        self.assertRedirects(response, reverse('notifications'))
+
+        self.notification.refresh_from_db()
+        other_notification.refresh_from_db()
+        self.assertTrue(self.notification.is_read)
+        self.assertFalse(other_notification.is_read)
+
+    def test_read_notification_disappears_from_badge_and_list(self):
+        self.client.post(reverse('mark_notification_read', args=[self.notification.pk]))
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 0)
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(list(response.context['notificacoes']), [])
+
+    def test_cannot_mark_another_users_notification_as_read(self):
+        other_user = User.objects.create_user(email='outromarcar@example.com', password='SenhaForte123')
+        other_bet = GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='22',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        other_notification = HitNotification.objects.create(bet=other_bet, won=True)
+
+        self.client.post(reverse('mark_notification_read', args=[other_notification.pk]))
+
+        other_notification.refresh_from_db()
+        self.assertFalse(other_notification.is_read)
+
+    def test_nonexistent_pk_does_not_error(self):
+        response = self.client.post(reverse('mark_notification_read', args=[999999]))
+        self.assertRedirects(response, reverse('notifications'))
+
+    def test_response_does_not_leak_whether_notification_exists(self):
+        """Mesmo redirect (302 pra 'notifications') tanto pra um pk que pertence ao usuario
+        quanto pra um pk de outro usuario ou inexistente -- nenhuma pista de qual e qual."""
+        other_user = User.objects.create_user(email='outroleak@example.com', password='SenhaForte123')
+        other_bet = GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='23',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        other_notification = HitNotification.objects.create(bet=other_bet, won=True)
+
+        own_response = self.client.post(reverse('mark_notification_read', args=[self.notification.pk]))
+        foreign_response = self.client.post(reverse('mark_notification_read', args=[other_notification.pk]))
+        missing_response = self.client.post(reverse('mark_notification_read', args=[999999]))
+
+        self.assertEqual(own_response.status_code, foreign_response.status_code)
+        self.assertEqual(own_response.status_code, missing_response.status_code)
+        self.assertEqual(own_response.url, foreign_response.url)
+        self.assertEqual(own_response.url, missing_response.url)
+
+    def test_redirects_to_next_when_provided_to_preserve_pagination_page(self):
+        response = self.client.post(
+            reverse('mark_notification_read', args=[self.notification.pk]),
+            {'next': reverse('notifications') + '?page=2'},
+        )
+        self.assertRedirects(response, reverse('notifications') + '?page=2')
+
+    def test_ignores_next_pointing_outside_the_site(self):
+        response = self.client.post(
+            reverse('mark_notification_read', args=[self.notification.pk]),
+            {'next': 'https://evil.example.com/'},
+        )
+        self.assertRedirects(response, reverse('notifications'))
+
+    def test_requires_login(self):
+        self.client.logout()
+        response = self.client.post(reverse('mark_notification_read', args=[self.notification.pk]))
+        self.assertRedirects(
+            response, f"/accounts/login/?next={reverse('mark_notification_read', args=[self.notification.pk])}"
+        )
+
+    def test_get_request_does_not_mark_as_read(self):
+        response = self.client.get(reverse('mark_notification_read', args=[self.notification.pk]))
+        self.assertEqual(response.status_code, 405)
+        self.notification.refresh_from_db()
+        self.assertFalse(self.notification.is_read)

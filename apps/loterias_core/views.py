@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -11,6 +13,8 @@ from .utils import (
     calculate_statistics, normalize_numbers, calculate_bet_prize,
     fetch_cef_result, suggest_next_contest, apply_prize_to_bet
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', **redirect_kwargs):
@@ -392,8 +396,8 @@ def api_create_bet_view(request):
 
 @login_required
 def notifications_view(request):
-    """Lista as notificacoes de acerto nao lidas do usuario (versao minima -- Story 2.5
-    adiciona o detalhe completo por item e a acao de marcar como lida)."""
+    """Lista as notificacoes de acerto nao lidas do usuario, com os numeros batidos e o valor
+    do premio por item, e a acao de marcar como lida (Story 2.5)."""
     notifications = HitNotification.objects.filter(
         bet__user=request.user, is_read=False
     ).select_related('bet')
@@ -402,7 +406,45 @@ def notifications_view(request):
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
 
+    pairs = {(n.bet.game, n.bet.contest) for n in page}
+    results_by_pair = {
+        (r.game, r.contest): r
+        for r in LotteryResult.objects.filter(
+            game__in=[game for game, _ in pairs],
+            contest__in=[contest for _, contest in pairs],
+        )
+    } if pairs else {}
+
+    for notification in page:
+        result = results_by_pair.get((notification.bet.game, notification.bet.contest))
+        if result:
+            user_numbers = set(normalize_numbers(notification.bet.numbers))
+            result_numbers = set(normalize_numbers(result.numbers))
+            notification.matched_numbers = sorted(user_numbers & result_numbers)
+        else:
+            logger.warning(
+                'notifications_view: LotteryResult nao encontrado para %s/%s (notificacao %s)',
+                notification.bet.game, notification.bet.contest, notification.pk,
+            )
+            notification.matched_numbers = []
+
     context = {
         'notificacoes': page,
     }
     return render(request, 'loterias_core/notificacoes.html', context)
+
+
+@login_required
+@require_POST
+def mark_notification_read_view(request, pk):
+    """Marca uma notificacao de acerto como lida. So afeta a notificacao do proprio usuario --
+    um pk de outra pessoa (ou inexistente) simplesmente nao casa com o filtro, sem revelar se
+    existe ou nao (mesmo redirect, sem erro, nos dois casos)."""
+    HitNotification.objects.filter(pk=pk, bet__user=request.user).update(is_read=True)
+    # Mensagem sempre exibida (sem checar quantas linhas foram afetadas) -- do contrario, a
+    # ausencia da mensagem revelaria se aquele pk existe/pertence a outro usuario.
+    messages.success(request, 'Notificacao marcada como lida.')
+    next_url = request.POST.get('next')
+    if next_url and next_url.startswith('/'):
+        return redirect(next_url)
+    return redirect('notifications')

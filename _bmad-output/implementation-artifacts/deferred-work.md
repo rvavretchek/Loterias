@@ -74,3 +74,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "Sem índice composto cobrindo a consulta real do badge/lista (`bet__user` + `is_read` juntos) -- só `is_read` tem índice próprio (Story 2.3)."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.4. Baixo impacto no volume atual; revisitar se o número de `GeneratedBet`/`HitNotification` por usuário crescer o suficiente pra tornar essa junção uma consulta lenta.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-detalhe-e-leitura-da-notificacao.md`
+  summary: "A busca em lote de `LotteryResult` em `notifications_view` (e também em `jobs._notify_covered_bets`, Story 2.3) usa `game__in=[...], contest__in=[...]` separados -- um produto cartesiano que pode trazer registros 'cruzados' que não correspondem a nenhum par real da página, sem causar dado errado (a chave do dict vem do próprio registro retornado), só desperdiçando linhas buscadas."
+  evidence: Achado pelo Blind Hunter e confirmado (sem ser um bug de correção) pelo Edge Case Hunter na revisão da Story 2.5 -- o mesmo padrão já existia em `jobs.py` desde a Story 2.3, não foi introduzido agora. Resolver de verdade exigiria uma query por pares exatos (`Q(game=g1,contest=c1) | Q(game=g2,contest=c2) | ...`), mais complexa de montar dinamicamente; o volume atual (página de 20 notificações) não torna isso um problema prático.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-detalhe-e-leitura-da-notificacao.md`
+  summary: "Marcar como lida não tem confirmação nem desfazer -- um clique acidental é permanente (só reversível via admin/shell)."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.5. Comportamento comum em apps similares (ex. notificações do GitHub também não confirmam), e nenhum FR pede confirmação/desfazer -- documentado como decisão de produto em aberto, não um bug.

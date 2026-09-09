@@ -20,8 +20,8 @@
                         <tr>
                             <th>Jogo</th>
                             <th>Concurso</th>
-                            <th>Acertos</th>
-                            <th>Status</th>
+                            <th>Numeros batidos</th>
+                            <th>Premio</th>
                             <th>Data</th>
                             <th class="text-end">Acoes</th>
                         </tr>
@@ -33,10 +33,27 @@
                                 <span class="badge bg-primary">{{ notificacao.bet.game }}</span>
                             </td>
                             <td class="fw-semibold">{{ notificacao.bet.contest }}</td>
-                            <td>{{ notificacao.bet.hits }}</td>
+                            <td>
+                                <div class="d-flex flex-wrap" style="max-width: 260px;">
+                                    {% for num in notificacao.matched_numbers %}
+                                    <span class="numero-bola" style="width:32px;height:32px;font-size:11px;">
+                                        {{ num|stringformat:"02d" }}
+                                    </span>
+                                    {% empty %}
+                                    <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </div>
+                                <small class="text-secondary">
+                                    {% if notificacao.won and notificacao.bet.hits == 0 %}
+                                    Premio por 0 acertos
+                                    {% else %}
+                                    {{ notificacao.bet.hits }} acerto{{ notificacao.bet.hits|pluralize }}
+                                    {% endif %}
+                                </small>
+                            </td>
                             <td>
                                 {% if notificacao.won %}
-                                <span class="badge bg-success"><i class="bi bi-trophy-fill me-1"></i>Premiado</span>
+                                <span class="badge bg-success"><i class="bi bi-trophy-fill me-1"></i>R$ {{ notificacao.bet.prize|floatformat:2 }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary">Sem premio</span>
                                 {% endif %}
@@ -45,9 +62,20 @@
                                 <small>{{ notificacao.created_at|date:"d/m/Y" }}<br>{{ notificacao.created_at|date:"H:i" }}</small>
                             </td>
                             <td class="text-end">
-                                <a href="{% url 'bet_detail' notificacao.bet.pk %}" class="btn btn-sm btn-outline-primary" title="Ver jogo">
-                                    <i class="bi bi-eye"></i>
-                                </a>
+                                <div class="d-flex justify-content-end gap-1">
+                                    <a href="{% url 'bet_detail' notificacao.bet.pk %}" class="btn btn-sm btn-outline-primary"
+                                       title="Ver jogo" aria-label="Ver jogo de {{ notificacao.bet.game }}, concurso {{ notificacao.bet.contest }}">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'mark_notification_read' notificacao.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-success"
+                                                title="Marcar como lida" aria-label="Marcar notificacao de {{ notificacao.bet.game }} como lida">
+                                            <i class="bi bi-check2"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
