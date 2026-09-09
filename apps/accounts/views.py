@@ -33,8 +33,8 @@ def toggle_theme(request):
     """Alterna entre tema claro e escuro."""
     if request.user.is_authenticated:
         user = request.user
-        user.tema_preferido = 'dark' if user.tema_preferido == 'light' else 'light'
-        user.save(update_fields=['tema_preferido'])
+        user.preferred_theme = 'dark' if user.preferred_theme == 'light' else 'light'
+        user.save(update_fields=['preferred_theme'])
     else:
         # Para usuarios anonimos, usar sessao
         current = request.session.get('theme', 'light')

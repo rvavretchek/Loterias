@@ -1,159 +1,183 @@
-from decimal import Decimal
+import logging
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db.models import Count
-from .models import JogoGerado, ResultadoLoteria, JOGOS_CONFIG, JOGOS_COM_REGRA_SEQUENCIA
+from .forms import NotificationPreferenceForm
+from .models import GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
 from .utils import (
-    gerar_aposta, verificar_jogo_repetido, contar_pares_sequenciais,
-    calcular_estatisticas, normalizar_numeros, calcular_premiacao_jogo,
-    capturar_resultado_cef
+    generate_bet, check_duplicate_bet, count_sequential_pairs,
+    calculate_statistics, normalize_numbers, calculate_bet_prize,
+    fetch_cef_result, suggest_next_contest, apply_prize_to_bet
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', **redirect_kwargs):
+    """Bloqueia com mensagem clara se o Jogo+Concurso ja tem resultado oficial (de qualquer
+    usuario) -- devolve um redirect pronto se bloqueado, ou None se pode seguir."""
+    if LotteryResult.objects.filter(game=game, contest=contest).exists():
+        messages.error(request, f'O concurso {contest} de {game} ja foi sorteado. Escolha outro concurso.')
+        return redirect(redirect_to, **redirect_kwargs)
+    return None
 
 
 def home(request):
     """Pagina inicial com dashboard."""
     if request.user.is_authenticated:
-        total_jogos = JogoGerado.objects.filter(usuario=request.user).count()
-        jogos_por_tipo = JogoGerado.objects.filter(usuario=request.user).values('jogo').annotate(
+        total_bets = GeneratedBet.objects.filter(user=request.user).count()
+        bets_by_type = GeneratedBet.objects.filter(user=request.user).values('game').annotate(
             total=Count('id')
         ).order_by('-total')
 
-        ultimos_jogos = JogoGerado.objects.filter(usuario=request.user)[:10]
+        recent_bets = GeneratedBet.objects.filter(user=request.user)[:10]
+        suggested_contests = {
+            game_name: suggest_next_contest(game_name) for game_name in GAMES_CONFIG
+        }
 
         context = {
-            'total_jogos': total_jogos,
-            'jogos_por_tipo': jogos_por_tipo,
-            'ultimos_jogos': ultimos_jogos,
-            'jogos_disponiveis': JOGOS_CONFIG,
+            'total_jogos': total_bets,
+            'jogos_por_tipo': bets_by_type,
+            'ultimos_jogos': recent_bets,
+            'jogos_disponiveis': GAMES_CONFIG,
+            'concursos_sugeridos': suggested_contests,
         }
     else:
         context = {
-            'jogos_disponiveis': JOGOS_CONFIG,
+            'jogos_disponiveis': GAMES_CONFIG,
         }
 
     return render(request, 'loterias_core/home.html', context)
 
 
 @login_required
-def gerar_jogo(request):
+def create_bet_view(request):
     """View para gerar novo jogo."""
     if request.method != 'POST':
         return redirect('home')
 
-    jogo_sel = request.POST.get('jogo')
-    concurso = request.POST.get('concurso', '').strip()
+    selected_game = request.POST.get('jogo')
+    contest = request.POST.get('concurso', '').strip()
 
-    if not jogo_sel or not concurso:
+    if not selected_game or not contest:
         messages.error(request, 'Selecione o jogo e informe o numero do concurso.')
         return redirect('home')
 
-    if jogo_sel not in JOGOS_CONFIG:
+    if selected_game not in GAMES_CONFIG:
         messages.error(request, 'Jogo invalido.')
         return redirect('home')
 
+    blocked = _block_if_contest_already_drawn(request, selected_game, contest)
+    if blocked:
+        return blocked
+
     # Verificar se concurso ja existe para este usuario e jogo
-    if JogoGerado.objects.filter(usuario=request.user, jogo=jogo_sel, concurso=concurso).exists():
-        messages.warning(request, f'Ja existe um jogo de {jogo_sel} para o concurso {concurso}.')
+    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
+        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
 
-    tentativas = 0
-    max_tentativas = 1000
-    novo_jogo = None
-    novos_trevos = None
+    attempts = 0
+    max_attempts = 1000
+    new_bet = None
+    new_clovers = None
 
-    while tentativas < max_tentativas:
-        nums, trevos = gerar_aposta(jogo_sel, request.user)
+    while attempts < max_attempts:
+        nums, clovers = generate_bet(selected_game, request.user)
 
-        if verificar_jogo_repetido(request.user, jogo_sel, nums, trevos):
-            tentativas += 1
+        if check_duplicate_bet(request.user, selected_game, nums, clovers):
+            attempts += 1
             continue
 
-        novo_jogo = nums
-        novos_trevos = trevos
+        new_bet = nums
+        new_clovers = clovers
         break
 
-    if not novo_jogo:
+    if not new_bet:
         messages.warning(request, 'Nao foi possivel gerar um jogo unico apos muitas tentativas.')
         return redirect('home')
 
     # Calcular pares sequenciais
-    pares_seq = contar_pares_sequenciais(novo_jogo)
+    sequential_pairs_count = count_sequential_pairs(new_bet)
 
     # Salvar no banco de dados
-    jogo = JogoGerado.objects.create(
-        usuario=request.user,
-        jogo=jogo_sel,
-        concurso=concurso,
-        numeros=novo_jogo,
-        trevos=novos_trevos if novos_trevos else [],
-        pares_sequenciais=pares_seq
+    bet = GeneratedBet.objects.create(
+        user=request.user,
+        game=selected_game,
+        contest=contest,
+        numbers=new_bet,
+        clovers=new_clovers if new_clovers else [],
+        sequential_pairs=sequential_pairs_count
     )
 
-    messages.success(request, f'Jogo de {jogo_sel} gerado com sucesso para o concurso {concurso}!')
+    messages.success(request, f'Jogo de {selected_game} gerado com sucesso para o concurso {contest}!')
 
-    return redirect('detalhes_jogo', pk=jogo.pk)
+    return redirect('bet_detail', pk=bet.pk)
 
 
 @login_required
-def detalhes_jogo(request, pk):
+def bet_detail_view(request, pk):
     """Pagina de detalhes de um jogo."""
-    jogo = get_object_or_404(JogoGerado, pk=pk, usuario=request.user)
+    bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
 
-    jogos_anteriores = JogoGerado.objects.filter(
-        usuario=request.user,
-        jogo=jogo.jogo
-    ).exclude(pk=pk).order_by('-criado_em')[:5]
+    previous_bets = GeneratedBet.objects.filter(
+        user=request.user,
+        game=bet.game
+    ).exclude(pk=pk).order_by('-created_at')[:5]
 
-    resultado_oficial = ResultadoLoteria.objects.filter(jogo=jogo.jogo, concurso=jogo.concurso).first()
-    premio_info = None
-    if resultado_oficial:
-        premio_info = calcular_premiacao_jogo(
-            jogo.jogo,
-            jogo.numeros,
-            jogo.trevos,
+    official_result = LotteryResult.objects.filter(game=bet.game, contest=bet.contest).first()
+    prize_info = None
+    if official_result:
+        prize_info = calculate_bet_prize(
+            bet.game,
+            bet.numbers,
+            bet.clovers,
             {
-                'numeros': resultado_oficial.numeros,
-                'trevos': resultado_oficial.trevos,
-                'premiacoes': resultado_oficial.premiacoes,
+                'numbers': official_result.numbers,
+                'clovers': official_result.clovers,
+                'prizes': official_result.prizes,
+                'captured_at': official_result.captured_at,
             }
         )
 
     context = {
-        'jogo': jogo,
-        'jogos_anteriores': jogos_anteriores,
-        'aplica_regra_sequencia': jogo.jogo in JOGOS_COM_REGRA_SEQUENCIA,
-        'resultado_oficial': resultado_oficial,
-        'premio_info': premio_info,
+        'jogo': bet,
+        'jogos_anteriores': previous_bets,
+        'aplica_regra_sequencia': bet.game in GAMES_WITH_SEQUENCE_RULE,
+        'resultado_oficial': official_result,
+        'premio_info': prize_info,
     }
 
     return render(request, 'loterias_core/detalhes_jogo.html', context)
 
 
 @login_required
-def historico(request):
+def history_view(request):
     """Pagina de historico de jogos."""
-    jogos_list = JogoGerado.objects.filter(usuario=request.user)
+    bets_list = GeneratedBet.objects.filter(user=request.user)
 
-    jogo_filtro = request.GET.get('jogo')
-    if jogo_filtro and jogo_filtro in JOGOS_CONFIG:
-        jogos_list = jogos_list.filter(jogo=jogo_filtro)
+    game_filter = request.GET.get('jogo')
+    if game_filter and game_filter in GAMES_CONFIG:
+        bets_list = bets_list.filter(game=game_filter)
 
-    ordenacao = request.GET.get('ordenacao', '-criado_em')
-    jogos_list = jogos_list.order_by(ordenacao)
+    valid_orderings = {'-created_at', 'created_at', 'game', 'contest'}
+    ordering = request.GET.get('ordenacao', '-created_at')
+    if ordering not in valid_orderings:
+        ordering = '-created_at'
+    bets_list = bets_list.order_by(ordering)
 
-    paginator = Paginator(jogos_list, 20)
+    paginator = Paginator(bets_list, 20)
     page_number = request.GET.get('page')
-    jogos = paginator.get_page(page_number)
+    bets = paginator.get_page(page_number)
 
     context = {
-        'jogos': jogos,
-        'jogos_disponiveis': JOGOS_CONFIG,
-        'jogo_filtro': jogo_filtro,
-        'ordenacao': ordenacao,
+        'jogos': bets,
+        'jogos_disponiveis': GAMES_CONFIG,
+        'jogo_filtro': game_filter,
+        'ordenacao': ordering,
     }
 
     return render(request, 'loterias_core/historico.html', context)
@@ -161,170 +185,174 @@ def historico(request):
 
 @login_required
 @require_POST
-def salvar_jogo_manual(request):
+def save_manual_bet_view(request):
     """Salva um jogo manual informado pelo usuario."""
-    jogo_sel = request.POST.get('jogo')
-    concurso = request.POST.get('concurso', '').strip()
-    numeros_raw = request.POST.get('numeros', '').strip()
+    selected_game = request.POST.get('jogo')
+    contest = request.POST.get('concurso', '').strip()
+    raw_numbers = request.POST.get('numeros', '').strip()
 
-    if not jogo_sel or not concurso or not numeros_raw:
+    if not selected_game or not contest or not raw_numbers:
         messages.error(request, 'Preencha o jogo, concurso e numeracao do jogo manual.')
         return redirect('home')
 
-    if jogo_sel not in JOGOS_CONFIG:
+    if selected_game not in GAMES_CONFIG:
         messages.error(request, 'Jogo invalido.')
         return redirect('home')
 
-    numeros = sorted(normalizar_numeros(numeros_raw))
-    config = JOGOS_CONFIG[jogo_sel]
-    esperado = config['apostas']
+    numbers = sorted(normalize_numbers(raw_numbers))
+    config = GAMES_CONFIG[selected_game]
+    expected = config['bets_count']
 
-    if len(numeros) != esperado:
-        messages.error(request, f'Este jogo exige {esperado} numeros. Voce informou {len(numeros)}.')
+    if len(numbers) != expected:
+        messages.error(request, f'Este jogo exige {expected} numeros. Voce informou {len(numbers)}.')
         return redirect('home')
 
-    minimo = 1
-    maximo = config['numeros']
-    if any(num < minimo or num > maximo for num in numeros):
-        messages.error(request, f'Os numeros devem estar entre {minimo} e {maximo} para {jogo_sel}.')
+    minimum = 1
+    maximum = config['numbers_count']
+    if any(num < minimum or num > maximum for num in numbers):
+        messages.error(request, f'Os numeros devem estar entre {minimum} e {maximum} para {selected_game}.')
         return redirect('home')
 
-    if JogoGerado.objects.filter(usuario=request.user, jogo=jogo_sel, concurso=concurso).exists():
-        messages.warning(request, f'Ja existe um jogo de {jogo_sel} para o concurso {concurso}.')
+    blocked = _block_if_contest_already_drawn(request, selected_game, contest)
+    if blocked:
+        return blocked
 
-    pares_seq = contar_pares_sequenciais(numeros)
-    jogo = JogoGerado.objects.create(
-        usuario=request.user,
-        jogo=jogo_sel,
-        concurso=concurso,
-        numeros=numeros,
-        trevos=[],
-        pares_sequenciais=pares_seq,
+    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
+        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
+
+    sequential_pairs_count = count_sequential_pairs(numbers)
+    bet = GeneratedBet.objects.create(
+        user=request.user,
+        game=selected_game,
+        contest=contest,
+        numbers=numbers,
+        clovers=[],
+        sequential_pairs=sequential_pairs_count,
         manual=True,
     )
 
-    resultado = capturar_resultado_cef(jogo_sel, concurso)
-    if resultado:
-        ResultadoLoteria.objects.update_or_create(
-            jogo=jogo_sel,
-            concurso=concurso,
+    result = fetch_cef_result(selected_game, contest)
+    if result:
+        LotteryResult.objects.update_or_create(
+            game=selected_game,
+            contest=contest,
             defaults={
-                'numeros': resultado.get('numeros', []),
-                'trevos': resultado.get('trevos', []),
-                'premiacoes': resultado.get('premiacoes', {}),
-                'origem': 'CEF',
+                'numbers': result.get('numbers', []),
+                'clovers': result.get('clovers', []),
+                'prizes': result.get('prizes', {}),
+                'source': 'CEF',
             }
         )
-        premio = calcular_premiacao_jogo(jogo_sel, jogo.numeros, jogo.trevos, resultado)
-        jogo.resultado_verificado = True
-        jogo.acertos = premio['acertos']
-        jogo.premio = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        jogo.premio_descricao = premio['categoria']
-        jogo.save(update_fields=['resultado_verificado', 'acertos', 'premio', 'premio_descricao', 'atualizado_em'])
-        if premio['ganhou']:
-            messages.success(request, f'Jogo manual salvo e verificado com {premio["acertos"]} acertos. Premio: {premio["valor"]}.')
+        prize = calculate_bet_prize(selected_game, bet.numbers, bet.clovers, result)
+        apply_prize_to_bet(bet, prize)
+        if prize['won']:
+            messages.success(request, f'Jogo manual salvo e verificado com {prize["hits"]} acertos. Premio: {prize["value"]}.')
         else:
             messages.info(request, f'Jogo manual salvo. Resultado oficial consultado; sem premio para este jogo e concurso.')
     else:
-        messages.success(request, f'Jogo manual salvo com sucesso para o concurso {concurso}.')
+        messages.success(request, f'Jogo manual salvo com sucesso para o concurso {contest}.')
 
-    return redirect('detalhes_jogo', pk=jogo.pk)
+    return redirect('bet_detail', pk=bet.pk)
 
 
 @login_required
-def verificar_resultado_jogo(request, pk):
+def check_bet_result_view(request, pk):
     """Consulta o resultado oficial da CEF para um jogo do usuario e atualiza premio."""
-    jogo = get_object_or_404(JogoGerado, pk=pk, usuario=request.user)
-    resultado = capturar_resultado_cef(jogo.jogo, jogo.concurso)
+    bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
+    result = fetch_cef_result(bet.game, bet.contest)
 
-    if not resultado:
+    if not result:
         messages.warning(request, 'Nao foi possivel consultar o resultado oficial da CEF neste momento.')
-        return redirect('detalhes_jogo', pk=pk)
+        return redirect('bet_detail', pk=pk)
 
-    ResultadoLoteria.objects.update_or_create(
-        jogo=jogo.jogo,
-        concurso=jogo.concurso,
+    LotteryResult.objects.update_or_create(
+        game=bet.game,
+        contest=bet.contest,
         defaults={
-            'numeros': resultado.get('numeros', []),
-            'trevos': resultado.get('trevos', []),
-            'premiacoes': resultado.get('premiacoes', {}),
-            'origem': 'CEF',
+            'numbers': result.get('numbers', []),
+            'clovers': result.get('clovers', []),
+            'prizes': result.get('prizes', {}),
+            'source': 'CEF',
         }
     )
 
-    premio = calcular_premiacao_jogo(jogo.jogo, jogo.numeros, jogo.trevos, resultado)
-    jogo.resultado_verificado = True
-    jogo.acertos = premio['acertos']
-    jogo.premio = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-    jogo.premio_descricao = premio['categoria']
-    jogo.save(update_fields=['resultado_verificado', 'acertos', 'premio', 'premio_descricao', 'atualizado_em'])
+    prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
+    apply_prize_to_bet(bet, prize)
 
-    if premio['ganhou']:
-        messages.success(request, f'Verificacao concluida: {premio["acertos"]} acertos e premio de {premio["valor"]}.')
+    if prize['won']:
+        messages.success(request, f'Verificacao concluida: {prize["hits"]} acertos e premio de {prize["value"]}.')
     else:
-        messages.info(request, f'Verificacao concluida: {premio["acertos"]} acertos. Sem premio identificado para este concurso.')
+        messages.info(request, f'Verificacao concluida: {prize["hits"]} acertos. Sem premio identificado para este concurso.')
 
-    return redirect('detalhes_jogo', pk=pk)
+    return redirect('bet_detail', pk=pk)
 
 
 @login_required
-def refazer_jogo(request, pk):
+def regenerate_bet_view(request, pk):
     """Refaz um jogo existente gerando novos numeros."""
-    jogo_original = get_object_or_404(JogoGerado, pk=pk, usuario=request.user)
+    original_bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
 
-    tentativas = 0
-    max_tentativas = 1000
-    novo_jogo = None
-    novos_trevos = None
+    blocked = _block_if_contest_already_drawn(request, original_bet.game, original_bet.contest, redirect_to='bet_detail', pk=pk)
+    if blocked:
+        return blocked
 
-    while tentativas < max_tentativas:
-        nums, trevos = gerar_aposta(jogo_original.jogo, request.user)
+    attempts = 0
+    max_attempts = 1000
+    new_bet = None
+    new_clovers = None
 
-        if verificar_jogo_repetido(request.user, jogo_original.jogo, nums, trevos):
-            tentativas += 1
+    while attempts < max_attempts:
+        nums, clovers = generate_bet(original_bet.game, request.user)
+
+        if check_duplicate_bet(request.user, original_bet.game, nums, clovers):
+            attempts += 1
             continue
 
-        novo_jogo = nums
-        novos_trevos = trevos
+        new_bet = nums
+        new_clovers = clovers
         break
 
-    if not novo_jogo:
+    if not new_bet:
         messages.warning(request, 'Nao foi possivel gerar um jogo unico.')
-        return redirect('detalhes_jogo', pk=pk)
+        return redirect('bet_detail', pk=pk)
 
-    pares_seq = contar_pares_sequenciais(novo_jogo)
+    sequential_pairs_count = count_sequential_pairs(new_bet)
 
     # Criar novo jogo baseado no original
-    novo_registro = JogoGerado.objects.create(
-        usuario=request.user,
-        jogo=jogo_original.jogo,
-        concurso=jogo_original.concurso,
-        numeros=novo_jogo,
-        trevos=novos_trevos if novos_trevos else [],
-        pares_sequenciais=pares_seq
+    new_record = GeneratedBet.objects.create(
+        user=request.user,
+        game=original_bet.game,
+        contest=original_bet.contest,
+        numbers=new_bet,
+        clovers=new_clovers if new_clovers else [],
+        sequential_pairs=sequential_pairs_count
     )
 
-    messages.success(request, f'Novo jogo de {jogo_original.jogo} gerado com sucesso!')
-    return redirect('detalhes_jogo', pk=novo_registro.pk)
+    messages.success(request, f'Novo jogo de {original_bet.game} gerado com sucesso!')
+    return redirect('bet_detail', pk=new_record.pk)
 
 
 @login_required
-def estatisticas(request):
+def statistics_view(request):
     """Pagina de estatisticas do usuario."""
-    estatisticas_por_jogo = {}
+    statistics_by_game = {}
 
-    for jogo_nome in JOGOS_CONFIG.keys():
-        stats = calcular_estatisticas(request.user, jogo_nome)
+    for game_name in GAMES_CONFIG.keys():
+        stats = calculate_statistics(request.user, game_name)
         if stats:
-            estatisticas_por_jogo[jogo_nome] = stats
+            statistics_by_game[game_name] = stats
 
     # Estatisticas gerais
-    total_geral = JogoGerado.objects.filter(usuario=request.user).count()
+    total_bets = GeneratedBet.objects.filter(user=request.user).count()
+    total_with_sequence = sum(stats['with_sequence'] for stats in statistics_by_game.values())
+    total_without_sequence = sum(stats['without_sequence'] for stats in statistics_by_game.values())
 
     context = {
-        'estatisticas': estatisticas_por_jogo,
-        'total_geral': total_geral,
-        'jogos_disponiveis': JOGOS_CONFIG,
+        'estatisticas': statistics_by_game,
+        'total_geral': total_bets,
+        'total_com_sequencia': total_with_sequence,
+        'total_sem_sequencia': total_without_sequence,
+        'jogos_disponiveis': GAMES_CONFIG,
     }
 
     return render(request, 'loterias_core/estatisticas.html', context)
@@ -332,37 +360,112 @@ def estatisticas(request):
 
 @login_required
 @require_POST
-def excluir_jogo(request, pk):
+def delete_bet_view(request, pk):
     """Exclui um jogo do historico."""
-    jogo = get_object_or_404(JogoGerado, pk=pk, usuario=request.user)
-    jogo.delete()
+    bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
+    bet.delete()
     messages.success(request, 'Jogo excluido com sucesso!')
-    return redirect('historico')
+    return redirect('history')
 
 
 @login_required
-def api_gerar_jogo(request):
+def api_create_bet_view(request):
     """API endpoint para gerar jogo via AJAX."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Metodo nao permitido'}, status=405)
 
     import json
     data = json.loads(request.body)
-    jogo_sel = data.get('jogo')
-    concurso = data.get('concurso', '').strip()
+    selected_game = data.get('jogo')
+    contest = data.get('concurso', '').strip()
 
-    if not jogo_sel or not concurso:
+    if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)
 
-    nums, trevos = gerar_aposta(jogo_sel, request.user)
-    pares_seq = contar_pares_sequenciais(nums)
+    nums, clovers = generate_bet(selected_game, request.user)
+    sequential_pairs_count = count_sequential_pairs(nums)
 
     # Verificar repeticao
-    repetido = verificar_jogo_repetido(request.user, jogo_sel, nums, trevos)
+    is_duplicate = check_duplicate_bet(request.user, selected_game, nums, clovers)
 
     return JsonResponse({
         'numeros': nums,
-        'trevos': trevos,
-        'pares_sequenciais': pares_seq,
-        'repetido': repetido,
+        'trevos': clovers,
+        'pares_sequenciais': sequential_pairs_count,
+        'repetido': is_duplicate,
     })
+
+
+@login_required
+def notifications_view(request):
+    """Lista as notificacoes de acerto nao lidas do usuario, com os numeros batidos e o valor
+    do premio por item, e a acao de marcar como lida (Story 2.5)."""
+    notifications = HitNotification.objects.filter(
+        bet__user=request.user, is_read=False
+    ).select_related('bet')
+
+    paginator = Paginator(notifications, 20)
+    page_number = request.GET.get('page')
+    page = paginator.get_page(page_number)
+
+    pairs = {(n.bet.game, n.bet.contest) for n in page}
+    results_by_pair = {
+        (r.game, r.contest): r
+        for r in LotteryResult.objects.filter(
+            game__in=[game for game, _ in pairs],
+            contest__in=[contest for _, contest in pairs],
+        )
+    } if pairs else {}
+
+    for notification in page:
+        result = results_by_pair.get((notification.bet.game, notification.bet.contest))
+        if result:
+            user_numbers = set(normalize_numbers(notification.bet.numbers))
+            result_numbers = set(normalize_numbers(result.numbers))
+            notification.matched_numbers = sorted(user_numbers & result_numbers)
+        else:
+            logger.warning(
+                'notifications_view: LotteryResult nao encontrado para %s/%s (notificacao %s)',
+                notification.bet.game, notification.bet.contest, notification.pk,
+            )
+            notification.matched_numbers = []
+
+    context = {
+        'notificacoes': page,
+    }
+    return render(request, 'loterias_core/notificacoes.html', context)
+
+
+@login_required
+@require_POST
+def mark_notification_read_view(request, pk):
+    """Marca uma notificacao de acerto como lida. So afeta a notificacao do proprio usuario --
+    um pk de outra pessoa (ou inexistente) simplesmente nao casa com o filtro, sem revelar se
+    existe ou nao (mesmo redirect, sem erro, nos dois casos)."""
+    HitNotification.objects.filter(pk=pk, bet__user=request.user).update(is_read=True)
+    # Mensagem sempre exibida (sem checar quantas linhas foram afetadas) -- do contrario, a
+    # ausencia da mensagem revelaria se aquele pk existe/pertence a outro usuario.
+    messages.success(request, 'Notificacao marcada como lida.')
+    next_url = request.POST.get('next')
+    if next_url and next_url.startswith('/'):
+        return redirect(next_url)
+    return redirect('notifications')
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def notification_preferences_view(request):
+    """Tela de preferencia de canal de aviso de acerto (site e/ou e-mail)."""
+    preference, _ = NotificationPreference.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        form = NotificationPreferenceForm(request.POST, instance=preference)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Preferencia de notificacao atualizada com sucesso!')
+            return redirect('notification_preferences')
+    else:
+        form = NotificationPreferenceForm(instance=preference)
+
+    context = {'form': form}
+    return render(request, 'loterias_core/preferencias_notificacao.html', context)

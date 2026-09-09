@@ -12,13 +12,15 @@ inputDocuments: ["docs/diagnostico-projeto.md"]
 
 Este PRD é dirigido ao próprio Ricardo (Boss), como PM e único desenvolvedor do projeto Loterias, e serve tanto como especificação de trabalho quanto como peça de portfólio — a documentação em si é parte do valor demonstrado. Ele cobre duas frentes de funcionalidade que se somam a um sistema já funcional de geração de apostas e autenticação por e-mail (`apps/loterias_core`, `apps/accounts`), documentado tecnicamente em `docs/diagnostico-projeto.md` (que também registra a remoção da multitenancy, uma decisão de arquitetura anterior a este PRD e fora do escopo aqui). O documento usa vocabulário fixado no Glossário (§3); termos de FRs, Jornadas de Usuário (UJs) e Métricas de Sucesso (SMs) devem ser lidos exatamente como definidos ali.
 
+**Convenção de nomenclatura de código (decisão deste PRD, ver §3.1):** todo item de código — variáveis, constantes, classes, funções, model fields — passa a ser em inglês, inclusive o código legado hoje em português (`JogoGerado`, `ResultadoLoteria`, `capturar_resultado_cef`, etc.). Prosa deste documento, UI (labels/mensagens ao usuário) e o vocabulário de domínio do Glossário continuam em português — a convenção é só de identificador de código.
+
 ## 1. Visão
 
 O Loterias hoje gera apostas válidas para seis loterias brasileiras e guarda o histórico de cada usuário — mas para saber se ganhou, o usuário precisa lembrar de voltar ao site e clicar manualmente em "verificar resultado", jogo por jogo. Isso é o oposto de por que alguém jogaria: a promessa de uma loteria é "e se eu tiver ganhado?", e hoje o sistema não responde essa pergunta sozinho.
 
 As duas frentes deste PRD atacam os dois momentos em que, hoje, o sistema empurra pro usuário um trabalho que deveria ser dele: a primeira impressão (cadastro) e a primeira vitória (saber que ganhou). A primeira faz o sistema vigiar os resultados oficiais da Caixa por conta própria — todo dia — e avisar o usuário assim que ele faz login se algum dos seus jogos bateu, diferenciando claramente "acertou alguns números" de "acertou o suficiente pra ganhar prêmio". A segunda troca o cadastro genérico do django-allauth por um fluxo deliberado (e-mail → link → senha → nome) que corresponde a como o Ricardo quer que a primeira impressão do produto aconteça.
 
-Nenhuma das duas depende de infraestrutura nova pesada: a captura de resultado já existe (`capturar_resultado_cef`), só falta rodar sozinha; o cadastro por e-mail já existe via allauth, só falta reordenar os passos.
+Nenhuma das duas depende de infraestrutura nova pesada: a captura de resultado já existe (`fetch_cef_result`, antes `capturar_resultado_cef` — ver §3.1), só falta rodar sozinha; o cadastro por e-mail já existe via allauth, só falta reordenar os passos.
 
 ## 2. Usuário-Alvo
 
@@ -44,7 +46,7 @@ Nenhuma das duas depende de infraestrutura nova pesada: a captura de resultado j
     2. Gera o jogo. Repete quantas vezes quiser, no mesmo jogo ou em jogos diferentes, na mesma sessão — sempre que o concurso digitado ainda não tiver resultado registrado.
     3. Se tentar gerar/salvar para um concurso que já tem resultado, o sistema bloqueia com mensagem clara.
     4. Pode também criar um jogo manual (digita os números em vez de gerar), sujeito à mesma regra de bloqueio.
-    5. Em um login posterior, depois que a rotina diária capturou um resultado que bate com algum jogo dela, ela vê uma notificação (barra/local a definir por UX) resumindo os acertos — diferenciando "acertos sem prêmio" de "acertos com prêmio".
+    5. Em um login posterior, depois que a rotina diária capturou um resultado que bate com algum jogo dela, ela vê um badge no cabeçalho resumindo os acertos — diferenciando "acertos sem prêmio" de "acertos com prêmio".
   - **Clímax:** ela clica na notificação e vê a tela de detalhe do(s) acerto(s)/premiação(ões) — é o momento em que ela sabe, sem precisar caçar a informação, se ganhou e quanto.
   - **Resolução:** a partir da tela de detalhe, marca aquela notificação específica como lida. A preferência de *receber* notificação por site e/ou e-mail é uma configuração separada, ajustada uma vez, não por notificação individual.
   - **Caso de borda:** se a rotina diária falhar em capturar o resultado da Caixa (scraping quebrado, site fora do ar), Dulce simplesmente não vê notificação naquele dia — o sistema não avisa sobre a própria falha pra ela (ver FR-9).
@@ -63,18 +65,62 @@ Nenhuma das duas depende de infraestrutura nova pesada: a captura de resultado j
 
 ## 3. Glossário
 
-- **Jogo** — Um dos seis tipos de loteria suportados (Mega-Sena, +Milionária, Lotomania, Lotofácil, Quina, Dupla-Sena). Corresponde a `JOGOS_CONFIG` no código.
-- **Concurso** — Identificador numérico de um sorteio específico de um Jogo. Não é estritamente sequencial nem exclusivo por Jogo — concursos especiais/comemorativos podem rodar em paralelo à numeração regular.
-- **JogoGerado** — Uma aposta salva por um usuário: um Jogo + um Concurso + um conjunto de números (e trevos, quando aplicável). Pode ser gerado automaticamente ou informado manualmente (`manual=True`).
-- **ResultadoLoteria** — O resultado oficial de um Concurso, capturado da Caixa. Único por (Jogo, Concurso).
-- **Acerto** — Interseção não vazia entre os números de um JogoGerado e os números de um ResultadoLoteria para o mesmo Jogo+Concurso.
-- **Acerto premiado** — Acerto cuja quantidade de números atinge o mínimo que gera prêmio para aquele Jogo (ex.: 4+ na Mega-Sena). Ver `calcular_premiacao_jogo`.
+*Cada termo de domínio (em português, como sempre foi tratado neste projeto) traz entre parênteses o identificador de código correspondente, em inglês — ver mapeamento completo e regras em §3.1.*
+
+- **Jogo** (`Game` — constante `GAMES_CONFIG`) — Um dos seis tipos de loteria suportados (Mega-Sena, +Milionária, Lotomania, Lotofácil, Quina, Dupla-Sena).
+- **Concurso** (campo `contest`) — Identificador numérico de um sorteio específico de um Jogo. Não é estritamente sequencial nem exclusivo por Jogo — concursos especiais/comemorativos podem rodar em paralelo à numeração regular.
+- **JogoGerado** (`GeneratedBet`) — Uma aposta salva por um usuário: um Jogo + um Concurso + um conjunto de números (e trevos, quando aplicável). Pode ser gerado automaticamente ou informado manualmente (campo `manual=True`).
+- **ResultadoLoteria** (`LotteryResult`) — O resultado oficial de um Concurso, capturado da Caixa. Único por (Jogo, Concurso).
+- **Acerto** (campo `hits`) — Interseção não vazia entre os números de um JogoGerado e os números de um ResultadoLoteria para o mesmo Jogo+Concurso.
+- **Acerto premiado** — Acerto cuja quantidade de números atinge o mínimo que gera prêmio para aquele Jogo (ex.: 4+ na Mega-Sena). Ver `calculate_bet_prize` (antes `calcular_premiacao_jogo`).
 - **Acerto não premiado** — Acerto que não atinge esse mínimo.
-- **Notificação de Acerto** — Registro criado quando a rotina diária encontra um Acerto novo para um JogoGerado; carrega o estado lido/não-lido e se é premiado ou não.
-- **Preferência de Notificação** — Configuração por usuário de por onde deseja receber avisos de Acerto: site, e-mail, ou ambos.
-- **Rotina diária de resultados** — Job agendado (django-crontab) que roda `capturar_resultado_cef` para os concursos em aberto de cada Jogo e cruza com os JogoGerado dos usuários.
-- **Rotina mensal de premiações** — Job agendado (django-crontab) que atualiza a tabela de valores de premiação vigentes.
-- **Vínculo de Confirmação de Cadastro** — Token de uso único e com expiração que autentica a Sônia da UJ-2 na tela de criação de senha (mecanismo já existente do django-allauth).
+- **Notificação de Acerto** (`HitNotification` — nova classe) — Registro criado quando a rotina diária encontra um Acerto novo para um JogoGerado; carrega o estado lido/não-lido (`is_read`) e se é premiado ou não (`is_prize_winning`).
+- **Preferência de Notificação** (`NotificationPreference` — nova classe) — Configuração por usuário de por onde deseja receber avisos de Acerto: site, e-mail, ou ambos.
+- **Rotina diária de resultados** (função `fetch_daily_results` — nova) — Job agendado (django-crontab) que roda `fetch_cef_result` (antes `capturar_resultado_cef`) para os concursos em aberto de cada Jogo e cruza com os GeneratedBet dos usuários.
+- **Rotina mensal de premiações** (função `update_monthly_prize_values` — nova) — Job agendado (django-crontab) que atualiza a tabela de valores de premiação vigentes.
+- **Vínculo de Confirmação de Cadastro** — Token de uso único e com expiração que autentica a Sônia da UJ-2 na tela de criação de senha. Reaproveita o mecanismo já existente do django-allauth (`EmailConfirmationHMAC`) — não é uma classe nova do projeto, por isso não entra no mapeamento de renomeação de §3.1.
+- **Faixa de Premiação** (`PrizeTier` — nova classe) — Valor de prêmio vigente para uma quantidade específica de acertos de um Jogo (ex.: Mega-Sena com 6 acertos = Sena; com 5 = Quina; com 4 = Quadra), capturado a cada virada de mês pela rotina mensal. É a regra de validação de quais quantidades de acertos são premiadas em cada Jogo, além de ser uma fonte oficial de valor de prêmio. Mantém histórico só dos 3 meses mais recentes por (Jogo, quantidade de acertos) — suficiente pra validar acertos retroativos dentro dessa janela.
+
+### 3.1 Convenção de Nomenclatura de Código
+
+**Regra:** todo identificador de código — nomes de variável, constante, classe, função e model field — é em inglês, tanto no código novo desta PRD quanto no código legado já existente. Não muda: strings de UI (labels, mensagens, `verbose_name`, texto de e-mail) e o vocabulário de domínio em português usado neste documento e em conversas — ambos continuam em português. Um model field em inglês carrega o rótulo em português explicitamente via `verbose_name` (ex.: `contest = models.CharField(..., verbose_name='Concurso')`), então a tela do usuário não muda.
+
+**Por quê agora:** decisão do Boss durante a revisão deste PRD (2026-09-08) — o código legado em português (`JogoGerado`, `capturar_resultado_cef`, etc.) foi escrito antes dessa convenção existir; como este PRD introduz classes/campos novos, é o momento de alinhar o legado em vez de misturar as duas línguas de forma permanente no mesmo código.
+
+**Como isso é executado:** este PRD fixa a convenção e o mapeamento de nomes (tabela abaixo); a sequência segura de execução — ordem das renomeações, geração de migrations Django (`RenameModel`/`RenameField`, preservando dados e nomes de tabela/coluna reais no SQLite de produção) e o que pode ser feito em paralelo às features FR-1 a FR-14 — é decisão de arquitetura, registrada no documento de arquitetura técnica (`/bmad-architecture`), não repetida aqui.
+
+**Mapeamento de nomes (legado → novo, e novo código desta PRD):**
+
+| Português (legado)                                                                                                                                                     | Inglês (novo)                                                                                                                                                                             | Tipo                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JOGOS_CONFIG`                                                                                                                                                         | `GAMES_CONFIG`                                                                                                                                                                            | constante                                                                                                                                                                                                     |
+| `JOGOS_COM_REGRA_SEQUENCIA`                                                                                                                                            | `GAMES_WITH_SEQUENCE_RULE`                                                                                                                                                                | constante                                                                                                                                                                                                     |
+| `INTERVALO_MIN_SEQUENCIA`                                                                                                                                              | `MIN_SEQUENCE_INTERVAL`                                                                                                                                                                   | constante                                                                                                                                                                                                     |
+| chaves `nome`/`apostas`/`numeros`/`trevos`/`qtd_trevos` dos dicts de jogo                                                                                              | `name`/`bets_count`/`numbers_count`/`clovers`/`clovers_count`                                                                                                                             | chaves de dict                                                                                                                                                                                                |
+| `JogoGerado`                                                                                                                                                           | `GeneratedBet`                                                                                                                                                                            | classe (model)                                                                                                                                                                                                |
+| `ResultadoLoteria`                                                                                                                                                     | `LotteryResult`                                                                                                                                                                           | classe (model)                                                                                                                                                                                                |
+| `EstatisticaJogo`                                                                                                                                                      | `GameStatistics`                                                                                                                                                                          | classe (model)                                                                                                                                                                                                |
+| `JogoGerado.JOGOS_CHOICES` (reutilizado por `ResultadoLoteria.JOGOS_CHOICES = JogoGerado.JOGOS_CHOICES` e por `EstatisticaJogo.jogo`)                                  | `GeneratedBet.GAME_CHOICES`                                                                                                                                                               | atributo de classe compartilhado entre as 3 classes acima — renomear numa só passada, nunca dividir a renomeação dessas 3 classes entre pessoas/PRs diferentes, exatamente por causa desta referência cruzada |
+| `related_name='jogos'` (em `JogoGerado.usuario`)                                                                                                                       | `related_name='bets'`                                                                                                                                                                     | model field (reverse accessor `user.bets`)                                                                                                                                                                    |
+| `related_name='estatisticas'` (em `EstatisticaJogo.usuario`)                                                                                                           | `related_name='statistics'`                                                                                                                                                               | model field (reverse accessor `user.statistics`)                                                                                                                                                              |
+| campos `usuario`, `jogo`, `concurso`, `numeros`, `trevos`                                                                                                              | `user`, `game`, `contest`, `numbers`, `clovers`                                                                                                                                           | model field (comum às 3 classes acima)                                                                                                                                                                        |
+| `pares_sequenciais`, `resultado_verificado`, `acertos`, `premio`, `premio_descricao`, `criado_em`, `atualizado_em`                                                     | `sequential_pairs`, `result_checked`, `hits`, `prize`, `prize_description`, `created_at`, `updated_at`                                                                                    | model field (`GeneratedBet`)                                                                                                                                                                                  |
+| `premiacoes`, `origem`, `capturado_em`                                                                                                                                 | `prizes`, `source`, `captured_at`                                                                                                                                                         | model field (`LotteryResult`)                                                                                                                                                                                 |
+| `total_jogos`, `total_com_sequencia`, `total_sem_sequencia`, `numero_mais_frequente`, `ultima_atualizacao`                                                             | `total_bets`, `total_with_sequence`, `total_without_sequence`, `most_frequent_numbers`, `last_updated`                                                                                    | model field (`GameStatistics`)                                                                                                                                                                                |
+| `get_numeros_formatados`, `get_trevos_formatados`, `tem_sequencia`                                                                                                     | `get_formatted_numbers`, `get_formatted_clovers`, `has_sequence`                                                                                                                          | método                                                                                                                                                                                                        |
+| `normalizar_numeros`                                                                                                                                                   | `normalize_numbers`                                                                                                                                                                       | função                                                                                                                                                                                                        |
+| `contar_pares_sequenciais`                                                                                                                                             | `count_sequential_pairs`                                                                                                                                                                  | função                                                                                                                                                                                                        |
+| `ultimos_jogos_tiveram_sequencia`                                                                                                                                      | `recent_bets_had_sequence`                                                                                                                                                                | função                                                                                                                                                                                                        |
+| `gerar_aposta`                                                                                                                                                         | `generate_bet`                                                                                                                                                                            | função                                                                                                                                                                                                        |
+| `verificar_jogo_repetido`                                                                                                                                              | `check_duplicate_bet`                                                                                                                                                                     | função                                                                                                                                                                                                        |
+| `calcular_estatisticas`                                                                                                                                                | `calculate_statistics`                                                                                                                                                                    | função                                                                                                                                                                                                        |
+| `calcular_premiacao_jogo`                                                                                                                                              | `calculate_bet_prize`                                                                                                                                                                     | função                                                                                                                                                                                                        |
+| `capturar_resultado_cef`                                                                                                                                               | `fetch_cef_result`                                                                                                                                                                        | função                                                                                                                                                                                                        |
+| `verificar_resultados_usuarios`                                                                                                                                        | `check_user_results`                                                                                                                                                                      | função                                                                                                                                                                                                        |
+| `gerar_jogo`, `detalhes_jogo`, `historico`, `salvar_jogo_manual`, `verificar_resultado_jogo`, `refazer_jogo`, `estatisticas`, `excluir_jogo`, `api_gerar_jogo` (views) | `create_bet_view`, `bet_detail_view`, `history_view`, `save_manual_bet_view`, `check_bet_result_view`, `regenerate_bet_view`, `statistics_view`, `delete_bet_view`, `api_create_bet_view` | view (função)                                                                                                                                                                                                 |
+| *(novo, sem equivalente legado)*                                                                                                                                       | `HitNotification`, `NotificationPreference`, `PrizeTier`, `fetch_daily_results`, `update_monthly_prize_values`                                                                            | classe/função nova desta PRD                                                                                                                                                                                  |
+
+`apps/accounts` segue a convenção na maior parte (classes `User`, `UserManager`, `CustomSignupForm`, `CustomAccountAdapter` já em inglês), **mas dois campos do model `User` escaparam da varredura original desta PRD e continuam em português: `tema_preferido`→`preferred_theme` e `telefone`→`phone`** (usados em `apps/accounts/admin.py`, `forms.py`, `views.py`, `apps/loterias_core/context_processors.py` e nos templates `accounts/profile.html`/outros). Corrigido pela Story 1.5 do Epic 1 (achado durante a implementação, não fazia parte do mapeamento original). O novo código do fluxo de cadastro (FR-10 a FR-14) precisa nascer consistente com isso.
 
 ## 4. Funcionalidades
 
@@ -82,46 +128,49 @@ Nenhuma das duas depende de infraestrutura nova pesada: a captura de resultado j
 
 ### 4.1 Verificação e Notificação de Resultados
 
-**Descrição:** Realiza a UJ-1. Duas rotinas agendadas via django-crontab mantêm o sistema informado sobre resultados oficiais sem ação do usuário; o cruzamento contra os JogoGerado de cada usuário gera Notificações de Acerto, exibidas ao logar e detalhadas sob clique. Substitui a decisão de arquitetura originalmente cogitada (Celery + Redis) — ver Não-Objetivos (§5) para o porquê.
+**Descrição:** Realiza a UJ-1. Duas rotinas agendadas via django-crontab mantêm o sistema informado sobre resultados oficiais sem ação do usuário; o cruzamento contra os GeneratedBet de cada usuário gera Notificações de Acerto (`HitNotification`), exibidas ao logar e detalhadas sob clique. Substitui a decisão de arquitetura originalmente cogitada (Celery + Redis) — ver Não-Objetivos (§5) para o porquê.
 
 #### FR-1: Rotina diária de resultados
 
-Diariamente às 3h (horário de Brasília — janela segura após os sorteios noturnos da Caixa terminarem), o sistema executa uma rotina que, para cada Jogo com concursos em aberto (sem ResultadoLoteria registrado), tenta capturar o resultado oficial via `capturar_resultado_cef` e grava em ResultadoLoteria.
+Diariamente às 3h (horário de Brasília — janela segura após os sorteios noturnos da Caixa terminarem), o sistema executa uma rotina (`fetch_daily_results`) que, para cada Jogo com concursos em aberto (sem LotteryResult registrado), tenta capturar o resultado oficial via `fetch_cef_result` — números sorteados e, para cada faixa premiada daquele Jogo (ex.: Mega-Sena: quadra, quina e sena), o valor do prêmio **e a quantidade de ganhadores** daquela faixa naquele concurso — e grava em LotteryResult.
 
 **Consequências (testáveis):**
-- A rotina não recria um ResultadoLoteria que já existe para o mesmo Jogo+Concurso (idempotente).
+- A rotina não recria um LotteryResult que já existe para o mesmo Jogo+Concurso (idempotente).
 - Uma falha de captura para um Jogo/Concurso específico não interrompe a tentativa dos demais.
+- `fetch_cef_result` extrai, pra cada faixa premiada do concurso, tanto o valor do prêmio quanto a quantidade de ganhadores — não só os números sorteados. Hoje a função só extrai os números (o valor é um placeholder fixo, sem quantidade de ganhadores nenhuma); fechar essa lacuna faz parte do escopo desta FR — é o dado necessário pra informar corretamente ao usuário premiado qual foi o prêmio dele. Se a extração falhar mas os números vierem normalmente, o resultado é salvo sem prêmio populado e `calculate_bet_prize` usa a Faixa de Premiação (`PrizeTier`, FR-8) vigente como fonte. Uma faixa premiada nunca é gravada com quantidade de ganhadores zerada ou ausente — isso é tratado como falha de extração daquela faixa, não como "zero ganhadores".
 - Ver FR-9 para a política de retentativa dentro da mesma execução diária.
 
 #### FR-2: Bloqueio de concurso já sorteado
 
-Ao gerar (automático ou manual) um JogoGerado, o sistema pré-preenche o campo de Concurso com uma sugestão (próximo concurso sequencial daquele Jogo, com base no maior Concurso já visto), mas aceita qualquer número informado. A única validação real: rejeitar se aquele Jogo+Concurso já tiver ResultadoLoteria registrado. Realiza UJ-1, passos 1–3.
+Ao gerar (automático ou manual) um GeneratedBet, o sistema pré-preenche o campo de Concurso com uma sugestão (próximo concurso sequencial daquele Jogo, com base no maior Concurso já visto), mas aceita qualquer número informado. A única validação real: rejeitar se aquele Jogo+Concurso já tiver LotteryResult registrado. Realiza UJ-1, passos 1–3.
 
 **Consequências (testáveis):**
-- Tentar gerar/salvar um JogoGerado para um Jogo+Concurso com ResultadoLoteria existente retorna erro claro, sem gravar o registro.
-- Um Concurso fora da sequência normal (especial/comemorativo) sem ResultadoLoteria é aceito normalmente.
+- Tentar gerar/salvar um GeneratedBet para um Jogo+Concurso com LotteryResult existente retorna erro claro, sem gravar o registro.
+- Um Concurso fora da sequência normal (especial/comemorativo) sem LotteryResult é aceito normalmente.
 
 #### FR-3: Geração de Notificação de Acerto
 
-Sempre que a rotina diária grava um ResultadoLoteria novo, o sistema compara com todos os JogoGerado existentes daquele Jogo+Concurso e cria uma Notificação de Acerto para cada JogoGerado com interseção não vazia — marcada como premiada ou não, conforme `calcular_premiacao_jogo`. Realiza UJ-1, passo 5.
+Sempre que a rotina diária grava um LotteryResult novo, o sistema compara com todos os GeneratedBet existentes daquele Jogo+Concurso e cria uma Notificação de Acerto (`HitNotification`) para cada GeneratedBet com interseção não vazia **ou com prêmio real segundo `calculate_bet_prize`** (`won=True`) — marcada como premiada ou não. A ressalva existe porque a Lotomania paga por 0 acertos (regra real do jogo): uma regra de negócio que não reflete esse caso não está modelando a realidade, e a exceção precisa estar aqui, não só no código. Realiza UJ-1, passo 5.
 
 **Consequências (testáveis):**
-- JogoGerado sem interseção nenhuma não gera Notificação.
-- Uma Notificação de Acerto é criada no máximo uma vez por JogoGerado+ResultadoLoteria (idempotente — reexecutar a rotina não duplica).
+- GeneratedBet sem interseção nenhuma **e sem prêmio real** não gera Notificação — mas 0 acertos com prêmio (Lotomania) gera normalmente.
+- Uma Notificação de Acerto é criada no máximo uma vez por GeneratedBet+LotteryResult (idempotente — reexecutar a rotina não duplica).
 
 #### FR-4: Exibição da notificação ao logar
 
-Ao autenticar, o usuário com Notificação(ões) de Acerto não lida(s) vê um indicador (local exato definido por UX) resumindo a quantidade, diferenciando visualmente acertos premiados de não premiados.
+Ao autenticar, o usuário com Notificação(ões) de Acerto não lida(s) vê um badge numérico no cabeçalho (ícone de sino + contador, junto do nome/avatar do usuário) resumindo a quantidade, diferenciando visualmente acertos premiados de não premiados. Visível em toda página enquanto autenticado, sem depender de JS/tempo real — decisão fechada nesta PRD, não fica mais pendente de UX.
 
 **Consequências (testáveis):**
-- Usuário sem Notificação pendente não vê indicador algum.
+- Usuário sem Notificação pendente não vê o badge (sem sino vazio, sem contador zerado).
 - Um acerto premiado é visualmente distinguível de um não premiado no resumo (não apenas no detalhe).
+- Clicar no badge leva direto à tela de detalhe (FR-5).
 
 #### FR-5: Detalhe e leitura da notificação
 
-Clicar no indicador leva a uma tela listando as Notificações de Acerto pendentes, com o detalhe de números batidos e valor do prêmio (se houver). Cada Notificação pode ser marcada como lida individualmente a partir dessa tela. Realiza UJ-1, clímax e resolução.
+Clicar no indicador leva a uma tela listando as Notificações de Acerto pendentes, identificando pra cada uma o tipo de Jogo (ex.: Mega-Sena) e o número do Concurso, além do detalhe de números batidos e valor do prêmio (se houver). Cada Notificação pode ser marcada como lida individualmente a partir dessa tela. Realiza UJ-1, clímax e resolução.
 
 **Consequências (testáveis):**
+- Cada item da lista identifica claramente qual Jogo e qual Concurso geraram aquele acerto — o usuário nunca precisa adivinhar a qual jogo uma notificação se refere.
 - Marcar uma Notificação como lida não afeta o estado das demais.
 - Notificação marcada como lida não volta a aparecer no indicador de FR-4.
 
@@ -145,14 +194,16 @@ Quando a Preferência de Notificação do usuário inclui e-mail, o sistema envi
 
 #### FR-8: Rotina mensal de valores de premiação
 
-No primeiro dia de cada mês, o sistema atualiza a tabela de valores de premiação vigentes usada por `calcular_premiacao_jogo`, para que o valor exibido numa Notificação premiada reflita a faixa de prêmio corrente.
+No primeiro dia de cada mês, o sistema (`update_monthly_prize_values`) captura, para cada tipo de Jogo, as Faixas de Premiação vigentes (`PrizeTier`) — o valor de prêmio oficial pra cada quantidade de acertos que dá prêmio naquele Jogo (ex.: Mega-Sena: 4, 5 e 6 acertos, cada um com seu valor; o mesmo padrão vale pra todos os 6 Jogos). Essas faixas são a regra de validação que `calculate_bet_prize` usa pra decidir se uma quantidade de acertos é premiada — substituem a lista fixa de faixas hoje hardcoded por Jogo dentro da função. O sistema mantém histórico só dos **3 meses mais recentes** por (Jogo, quantidade de acertos) — suficiente pra validar acertos retroativos dentro dessa janela; capturar um mês novo remove automaticamente o mês mais antigo além dos 3 retidos.
 
 **Consequências (testáveis):**
 - Uma Notificação de Acerto premiada criada após a rotina mensal usa os valores atualizados, não os anteriores.
+- Para cada Jogo, todas as quantidades de acertos que dão prêmio naquele Jogo têm uma Faixa de Premiação capturada — nenhuma fica de fora da validação.
+- Apagar o mês mais antigo ao capturar um novo nunca deixa menos de 1 nem mais de 3 meses retidos por (Jogo, quantidade de acertos).
 
 #### FR-9: Tratamento de falha da captura de resultado
 
-Dentro de uma mesma execução da rotina diária, se `capturar_resultado_cef` falhar para um Jogo/Concurso, o sistema tenta novamente até 3 vezes, com 15 minutos de intervalo entre tentativas, antes de desistir daquele Jogo/Concurso para o dia — as 3 tentativas terminam bem antes do horário em que usuários costumam abrir o sistema pela manhã. Se todas as tentativas falharem, o sistema envia um e-mail de alerta ao operador (Boss) — não é um alerta ao usuário final, e não depende de múltiplos dias de falha. O usuário final simplesmente não vê Notificação naquele Jogo/Concurso até a captura funcionar em um dia seguinte. Realiza UJ-1, caso de borda.
+Dentro de uma mesma execução da rotina diária, se `fetch_cef_result` falhar para um Jogo/Concurso, o sistema tenta novamente até 3 vezes, com 15 minutos de intervalo entre tentativas, antes de desistir daquele Jogo/Concurso para o dia — as 3 tentativas terminam bem antes do horário em que usuários costumam abrir o sistema pela manhã. Se todas as tentativas falharem, o sistema envia um e-mail de alerta ao operador (Boss) — não é um alerta ao usuário final, e não depende de múltiplos dias de falha. O usuário final simplesmente não vê Notificação naquele Jogo/Concurso até a captura funcionar em um dia seguinte. Realiza UJ-1, caso de borda.
 
 **Consequências (testáveis):**
 - Falha de captura não gera Notificação de Acerto incorreta nem falsa (nunca inventa resultado).
@@ -161,10 +212,18 @@ Dentro de uma mesma execução da rotina diária, se `capturar_resultado_cef` fa
 - O e-mail de alerta vai para um endereço de operador configurável via variável de ambiente (`[ASSUMPTION]` nome da variável e endereço exatos ficam para a implementação — ver §8).
 
 **NFRs específicas desta funcionalidade:**
-- Um valor de prêmio exibido numa Notificação sempre rastreia a um ResultadoLoteria.premiacoes concreto — o sistema nunca estima ou arredonda um valor de prêmio na ausência de dado oficial confirmado (falha = sem Notificação, não Notificação com valor incerto).
+- Um valor de prêmio exibido numa Notificação sempre rastreia a um `LotteryResult.prizes` (antes `ResultadoLoteria.premiacoes`) concreto **ou a uma Faixa de Premiação (`PrizeTier`) oficial vigente pra aquela quantidade de acertos (FR-8)** — o sistema nunca estima ou arredonda um valor de prêmio na ausência de um desses dois dados oficiais confirmados (falha = sem Notificação, não Notificação com valor incerto).
 - As rotinas agendadas respeitam uma cadência deliberadamente baixa (diária para resultado, mensal para valores) para não sobrecarregar nem ser bloqueado pelo site da Caixa, que não oferece API oficial.
 
-**Notas:** `[NOTE FOR PM]` A view `verificar_resultado_jogo` já existente (verificação sob demanda, por clique) continua funcionando em paralelo à rotina diária — ambas escrevem no mesmo ResultadoLoteria via `update_or_create`, então não há conflito, mas vale revisitar se a verificação manual ainda faz sentido depois que a rotina automática cobre o caso comum.
+**Notas:** `[NOTE FOR PM]` A view `check_bet_result_view` (antes `verificar_resultado_jogo`) já existente (verificação sob demanda, por clique) continua funcionando em paralelo à rotina diária — ambas escrevem no mesmo LotteryResult via `update_or_create`, então não há conflito, mas vale revisitar se a verificação manual ainda faz sentido depois que a rotina automática cobre o caso comum.
+
+#### FR-15: Retenção e purge manual de resultados oficiais antigos
+
+Diferente das Faixas de Premiação (FR-8, retidas só 3 meses), os `LotteryResult` (resultados oficiais capturados por Jogo+Concurso) são retidos **integralmente e por padrão indefinidamente** — nenhuma exclusão automática. O painel de administração ganha uma ação de "purge até uma data": o operador (Boss) informa uma data de corte e o sistema apaga os `LotteryResult` capturados antes dela, sob demanda.
+
+**Consequências (testáveis):**
+- Nenhum `LotteryResult` é apagado automaticamente por rotina alguma — só uma ação manual do operador no admin apaga.
+- A ação de purge aceita uma data de corte e afeta somente `LotteryResult` capturados antes dela; `GeneratedBet` dos usuários e `PrizeTier` não são afetados por essa ação.
 
 ### 4.2 Novo Fluxo de Cadastro
 
@@ -235,7 +294,9 @@ No primeiro login bem-sucedido após FR-12, antes de qualquer outra tela do sist
 - Preferência de canal (site/e-mail) e envio de e-mail para acerto premiado (FR-6, FR-7).
 - Rotina mensal de valores de premiação (FR-8).
 - Tratamento silencioso de falha de captura, sem notificar o usuário sobre a falha (FR-9).
+- Purge manual de resultados oficiais antigos pelo operador, via admin (FR-15).
 - Novo fluxo de cadastro completo: e-mail → link → senha → nome/sobrenome no primeiro login (FR-10 a FR-14).
+- Renomeação dos identificadores de código legados do português para o inglês, conforme mapeamento de §3.1 (débito técnico transversal, não é um FR numerado nem visível ao usuário final — UI e dados não mudam).
 
 ### 6.2 Fora de Escopo do MVP
 - Texto definitivo (jurídico) dos termos de serviço — usa placeholder até a publicação real do projeto. `[NOTE FOR PM]` revisitar antes de qualquer publicação pública.
@@ -250,7 +311,7 @@ No primeiro login bem-sucedido após FR-12, antes de qualquer outra tela do sist
 - **SM-2**: Uma pessoa consegue completar o cadastro (e-mail → senha → nome/sobrenome) sem precisar de ajuda ou reenvio de link na maioria das tentativas. Valida FR-10 a FR-14.
 
 **Secundária**
-- **SM-3**: Zero falso-positivo de premiação — nenhuma Notificação Premiada é criada sem um ResultadoLoteria oficial confirmado por trás. Valida FR-9 e a NFR de rastreabilidade de valor de prêmio (§4.1).
+- **SM-3**: Zero falso-positivo de premiação — nenhuma Notificação Premiada é criada sem um LotteryResult oficial confirmado por trás. Valida FR-9 e a NFR de rastreabilidade de valor de prêmio (§4.1).
 
 **Contra-métricas (não otimizar)**
 - **SM-C1**: Volume de e-mails de acerto por usuário permanece baixo (um e-mail por Acerto Premiado real, nunca reenviado por reexecução da rotina) — contrabalança SM-1: o objetivo é notificar corretamente, não notificar com frequência.
@@ -260,6 +321,7 @@ No primeiro login bem-sucedido após FR-12, antes de qualquer outra tela do sist
 1. Nome exato da variável de ambiente e endereço de e-mail do operador para o alerta de FR-9 (ex.: `OPERATOR_ALERT_EMAIL`) — decisão de implementação, não de produto.
 2. Texto definitivo (jurídico) dos termos de serviço, para quando o projeto for publicado de verdade — o Anexo A é só placeholder até lá.
 3. Onde/como o operador (Boss) acompanha o histórico de alertas de FR-9 além do e-mail avulso — um painel dedicado ficou fora do MVP (§6.2); por ora, o e-mail é o único registro.
+4. Sequenciamento da renomeação de código legado (§3.1): se acontece antes, em paralelo ou depois das features FR-1 a FR-14, e como as migrations Django (`RenameModel`/`RenameField`) são geradas e aplicadas sem perda de dados no SQLite de produção — decisão de arquitetura, não de produto.
 
 ## 9. Índice de Suposições
 

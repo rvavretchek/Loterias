@@ -22,7 +22,7 @@
                         <option value="">Todos os jogos</option>
                         {% for key, config in jogos_disponiveis.items %}
                         <option value="{{ key }}" {% if jogo_filtro == key %}selected{% endif %}>
-                            {{ config.nome }}
+                            {{ config.name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -30,16 +30,16 @@
                 <div class="col-md-3">
                     <label class="form-label">Ordenacao</label>
                     <select name="ordenacao" class="form-select">
-                        <option value="-criado_em" {% if ordenacao == '-criado_em' %}selected{% endif %}>
+                        <option value="-created_at" {% if ordenacao == '-created_at' %}selected{% endif %}>
                             Mais recentes primeiro
                         </option>
-                        <option value="criado_em" {% if ordenacao == 'criado_em' %}selected{% endif %}>
+                        <option value="created_at" {% if ordenacao == 'created_at' %}selected{% endif %}>
                             Mais antigos primeiro
                         </option>
-                        <option value="jogo" {% if ordenacao == 'jogo' %}selected{% endif %}>
+                        <option value="game" {% if ordenacao == 'game' %}selected{% endif %}>
                             Tipo de jogo
                         </option>
-                        <option value="concurso" {% if ordenacao == 'concurso' %}selected{% endif %}>
+                        <option value="contest" {% if ordenacao == 'contest' %}selected{% endif %}>
                             Concurso
                         </option>
                     </select>
@@ -78,12 +78,12 @@
                         {% for jogo in jogos %}
                         <tr class="fade-in">
                             <td>
-                                <span class="badge bg-primary">{{ jogo.jogo }}</span>
+                                <span class="badge bg-primary">{{ jogo.game }}</span>
                             </td>
-                            <td class="fw-semibold">{{ jogo.concurso }}</td>
+                            <td class="fw-semibold">{{ jogo.contest }}</td>
                             <td>
                                 <div class="d-flex flex-wrap" style="max-width: 300px;">
-                                    {% for num in jogo.numeros %}
+                                    {% for num in jogo.numbers %}
                                     <span class="numero-bola" style="width:32px;height:32px;font-size:11px;">
                                         {{ num|stringformat:"02d" }}
                                     </span>
@@ -91,8 +91,8 @@
                                 </div>
                             </td>
                             <td>
-                                {% if jogo.trevos %}
-                                    {% for trevo in jogo.trevos %}
+                                {% if jogo.clovers %}
+                                    {% for trevo in jogo.clovers %}
                                     <span class="trevo-bola" style="width:32px;height:32px;font-size:11px;">
                                         {{ trevo|stringformat:"02d" }}
                                     </span>
@@ -102,24 +102,24 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if jogo.pares_sequenciais > 0 %}
-                                <span class="badge bg-warning text-dark">{{ jogo.pares_sequenciais }}</span>
+                                {% if jogo.sequential_pairs > 0 %}
+                                <span class="badge bg-warning text-dark">{{ jogo.sequential_pairs }}</span>
                                 {% else %}
                                 <span class="badge bg-success">0</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ jogo.criado_em|date:"d/m/Y" }}<br>{{ jogo.criado_em|date:"H:i" }}</small>
+                                <small>{{ jogo.created_at|date:"d/m/Y" }}<br>{{ jogo.created_at|date:"H:i" }}</small>
                             </td>
                             <td class="text-end">
                                 <div class="btn-group">
-                                    <a href="{% url 'detalhes_jogo' jogo.pk %}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                    <a href="{% url 'bet_detail' jogo.pk %}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
                                         <i class="bi bi-eye"></i>
                                     </a>
-                                    <a href="{% url 'refazer_jogo' jogo.pk %}" class="btn btn-sm btn-outline-success" title="Gerar novamente">
+                                    <a href="{% url 'regenerate_bet' jogo.pk %}" class="btn btn-sm btn-outline-success" title="Gerar novamente">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
-                                    <form method="post" action="{% url 'excluir_jogo' jogo.pk %}" class="d-inline">
+                                    <form method="post" action="{% url 'delete_bet' jogo.pk %}" class="d-inline">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir">
                                             <i class="bi bi-trash"></i>

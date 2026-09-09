@@ -30,7 +30,7 @@ class User(AbstractUser):
     """Usuario customizado com suporte a email."""
     username = None
     email = models.EmailField(unique=True, verbose_name='E-mail')
-    tema_preferido = models.CharField(
+    preferred_theme = models.CharField(
         max_length=10,
         choices=[('light', 'Claro'), ('dark', 'Escuro')],
         default='light',
@@ -42,7 +42,7 @@ class User(AbstractUser):
         blank=True,
         verbose_name='Avatar'
     )
-    telefone = models.CharField(max_length=20, blank=True, verbose_name='Telefone')
+    phone = models.CharField(max_length=20, blank=True, verbose_name='Telefone')
     bio = models.TextField(blank=True, verbose_name='Biografia')
 
     USERNAME_FIELD = 'email'

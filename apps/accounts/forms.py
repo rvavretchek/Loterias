@@ -43,12 +43,12 @@ class ProfileUpdateForm(forms.ModelForm):
     """Formulario de atualizacao de perfil."""
     class Meta:
         model = User
-        fields = ('first_name', 'last_name', 'telefone', 'bio', 'avatar', 'tema_preferido')
+        fields = ('first_name', 'last_name', 'phone', 'bio', 'avatar', 'preferred_theme')
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
-            'telefone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '(00) 00000-0000'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '(00) 00000-0000'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Conte um pouco sobre voce...'}),
             'avatar': forms.FileInput(attrs={'class': 'form-control'}),
-            'tema_preferido': forms.Select(attrs={'class': 'form-select'}),
+            'preferred_theme': forms.Select(attrs={'class': 'form-select'}),
         }

@@ -3,255 +3,389 @@ import re
 from decimal import Decimal
 
 import requests
+from django.utils import timezone
 
-from .models import JogoGerado, JOGOS_CONFIG, JOGOS_COM_REGRA_SEQUENCIA, INTERVALO_MIN_SEQUENCIA, ResultadoLoteria
+from .models import (
+    GeneratedBet, LotteryResult, PrizeTier,
+    GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL,
+)
 
 
-def normalizar_numeros(numeros):
+def normalize_numbers(numbers):
     """Normaliza entradas em lista de inteiros para uso em validação e tabela."""
-    if numeros is None:
+    if numbers is None:
         return []
-    if isinstance(numeros, str):
-        numeros = numeros.replace(' ', '').replace(';', ',').replace('.', ',')
-        if ',' in numeros:
-            lista = numeros.split(',')
+    if isinstance(numbers, str):
+        numbers = numbers.replace(' ', '').replace(';', ',').replace('.', ',')
+        if ',' in numbers:
+            parts = numbers.split(',')
         else:
-            lista = [numeros]
-        return [int(item) for item in lista if item]
-    if isinstance(numeros, (list, tuple, set)):
-        return [int(item) for item in numeros]
-    return [int(numeros)]
+            parts = [numbers]
+        return [int(item) for item in parts if item]
+    if isinstance(numbers, (list, tuple, set)):
+        return [int(item) for item in numbers]
+    return [int(numbers)]
 
 
-def contar_pares_sequenciais(numeros):
+def count_sequential_pairs(numbers):
     """Conta quantos pares de numeros consecutivos existem na lista ordenada."""
-    if len(numeros) < 2:
+    if len(numbers) < 2:
         return 0
-    pares = 0
+    pairs = 0
     i = 0
-    nums_sorted = sorted(numeros)
+    nums_sorted = sorted(numbers)
     while i < len(nums_sorted) - 1:
         if nums_sorted[i + 1] == nums_sorted[i] + 1:
-            pares += 1
+            pairs += 1
             i += 2
         else:
             i += 1
-    return pares
+    return pairs
 
 
-def ultimos_jogos_tiveram_sequencia(usuario, jogo_nome, intervalo=INTERVALO_MIN_SEQUENCIA):
+def recent_bets_had_sequence(user, game_name, interval=MIN_SEQUENCE_INTERVAL):
     """Verifica se nos ultimos N jogos do mesmo tipo houve algum par sequencial."""
-    ultimos = JogoGerado.objects.filter(
-        usuario=usuario,
-        jogo=jogo_nome
-    ).order_by('-criado_em')[:intervalo]
+    recent_bets = GeneratedBet.objects.filter(
+        user=user,
+        game=game_name
+    ).order_by('-created_at')[:interval]
 
-    for jogo in ultimos:
-        if contar_pares_sequenciais(jogo.numeros) > 0:
+    for bet in recent_bets:
+        if count_sequential_pairs(bet.numbers) > 0:
             return True
     return False
 
 
-def gerar_aposta(nome_jogo, usuario=None):
+def generate_bet(game_name, user=None):
     """Gera uma aposta valida respeitando as regras de sequencia."""
-    config = JOGOS_CONFIG.get(nome_jogo)
+    config = GAMES_CONFIG.get(game_name)
     if not config:
         return None, None
 
-    aplica_regra_sequencia = nome_jogo in JOGOS_COM_REGRA_SEQUENCIA
+    applies_sequence_rule = game_name in GAMES_WITH_SEQUENCE_RULE
 
-    if aplica_regra_sequencia and usuario is not None:
-        bloquear_sequencias = ultimos_jogos_tiveram_sequencia(usuario, nome_jogo)
+    if applies_sequence_rule and user is not None:
+        block_sequences = recent_bets_had_sequence(user, game_name)
     else:
-        bloquear_sequencias = False
+        block_sequences = False
 
-    max_tentativas = 10000
-    tentativa = 0
+    max_attempts = 10000
+    attempt = 0
 
-    while tentativa < max_tentativas:
-        tentativa += 1
-        resultado_jogo = []
-        while len(resultado_jogo) < config['apostas']:
-            numero = random.randint(1, config['numeros'])
-            if numero not in resultado_jogo:
-                resultado_jogo.append(numero)
+    while attempt < max_attempts:
+        attempt += 1
+        bet_numbers = []
+        while len(bet_numbers) < config['bets_count']:
+            number = random.randint(1, config['numbers_count'])
+            if number not in bet_numbers:
+                bet_numbers.append(number)
 
-        resultado_jogo.sort()
+        bet_numbers.sort()
 
-        if aplica_regra_sequencia:
-            pares = contar_pares_sequenciais(resultado_jogo)
+        if applies_sequence_rule:
+            pairs = count_sequential_pairs(bet_numbers)
 
-            if bloquear_sequencias:
-                if pares > 0:
+            if block_sequences:
+                if pairs > 0:
                     continue
             else:
-                if pares > 1:
+                if pairs > 1:
                     continue
 
         break
 
-    resultado_trevos = []
-    if config['qtd_trevos'] > 0:
-        while len(resultado_trevos) < config['trevos']:
-            trevo = random.randint(1, config['qtd_trevos'])
-            if trevo not in resultado_trevos:
-                resultado_trevos.append(trevo)
-        resultado_trevos.sort()
+    bet_clovers = []
+    if config['clovers_count'] > 0:
+        while len(bet_clovers) < config['clovers']:
+            clover = random.randint(1, config['clovers_count'])
+            if clover not in bet_clovers:
+                bet_clovers.append(clover)
+        bet_clovers.sort()
 
-    return resultado_jogo, resultado_trevos
+    return bet_numbers, bet_clovers
 
 
-def verificar_jogo_repetido(usuario, jogo_nome, numeros, trevos):
+def check_duplicate_bet(user, game_name, numbers, clovers):
     """Verifica se um jogo identico ja foi gerado pelo usuario."""
-    return JogoGerado.objects.filter(
-        usuario=usuario,
-        jogo=jogo_nome,
-        numeros=numeros,
-        trevos=trevos if trevos else []
+    return GeneratedBet.objects.filter(
+        user=user,
+        game=game_name,
+        numbers=numbers,
+        clovers=clovers if clovers else []
     ).exists()
 
 
-def calcular_estatisticas(usuario, jogo_nome):
+def suggest_next_contest(game_name):
+    """Sugere o proximo numero de concurso pro Jogo, a partir do maior concurso numerico ja
+    conhecido em LotteryResult (+1). Concursos nao numericos (especiais/comemorativos) sao
+    ignorados. Retorna None se nao houver nenhum LotteryResult conhecido pro Jogo ainda."""
+    known_contests = []
+    for contest in LotteryResult.objects.filter(game=game_name).values_list('contest', flat=True):
+        try:
+            known_contests.append(int(contest))
+        except (TypeError, ValueError):
+            continue
+    if not known_contests:
+        return None
+    return str(max(known_contests) + 1)
+
+
+def calculate_statistics(user, game_name):
     """Calcula estatisticas para um tipo de jogo especifico."""
-    jogos = JogoGerado.objects.filter(usuario=usuario, jogo=jogo_nome)
-    total = jogos.count()
+    bets = GeneratedBet.objects.filter(user=user, game=game_name)
+    total = bets.count()
 
     if total == 0:
         return None
 
-    com_sequencia = jogos.filter(pares_sequenciais__gt=0).count()
+    with_sequence = bets.filter(sequential_pairs__gt=0).count()
 
-    frequencia = {}
-    for jogo in jogos:
-        for num in jogo.numeros:
-            frequencia[num] = frequencia.get(num, 0) + 1
+    frequency = {}
+    for bet in bets:
+        for num in bet.numbers:
+            frequency[num] = frequency.get(num, 0) + 1
 
-    mais_frequentes = sorted(frequencia.items(), key=lambda x: x[1], reverse=True)[:10]
+    most_frequent = sorted(frequency.items(), key=lambda x: x[1], reverse=True)[:10]
 
+    sequence_percentage = (with_sequence / total * 100) if total > 0 else 0
     return {
         'total': total,
-        'com_sequencia': com_sequencia,
-        'sem_sequencia': total - com_sequencia,
-        'mais_frequentes': mais_frequentes,
-        'percentual_sequencia': (com_sequencia / total * 100) if total > 0 else 0
+        'with_sequence': with_sequence,
+        'without_sequence': total - with_sequence,
+        'most_frequent': most_frequent,
+        'sequence_percentage': sequence_percentage,
+        'without_sequence_percentage': 100 - sequence_percentage,
     }
 
 
-def calcular_premiacao_jogo(jogo, numeros_usuario, trevos_usuario=None, resultado_oficial=None):
-    """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e status."""
-    if resultado_oficial is None:
-        return {'ganhou': False, 'acertos': 0, 'valor': 'R$ 0,00', 'categoria': 'Sem resultado'}
+GAME_PRIZE_CATEGORY = {
+    'Mega-sena': 'sena',
+    'Quina': 'quina',
+    'Lotofacil': 'lotofacil',
+    'Lotomania': 'lotomania',
+    'Milionaria': 'milionaria',
+    'Dupla-Sena': 'dupla_sena',
+}
 
-    numeros_usuario = set(normalizar_numeros(numeros_usuario))
-    numeros_resultado = set(normalizar_numeros(resultado_oficial.get('numeros', [])))
-    acertos = len(numeros_usuario & numeros_resultado)
+LEGACY_MIN_HITS = {
+    'Mega-sena': 4,
+    'Quina': 3,
+    'Lotofacil': 11,
+    'Milionaria': 4,
+    'Dupla-Sena': 4,
+}
 
-    premio = resultado_oficial.get('premiacoes', {})
-    premio_chave = None
-    valor = Decimal('0')
 
-    if jogo == 'Mega-sena':
-        premio_chave = 'sena' if acertos >= 4 else None
-    elif jogo == 'Quina':
-        premio_chave = 'quina' if acertos >= 3 else None
-    elif jogo == 'Lotofacil':
-        premio_chave = 'lotofacil' if acertos >= 11 else None
-    elif jogo == 'Lotomania':
-        premio_chave = 'lotomania' if acertos >= 0 else 'lotomania'
-    elif jogo == 'Milionaria':
-        premio_chave = 'milionaria' if acertos >= 4 else None
-    elif jogo == 'Dupla-Sena':
-        premio_chave = 'dupla_sena' if acertos >= 4 else None
+def _parse_currency(raw_value):
+    raw_value = str(raw_value).replace('R$', '').replace('.', '').replace(',', '.')
+    try:
+        return Decimal(raw_value.strip())
+    except Exception:
+        return Decimal('0')
 
-    if premio_chave and isinstance(premio, dict):
-        premio_info = premio.get(premio_chave, {})
-        valor_raw = premio_info.get('valor', 'R$ 0,00')
-        valor_raw = str(valor_raw).replace('R$', '').replace('.', '').replace(',', '.')
-        try:
-            valor = Decimal(valor_raw.strip())
-        except Exception:
-            valor = Decimal('0')
 
-    ganhou = bool(premio_chave and acertos > 0 and valor > 0)
+def _legacy_hits_is_valid(game, hits):
+    """Comportamento anterior a Story 2.8, preservado como fallback de cold-start (ver
+    calculate_bet_prize): a Lotomania sempre foi tratada como potencialmente valida pra
+    qualquer quantidade de acertos (o valor real da faixa e quem decide `won`)."""
+    if game == 'Lotomania':
+        return True
+    min_hits = LEGACY_MIN_HITS.get(game)
+    return min_hits is not None and hits >= min_hits
+
+
+def _find_prize_tier(game, hits, reference_month):
+    return PrizeTier.objects.filter(
+        game=game, hits=hits, reference_month__lte=reference_month
+    ).order_by('-reference_month').first()
+
+
+def _reference_month_for(captured_at):
+    """Converte um `captured_at` (aware ou None) no primeiro dia do mes correspondente, no fuso
+    local (America/Sao_Paulo) -- nao em UTC. `timezone.now()`/`DateTimeField.auto_now_add` guardam
+    o instante em UTC quando USE_TZ=True; chamar `.date()` direto nele pega a data UTC, que pode
+    cair no dia (e mes) seguinte ao horario local perto da meia-noite de Brasilia."""
+    if captured_at is None:
+        return timezone.localdate().replace(day=1)
+    if hasattr(captured_at, 'date'):
+        if timezone.is_aware(captured_at):
+            captured_at = timezone.localtime(captured_at)
+        return captured_at.date().replace(day=1)
+    return captured_at.replace(day=1)
+
+
+def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=None):
+    """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e
+    status. A validade de uma quantidade de acertos e decidida nesta ordem de prioridade:
+
+    1. A propria faixa de premiacao do concurso (`prizes` do LotteryResult daquele Jogo+Concurso
+       especifico) -- e um dado real e definitivo daquele sorteio, e o LotteryResult nunca e
+       podado (AD-10). Uma aposta antiga genuinamente premiada nao pode perder o reconhecimento
+       do premio so porque a retencao de 3 meses do PrizeTier (Story 2.8/AD-10) ja descartou o
+       reference_month dela -- o dado do proprio concurso e a fonte da verdade.
+    2. PrizeTier (Story 2.8/AD-10), usado so quando o concurso especifico nao tem essa faixa
+       registrada (ex.: captura incompleta daquele concurso).
+    3. O fallback legado hardcoded (_legacy_hits_is_valid), usado so em cold-start total
+       (nenhum PrizeTier pro Jogo ainda, ver jobs.fetch_daily_results)."""
+    if official_result is None:
+        return {'won': False, 'hits': 0, 'value': 'R$ 0,00', 'category': 'Sem resultado'}
+
+    user_numbers = set(normalize_numbers(user_numbers))
+    result_numbers = set(normalize_numbers(official_result.get('numbers', [])))
+    hits = len(user_numbers & result_numbers)
+
+    prizes = official_result.get('prizes', {})
+    concurso_prize_info = prizes.get(str(hits)) if isinstance(prizes, dict) else None
+
+    reference_month = _reference_month_for(official_result.get('captured_at'))
+    tier = _find_prize_tier(game, hits, reference_month)
+
+    if concurso_prize_info is not None:
+        is_valid = True
+    elif tier is not None:
+        is_valid = True
+    elif PrizeTier.objects.filter(game=game).exists():
+        is_valid = False
+    else:
+        is_valid = _legacy_hits_is_valid(game, hits)
+
+    amount = Decimal('0')
+    if is_valid:
+        if concurso_prize_info is not None:
+            amount = _parse_currency(concurso_prize_info.get('value', 'R$ 0,00'))
+        elif tier is not None:
+            amount = tier.value
+
+    prize_key = GAME_PRIZE_CATEGORY.get(game) if is_valid else None
+    won = bool(is_valid and amount > 0)
     return {
-        'ganhou': ganhou,
-        'acertos': acertos,
-        'valor': f'R$ {valor:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-        'categoria': premio_chave or 'Sem premio',
-        'resultado': resultado_oficial,
+        'won': won,
+        'hits': hits,
+        'value': _format_currency(amount),
+        'category': prize_key or 'Sem premio',
+        'result': official_result,
     }
 
 
-def capturar_resultado_cef(jogo, concurso):
-    """Busca o resultado oficial do jogo e concurso na CEF. Se a pagina da Caixa estiver indisponivel, retorna None."""
-    jogo_slug = {
-        'Mega-sena': 'mega-sena',
-        'Milionaria': 'mais-milionaria',
+PRIZE_TIER_PATTERN = re.compile(r'^(\d+) acertos$')
+
+
+def _format_currency(value):
+    return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _extract_prize_tiers(tiers):
+    """Converte a lista de faixas (`listaRateioPremio` da API oficial) num dict {"acertos": {value, winners}}
+    (chave string -- `prizes` e um JSONField, e JSON so tem chave string; usar int aqui quebraria
+    silenciosamente a leitura de volta do banco), uma entrada por quantidade real de acertos -- nao so a
+    faixa de acerto maximo, ja que jogos como Mega-Sena premiam quadra/quina/sena em faixas de valor bem
+    diferentes.
+
+    Nao resolve o caso da Dupla-Sena ter 2 sorteios com faixas repetidas (mesma quantidade de acertos
+    aparece 2x, uma por sorteio) -- fica com a primeira ocorrencia (1o sorteio); registrado em
+    deferred-work.md, sem story dedicada ainda (aguarda decisao de produto). Importante pra essa
+    dedup: uma faixa SEMPRE reserva `hits_key` em `result` na primeira ocorrencia que casar o
+    regex (mesmo quando `winners` fica None por falha de extracao, ver abaixo) -- nunca "pula" a
+    faixa inteira, senao a 2a ocorrencia (2o sorteio) silenciosamente tomaria o lugar da 1a.
+
+    `winners` vira None (Story 2.11) quando a faixa tem valor de premio positivo mas a API nao
+    informou a quantidade de ganhadores (None, nao simplesmente 0) -- e tratado como falha de
+    extracao SO daquele campo, nao fabrica um "0" que pareceria um concurso acumulado legitimo.
+    O `value` (que veio correto da API) e sempre preservado nesse caso -- descartar a faixa
+    inteira jogaria fora justamente o dado usado por calculate_bet_prize pra decidir o premio
+    (que nunca le `winners`), negando ou subestimando um premio real por causa de um campo que
+    nem influencia esse calculo. Uma faixa genuinamente sem premio (valor E ganhadores
+    zerados/ausentes, ex. concurso acumulado) continua sendo extraida normalmente com winners=0.
+    Um `valorPremio` negativo ou de tipo invalido descarta a faixa (dado corrompido, sem uso)."""
+    result = {}
+    for tier in tiers or []:
+        match = PRIZE_TIER_PATTERN.match(tier.get('descricaoFaixa') or '')
+        if not match:
+            continue
+        hits_key = match.group(1)
+        if hits_key in result:
+            continue
+        try:
+            raw_value = float(tier.get('valorPremio') or 0)
+        except (TypeError, ValueError):
+            continue
+        if raw_value < 0:
+            continue
+        raw_winners = tier.get('numeroDeGanhadores')
+        winners = None if (raw_value and raw_winners is None) else (raw_winners or 0)
+        result[hits_key] = {
+            'value': _format_currency(raw_value),
+            'winners': winners,
+        }
+    return result
+
+
+def fetch_cef_result(game, contest):
+    """Busca o resultado oficial do jogo e concurso na API oficial da CEF
+    (`servicebus2.caixa.gov.br/portaldeloterias/api`). Se a API estiver indisponivel, ou o concurso
+    devolvido nao bater com o pedido, retorna None -- nunca aceita um resultado de outro concurso."""
+    game_slug = {
+        'Mega-sena': 'megasena',
+        'Milionaria': 'maismilionaria',
         'Lotomania': 'lotomania',
         'Lotofacil': 'lotofacil',
         'Quina': 'quina',
-        'Dupla-Sena': 'dupla-sena',
-    }.get(jogo)
+        'Dupla-Sena': 'duplasena',
+    }.get(game)
 
-    if not jogo_slug:
+    if not game_slug:
         return None
 
-    nome_pagina = jogo_slug.replace('-', ' ').title().replace(' ', '-')
-    url = f'https://loterias.caixa.gov.br/Paginas/{nome_pagina}.aspx'
+    url = f'https://servicebus2.caixa.gov.br/portaldeloterias/api/{game_slug}/{contest}'
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+
+        if int(data.get('numero')) != int(contest):
+            return None
+
+        numbers = [int(n) for n in data.get('listaDezenas') or []]
+        if not numbers:
+            return None
+        clovers = [int(t) for t in data.get('trevosSorteados') or []]
+        prizes = _extract_prize_tiers(data.get('listaRateioPremio') or [])
     except Exception:
         return None
 
-    html = response.text
-    bloco = None
-    markers = [
-        'Concurso', 'Sorteio', 'Concurso', 'ACUMULOU', 'GANHADOR', 'Trevos sorteados', '1º sorteio', '2º sorteio'
-    ]
-    for marker in markers:
-        idx = html.lower().find(marker.lower())
-        if idx != -1:
-            bloco = html[idx: idx + 2500]
-            break
-    if not bloco:
-        return None
-
-    numeros = []
-    for match in re.findall(r'>(\d{1,2})<', bloco):
-        numero = int(match)
-        if 1 <= numero <= 100:
-            numeros.append(numero)
-    numeros = sorted(set(numeros))[:15]
-    if not numeros:
-        return None
-
     return {
-        'jogo': jogo,
-        'concurso': concurso,
-        'numeros': numeros,
-        'trevos': [],
-        'premiacoes': {'sena': {'valor': 'R$ 0,00'}}
+        'game': game,
+        'contest': contest,
+        'numbers': numbers,
+        'clovers': clovers,
+        'prizes': prizes,
     }
 
 
-def verificar_resultados_usuarios(usuario=None):
-    """Valida jogos do usuario contra resultados oficiais da CEF e atualiza o status de premio."""
-    queryset = JogoGerado.objects.all()
-    if usuario is not None:
-        queryset = queryset.filter(usuario=usuario)
+def apply_prize_to_bet(bet, prize):
+    """Aplica o retorno de calculate_bet_prize aos campos-cache do GeneratedBet e salva."""
+    bet.result_checked = True
+    bet.hits = prize['hits']
+    bet.prize = _parse_currency(prize['value'])
+    bet.prize_description = prize['category']
+    bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
 
-    for jogo in queryset:
-        if jogo.resultado_verificado:
+
+def check_user_results(user=None):
+    """Valida jogos do usuario contra resultados oficiais da CEF e atualiza o status de premio."""
+    queryset = GeneratedBet.objects.all()
+    if user is not None:
+        queryset = queryset.filter(user=user)
+
+    for bet in queryset:
+        if bet.result_checked:
             continue
-        resultado = capturar_resultado_cef(jogo.jogo, jogo.concurso)
-        if not resultado:
+        result = fetch_cef_result(bet.game, bet.contest)
+        if not result:
             continue
-        premio = calcular_premiacao_jogo(jogo.jogo, jogo.numeros, jogo.trevos, resultado)
-        jogo.resultado_verificado = True
-        jogo.acertos = premio['acertos']
-        jogo.premio = Decimal(str(premio['valor'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        jogo.premio_descricao = premio['categoria']
-        jogo.save(update_fields=['resultado_verificado', 'acertos', 'premio', 'premio_descricao', 'atualizado_em'])
+        prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
+        apply_prize_to_bet(bet, prize)
 
     return True

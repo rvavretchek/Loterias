@@ -64,7 +64,7 @@
                     <span>Gerar Novo Jogo</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{% url 'gerar_jogo' %}">
+                    <form method="post" action="{% url 'create_bet' %}">
                         {% csrf_token %}
 
                         <div class="row g-3 mb-4">
@@ -74,11 +74,11 @@
                                     <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
                                     <div class="text-center">
                                         <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
-                                        <h5 class="mb-1">{{ config.nome }}</h5>
+                                        <h5 class="mb-1">{{ config.name }}</h5>
                                         <small class="text-secondary">
-                                            {{ config.apostas }} de {{ config.numeros }}
-                                            {% if config.trevos > 0 %}
-                                            <br>+ {{ config.trevos }} trevos
+                                            {{ config.bets_count }} de {{ config.numbers_count }}
+                                            {% if config.clovers > 0 %}
+                                            <br>+ {{ config.clovers }} trevos
                                             {% endif %}
                                         </small>
                                     </div>
@@ -93,8 +93,9 @@
                                     <label for="concurso" class="form-label fw-semibold">
                                         <i class="bi bi-hash me-1"></i>Numero do Concurso
                                     </label>
-                                    <input type="text" class="form-control form-control-lg" id="concurso" 
+                                    <input type="text" class="form-control form-control-lg" id="concurso"
                                            name="concurso" placeholder="Ex: 2500" required>
+                                    <small class="text-secondary" id="concurso-sugestao-info"></small>
                                 </div>
                             </div>
                         </div>
@@ -116,20 +117,20 @@
                     <span>Guardar Jogo Manual</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{% url 'salvar_jogo_manual' %}">
+                    <form method="post" action="{% url 'save_manual_bet' %}">
                         {% csrf_token %}
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Jogo</label>
-                                <select name="jogo" class="form-select" required>
+                                <select name="jogo" id="jogo-manual" class="form-select" required>
                                     {% for key, config in jogos_disponiveis.items %}
-                                    <option value="{{ key }}">{{ config.nome }}</option>
+                                    <option value="{{ key }}">{{ config.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Concurso</label>
-                                <input type="text" name="concurso" class="form-control" placeholder="Ex: 2500" required>
+                                <input type="text" name="concurso" id="concurso-manual" class="form-control" placeholder="Ex: 2500" required>
                             </div>
                             <div class="col-md-5">
                                 <label class="form-label">Números</label>
@@ -152,7 +153,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-clock-history me-2 text-primary"></i>Ultimos Jogos</span>
-                    <a href="{% url 'historico' %}" class="btn btn-sm btn-outline-primary">
+                    <a href="{% url 'history' %}" class="btn btn-sm btn-outline-primary">
                         Ver Todos <i class="bi bi-arrow-right ms-1"></i>
                     </a>
                 </div>
@@ -173,26 +174,26 @@
                                 {% for jogo in ultimos_jogos %}
                                 <tr>
                                     <td>
-                                        <span class="badge bg-primary">{{ jogo.jogo }}</span>
+                                        <span class="badge bg-primary">{{ jogo.game }}</span>
                                     </td>
-                                    <td>{{ jogo.concurso }}</td>
+                                    <td>{{ jogo.contest }}</td>
                                     <td>
-                                        {% for num in jogo.numeros %}
+                                        {% for num in jogo.numbers %}
                                         <span class="numero-bola">{{ num|stringformat:"02d" }}</span>
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        {% if jogo.trevos %}
-                                            {% for trevo in jogo.trevos %}
+                                        {% if jogo.clovers %}
+                                            {% for trevo in jogo.clovers %}
                                             <span class="trevo-bola">{{ trevo|stringformat:"02d" }}</span>
                                             {% endfor %}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ jogo.criado_em|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ jogo.created_at|date:"d/m/Y H:i" }}</td>
                                     <td>
-                                        <a href="{% url 'detalhes_jogo' jogo.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <a href="{% url 'bet_detail' jogo.pk %}" class="btn btn-sm btn-outline-primary">
                                             <i class="bi bi-eye"></i>
                                         </a>
                                     </td>
@@ -249,12 +250,12 @@
                     <div class="card text-center p-3 h-100">
                         <div class="card-body">
                             <i class="bi bi-dice-5 fs-1 text-primary mb-2"></i>
-                            <h5 class="card-title">{{ config.nome }}</h5>
+                            <h5 class="card-title">{{ config.name }}</h5>
                             <p class="card-text text-secondary">
-                                <strong>{{ config.apostas }}</strong> numeros<br>
-                                de <strong>{{ config.numeros }}</strong> possiveis
-                                {% if config.trevos > 0 %}
-                                <br>+<strong>{{ config.trevos }}</strong> trevos
+                                <strong>{{ config.bets_count }}</strong> numeros<br>
+                                de <strong>{{ config.numbers_count }}</strong> possiveis
+                                {% if config.clovers > 0 %}
+                                <br>+<strong>{{ config.clovers }}</strong> trevos
                                 {% endif %}
                             </p>
                         </div>
@@ -267,6 +268,7 @@
     {% endif %}
 </div>
 
+{% if concursos_sugeridos %}{{ concursos_sugeridos|json_script:"concursos-sugeridos-data" }}{% endif %}
 <script>
 function selectGame(element, gameName) {
     // Remove active de todos
@@ -278,6 +280,63 @@ function selectGame(element, gameName) {
     // Adiciona active ao clicado
     element.classList.add('active');
     element.querySelector('input[type="radio"]').checked = true;
+
+    preencherConcursoSugerido(gameName);
+}
+
+function getConcursosSugeridos() {
+    var el = document.getElementById('concursos-sugeridos-data');
+    if (!el) {
+        return {};
+    }
+    return JSON.parse(el.textContent);
+}
+
+function preencherCampoComSugestao(campo, sugestao) {
+    if (!campo) {
+        return;
+    }
+    // So sobrescreve se o valor atual esta vazio ou foi ele mesmo quem preencheu antes
+    // (troca de jogo) -- nunca sobrescreve o que o usuario digitou manualmente.
+    if (!campo.value || campo.dataset.autofilled === 'true') {
+        if (sugestao) {
+            campo.value = sugestao;
+            campo.dataset.autofilled = 'true';
+        } else {
+            campo.value = '';
+            delete campo.dataset.autofilled;
+        }
+    }
+}
+
+function preencherConcursoSugerido(gameName) {
+    var sugestoes = getConcursosSugeridos();
+    var sugestao = sugestoes[gameName];
+    var campoConcurso = document.getElementById('concurso');
+    var infoConcurso = document.getElementById('concurso-sugestao-info');
+    preencherCampoComSugestao(campoConcurso, sugestao);
+    if (infoConcurso) {
+        infoConcurso.textContent = sugestao ? ('Sugestao: concurso ' + sugestao) : '';
+    }
+}
+
+function preencherConcursoManualSugerido(gameName) {
+    var sugestoes = getConcursosSugeridos();
+    var sugestao = sugestoes[gameName];
+    var campoConcursoManual = document.getElementById('concurso-manual');
+    preencherCampoComSugestao(campoConcursoManual, sugestao);
+}
+
+var jogoManualSelect = document.getElementById('jogo-manual');
+if (jogoManualSelect) {
+    jogoManualSelect.addEventListener('change', function () {
+        preencherConcursoManualSugerido(this.value);
+    });
+    // Preenche a sugestao da opcao ja selecionada por padrao ao carregar a pagina,
+    // sem esperar o usuario trocar o select.
+    if (jogoManualSelect.value) {
+        preencherConcursoManualSugerido(jogoManualSelect.value);
+    }
 }
 </script>
 {% endblock %}

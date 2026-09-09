@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'django_extensions',
+    'django_crontab',
 
     # Apps locais
     'apps.accounts',
@@ -66,6 +67,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.loterias_core.context_processors.theme_context',
+                'apps.loterias_core.context_processors.notifications_context',
             ],
         },
     },
@@ -78,8 +80,24 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.getenv('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': 20},
     }
 }
+
+# Cron (rotinas de dominio, ver apps/loterias_core/jobs.py)
+# A entrada mensal de update_monthly_prize_values e redundante na pratica com a chamada de
+# cold-start dentro de fetch_daily_results (roda todo dia, inclusive no dia 1) -- mantida como
+# defesa em profundidade: se o cron diario ficar fora do ar por qualquer motivo num periodo em
+# torno da virada de mes, o disparo mensal dedicado ainda garante ao menos uma tentativa.
+# fetch_daily_results roda 3x seguidas (3h/3h15/3h30, Story 2.9) -- retry automatico sem logica
+# nova (a funcao ja e idempotente); a ultima chamada usa --final, que avalia alerta ao operador
+# pra par que continuar sem resultado ha tempo demais (ver jobs.py).
+CRONJOBS = [
+    ('0 3 * * *', 'django.core.management.call_command', ['fetch_daily_results']),
+    ('15 3 * * *', 'django.core.management.call_command', ['fetch_daily_results']),
+    ('30 3 * * *', 'django.core.management.call_command', ['fetch_daily_results', '--final']),
+    ('0 4 1 * *', 'django.core.management.call_command', ['update_monthly_prize_values']),
+]
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -177,13 +195,9 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Lotérias <noreply@loterias.com>')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 20))
 
-# Celery
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+# E-mail do operador (Boss) que recebe alerta de falha de captura de resultado (Story 2.9).
+# Vazio por padrao -- send_capture_failure_alert so loga um aviso e nao envia nada se nao configurado.
+OPERATOR_ALERT_EMAIL = os.getenv('OPERATOR_ALERT_EMAIL', '')
 
 # Security
 SECURE_BROWSER_XSS_FILTER = True

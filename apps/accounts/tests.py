@@ -3,9 +3,11 @@ import os
 from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 
 from apps.accounts.hashers import PepperedArgon2PasswordHasher
 from apps.accounts.models import User
+from apps.loterias_core.models import GeneratedBet
 
 
 class PasswordHasherTests(SimpleTestCase):
@@ -129,3 +131,56 @@ class WelcomeEmailSignalTests(TestCase):
         user.bio = 'Atualizando perfil'
         user.save()
         self.assertEqual(len(mail.outbox), 0)
+
+
+class ProfileViewTests(TestCase):
+    """Regressao do rename de related_name 'jogos'->'bets' (GeneratedBet.user):
+    a contagem exibida no perfil (user.bets.count) precisa continuar correta."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='perfil@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_profile_shows_correct_count_of_generated_bets(self):
+        GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.get(reverse('profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['user'].bets.count(), 2)
+        self.assertContains(response, '2')
+
+
+class ToggleThemeViewTests(TestCase):
+    """Regressao do rename User.tema_preferido->preferred_theme (Story 1.5)."""
+
+    def test_authenticated_user_toggles_from_light_to_dark(self):
+        user = User.objects.create_user(email='tema@example.com', password='SenhaForte123')
+        self.assertEqual(user.preferred_theme, 'light')
+        self.client.force_login(user)
+
+        self.client.get(reverse('toggle_theme'), HTTP_REFERER='/')
+
+        user.refresh_from_db()
+        self.assertEqual(user.preferred_theme, 'dark')
+
+    def test_authenticated_user_toggles_from_dark_to_light(self):
+        user = User.objects.create_user(email='tema2@example.com', password='SenhaForte123')
+        user.preferred_theme = 'dark'
+        user.save(update_fields=['preferred_theme'])
+        self.client.force_login(user)
+
+        self.client.get(reverse('toggle_theme'), HTTP_REFERER='/')
+
+        user.refresh_from_db()
+        self.assertEqual(user.preferred_theme, 'light')
+
+    def test_anonymous_user_uses_session_without_touching_model(self):
+        response = self.client.get(reverse('toggle_theme'), HTTP_REFERER='/', follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session.get('theme'), 'dark')

@@ -329,6 +329,17 @@
                 <span>Gerador de Loterias</span>
             </a>
 
+            {% if user.is_authenticated and unread_notifications_count > 0 %}
+            <a class="nav-link position-relative order-lg-2 me-2" href="{% url 'notifications' %}"
+               title="Notificacoes de acerto" aria-label="{{ unread_notifications_count }} notificacao(oes) de acerto nao lida(s)">
+                <i class="bi bi-bell-fill fs-5"></i>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill {% if has_unread_won_notification %}bg-success{% else %}bg-secondary{% endif %}">
+                    {{ unread_notifications_count }}
+                    <span class="visually-hidden">notificacoes de acerto nao lidas</span>
+                </span>
+            </a>
+            {% endif %}
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -342,12 +353,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'historico' %}active{% endif %}" href="{% url 'historico' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'history' %}active{% endif %}" href="{% url 'history' %}">
                             <i class="bi bi-clock-history me-1"></i> Historico
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'estatisticas' %}active{% endif %}" href="{% url 'estatisticas' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'statistics' %}active{% endif %}" href="{% url 'statistics' %}">
                             <i class="bi bi-graph-up me-1"></i> Estatisticas
                         </a>
                     </li>

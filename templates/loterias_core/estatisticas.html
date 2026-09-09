@@ -37,28 +37,14 @@
                 <div class="col-md-3">
                     <div class="stat-card">
                         <i class="bi bi-check-circle text-info"></i>
-                        <div class="stat-value">
-                            {% with total_seq=0 %}
-                                {% for jogo, stats in estatisticas.items %}
-                                    {% with total_seq=total_seq|add:stats.com_sequencia %}{% endwith %}
-                                {% endfor %}
-                                {{ total_seq }}
-                            {% endwith %}
-                        </div>
+                        <div class="stat-value">{{ total_com_sequencia }}</div>
                         <div class="stat-label">Com Sequencia</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="stat-card">
                         <i class="bi bi-x-circle text-warning"></i>
-                        <div class="stat-value">
-                            {% with total_sem=0 %}
-                                {% for jogo, stats in estatisticas.items %}
-                                    {% with total_sem=total_sem|add:stats.sem_sequencia %}{% endwith %}
-                                {% endfor %}
-                                {{ total_sem }}
-                            {% endwith %}
-                        </div>
+                        <div class="stat-value">{{ total_sem_sequencia }}</div>
                         <div class="stat-label">Sem Sequencia</div>
                     </div>
                 </div>
@@ -80,29 +66,29 @@
                     <div class="mb-4">
                         <div class="d-flex justify-content-between mb-2">
                             <small>Com sequencia</small>
-                            <small>{{ stats.com_sequencia }} ({{ stats.percentual_sequencia|floatformat:1 }}%)</small>
+                            <small>{{ stats.with_sequence }} ({{ stats.sequence_percentage|floatformat:1 }}%)</small>
                         </div>
                         <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-warning" role="progressbar" 
-                                 style="width: {{ stats.percentual_sequencia }}%"></div>
+                            <div class="progress-bar bg-warning" role="progressbar"
+                                 style="width: {{ stats.sequence_percentage }}%"></div>
                         </div>
                     </div>
 
                     <div class="mb-4">
                         <div class="d-flex justify-content-between mb-2">
                             <small>Sem sequencia</small>
-                            <small>{{ stats.sem_sequencia }} ({{ stats.percentual_sequencia|add:-100|abs|floatformat:1 }}%)</small>
+                            <small>{{ stats.without_sequence }} ({{ stats.without_sequence_percentage|floatformat:1 }}%)</small>
                         </div>
                         <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-success" role="progressbar" 
-                                 style="width: {{ stats.percentual_sequencia|add:-100|abs }}%"></div>
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: {{ stats.without_sequence_percentage }}%"></div>
                         </div>
                     </div>
 
                     <!-- Numeros Mais Frequentes -->
                     <h6 class="mb-3"><i class="bi bi-trophy me-2 text-warning"></i>Numeros Mais Frequentes</h6>
                     <div class="d-flex flex-wrap gap-2">
-                        {% for num, freq in stats.mais_frequentes %}
+                        {% for num, freq in stats.most_frequent %}
                         <div class="text-center">
                             <span class="numero-bola" style="width:36px;height:36px;font-size:12px;">{{ num|stringformat:"02d" }}</span>
                             <div class="mt-1">
