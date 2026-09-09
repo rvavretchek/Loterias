@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'django_extensions',
+    'django_crontab',
 
     # Apps locais
     'apps.accounts',
@@ -78,8 +79,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.getenv('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': 20},
     }
 }
+
+# Cron (rotinas de dominio, ver apps/loterias_core/jobs.py)
+CRONJOBS = [
+    ('0 3 * * *', 'django.core.management.call_command', ['fetch_daily_results']),
+]
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -176,14 +183,6 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Lotérias <noreply@loterias.com>')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 20))
-
-# Celery
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
 
 # Security
 SECURE_BROWSER_XSS_FILTER = True

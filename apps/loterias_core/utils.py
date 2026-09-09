@@ -166,7 +166,7 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
         prize_key = 'dupla_sena' if hits >= 4 else None
 
     if prize_key and isinstance(prizes, dict):
-        prize_info = prizes.get(prize_key, {})
+        prize_info = prizes.get(str(hits), {})
         raw_amount = prize_info.get('value', 'R$ 0,00')
         raw_amount = str(raw_amount).replace('R$', '').replace('.', '').replace(',', '.')
         try:
@@ -184,56 +184,79 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
     }
 
 
+PRIZE_TIER_PATTERN = re.compile(r'^(\d+) acertos$')
+
+
+def _format_currency(value):
+    return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _extract_prize_tiers(tiers):
+    """Converte a lista de faixas (`listaRateioPremio` da API oficial) num dict {"acertos": {value, winners}}
+    (chave string -- `prizes` e um JSONField, e JSON so tem chave string; usar int aqui quebraria
+    silenciosamente a leitura de volta do banco), uma entrada por quantidade real de acertos -- nao so a
+    faixa de acerto maximo, ja que jogos como Mega-Sena premiam quadra/quina/sena em faixas de valor bem
+    diferentes.
+
+    Nao resolve o caso da Dupla-Sena ter 2 sorteios com faixas repetidas (mesma quantidade de acertos
+    aparece 2x, uma por sorteio) -- fica com a primeira ocorrencia (1o sorteio); extracao completa por
+    sorteio e a Story 2.11."""
+    result = {}
+    for tier in tiers or []:
+        match = PRIZE_TIER_PATTERN.match(tier.get('descricaoFaixa') or '')
+        if not match:
+            continue
+        hits_key = match.group(1)
+        if hits_key in result:
+            continue
+        result[hits_key] = {
+            'value': _format_currency(tier.get('valorPremio') or 0),
+            'winners': tier.get('numeroDeGanhadores') or 0,
+        }
+    return result
+
+
 def fetch_cef_result(game, contest):
-    """Busca o resultado oficial do jogo e concurso na CEF. Se a pagina da Caixa estiver indisponivel, retorna None."""
+    """Busca o resultado oficial do jogo e concurso na API oficial da CEF
+    (`servicebus2.caixa.gov.br/portaldeloterias/api`). Se a API estiver indisponivel, ou o concurso
+    devolvido nao bater com o pedido, retorna None -- nunca aceita um resultado de outro concurso."""
     game_slug = {
-        'Mega-sena': 'mega-sena',
-        'Milionaria': 'mais-milionaria',
+        'Mega-sena': 'megasena',
+        'Milionaria': 'maismilionaria',
         'Lotomania': 'lotomania',
         'Lotofacil': 'lotofacil',
         'Quina': 'quina',
-        'Dupla-Sena': 'dupla-sena',
+        'Dupla-Sena': 'duplasena',
     }.get(game)
 
     if not game_slug:
         return None
 
-    page_name = game_slug.replace('-', ' ').title().replace(' ', '-')
-    url = f'https://loterias.caixa.gov.br/Paginas/{page_name}.aspx'
+    url = f'https://servicebus2.caixa.gov.br/portaldeloterias/api/{game_slug}/{contest}'
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+
+        if int(data.get('numero')) != int(contest):
+            return None
+
+        numbers = [int(n) for n in data.get('listaDezenas') or []]
+        if not numbers:
+            return None
+        clovers = [int(t) for t in data.get('trevosSorteados') or []]
+        prizes = _extract_prize_tiers(data.get('listaRateioPremio') or [])
     except Exception:
-        return None
-
-    html = response.text
-    block = None
-    markers = [
-        'Concurso', 'Sorteio', 'Concurso', 'ACUMULOU', 'GANHADOR', 'Trevos sorteados', '1º sorteio', '2º sorteio'
-    ]
-    for marker in markers:
-        idx = html.lower().find(marker.lower())
-        if idx != -1:
-            block = html[idx: idx + 2500]
-            break
-    if not block:
-        return None
-
-    numbers = []
-    for match in re.findall(r'>(\d{1,2})<', block):
-        number = int(match)
-        if 1 <= number <= 100:
-            numbers.append(number)
-    numbers = sorted(set(numbers))[:15]
-    if not numbers:
         return None
 
     return {
         'game': game,
         'contest': contest,
         'numbers': numbers,
-        'clovers': [],
-        'prizes': {'sena': {'value': 'R$ 0,00'}}
+        'clovers': clovers,
+        'prizes': prizes,
     }
 
 

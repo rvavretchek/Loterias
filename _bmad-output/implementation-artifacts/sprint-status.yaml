@@ -43,8 +43,8 @@ development_status:
   1-5-renomear-campos-remanescentes-em-português-no-model-user: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-rotina-diária-de-resultados: backlog
+  epic-2: in-progress
+  2-1-rotina-diária-de-resultados: review
   2-2-bloqueio-de-concurso-já-sorteado: backlog
   2-3-geração-de-notificação-de-acerto: backlog
   2-4-exibição-da-notificação-ao-logar: backlog

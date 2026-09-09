@@ -27,6 +27,36 @@ services:
     networks:
       - lab-network
 
+  loterias-cron:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: loterias-cron
+    restart: unless-stopped
+    command: sh -c "python manage.py crontab remove; python manage.py crontab add && cron -f"
+    environment:
+      DJANGO_SETTINGS_MODULE: loterias.settings
+      DEBUG: "False"
+      SECRET_KEY: ${LOTERIAS_SECRET_KEY}
+      PASSWORD_PEPPER: ${LOTERIAS_PASSWORD_PEPPER}
+      DATABASE_NAME: /app/data/db.sqlite3
+      ALLOWED_HOSTS: loterias.internal,www.loterias.internal
+      CSRF_TRUSTED_ORIGINS: http://loterias.internal,http://www.loterias.internal
+      SECURE_SSL_REDIRECT: "False"
+      TZ: America/Sao_Paulo
+      EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+      EMAIL_HOST: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+      EMAIL_PORT: ${BREVO_SMTP_PORT:-587}
+      EMAIL_USE_TLS: ${BREVO_SMTP_USE_TLS:-True}
+      EMAIL_HOST_USER: ${BREVO_SMTP_USER}
+      EMAIL_HOST_PASSWORD: ${BREVO_SMTP_KEY}
+      DEFAULT_FROM_EMAIL: ${BREVO_FROM_EMAIL}
+    volumes:
+      - loterias_data:/app/data
+      - loterias_media:/app/media
+    networks:
+      - lab-network
+
 volumes:
   loterias_data:
     name: loterias_data

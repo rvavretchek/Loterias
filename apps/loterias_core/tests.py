@@ -2,11 +2,13 @@ import json
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.models import User
 from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, GAMES_CONFIG
+from apps.loterias_core.jobs import fetch_daily_results
 from apps.loterias_core.utils import (
     calculate_statistics,
     calculate_bet_prize,
@@ -161,7 +163,7 @@ class CalculateBetPrizeTests(TestCase):
         result = {
             'numbers': [1, 2, 3, 4, 5, 6],
             'clovers': [],
-            'prizes': {'sena': {'value': 'R$ 500.000,00'}},
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
         }
         prize = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], result)
         self.assertTrue(prize['won'])
@@ -172,7 +174,7 @@ class CalculateBetPrizeTests(TestCase):
         result = {
             'numbers': [1, 2, 3, 40, 50, 60],
             'clovers': [],
-            'prizes': {'sena': {'value': 'R$ 500.000,00'}},
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
         }
         prize = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], result)
         self.assertFalse(prize['won'])
@@ -185,9 +187,33 @@ class CalculateBetPrizeTests(TestCase):
         self.assertFalse(prize['won'])
         self.assertEqual(prize['value'], 'R$ 0,00')
 
+    def test_mega_sena_with_four_hits_uses_quadra_tier_not_sena_tier(self):
+        """Regressao: quadra/quina/sena tem faixas de valor bem diferentes -- usar a faixa errada
+        (sempre a de 6 acertos) mostraria um valor de premio incorreto pra quem bateu so 4 ou 5."""
+        result = {
+            'numbers': [1, 2, 3, 4, 50, 60],
+            'clovers': [],
+            'prizes': {
+                '6': {'value': 'R$ 50.000.000,00', 'winners': 0},
+                '5': {'value': 'R$ 40.000,00', 'winners': 10},
+                '4': {'value': 'R$ 900,00', 'winners': 5000},
+            },
+        }
+        prize = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 5, 6], [], result)
+        self.assertEqual(prize['hits'], 4)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 900,00')
+
 
 class FetchCefResultTests(TestCase):
-    """fetch_cef_result faz scraping externo -- sempre mockar requests.get."""
+    """fetch_cef_result chama a API oficial da CEF (servicebus2.caixa.gov.br) -- sempre mockar requests.get."""
+
+    def _mock_response(self, mock_get, payload, status_ok=True):
+        mock_response = Mock()
+        mock_response.json.return_value = payload
+        mock_response.raise_for_status = Mock() if status_ok else Mock(side_effect=Exception('http error'))
+        mock_get.return_value = mock_response
+        return mock_response
 
     def test_unknown_game_returns_none(self):
         self.assertIsNone(fetch_cef_result('Jogo-Inexistente', '2500'))
@@ -198,24 +224,114 @@ class FetchCefResultTests(TestCase):
         self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
 
     @patch('apps.loterias_core.utils.requests.get')
-    def test_page_without_recognizable_numbers_returns_none(self, mock_get):
+    def test_malformed_json_returns_none_without_raising(self, mock_get):
         mock_response = Mock()
-        mock_response.text = '<html><body>Sem concurso hoje</body></html>'
+        mock_response.json.side_effect = ValueError('not json')
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
         self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
 
     @patch('apps.loterias_core.utils.requests.get')
-    def test_page_with_numbers_returns_result(self, mock_get):
-        html = 'Concurso ' + ''.join(f'>{n}<' for n in [4, 8, 15, 16, 23, 42])
-        mock_response = Mock()
-        mock_response.text = html
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+    def test_contest_mismatch_returns_none(self, mock_get):
+        """Regressao do bug de concurso: a API sempre responde com o concurso pedido na URL,
+        mas se por algum motivo o campo 'numero' devolvido nao bater, o resultado e descartado --
+        nunca grava dado de um concurso errado sob o nome de outro."""
+        self._mock_response(mock_get, {
+            'numero': 2501, 'listaDezenas': ['4', '8', '15', '16', '23', '42'], 'listaRateioPremio': [],
+        })
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_missing_numbers_returns_none(self, mock_get):
+        self._mock_response(mock_get, {'numero': 2500, 'listaDezenas': [], 'listaRateioPremio': []})
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_matching_contest_returns_result_with_numbers(self, mock_get):
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 10, 'valorPremio': 5000.0},
+            ],
+        })
         result = fetch_cef_result('Mega-sena', '2500')
         self.assertIsNotNone(result)
         self.assertEqual(result['game'], 'Mega-sena')
+        self.assertEqual(result['contest'], '2500')
         self.assertEqual(result['numbers'], [4, 8, 15, 16, 23, 42])
+        self.assertEqual(result['prizes']['6']['value'], 'R$ 0,00')
+        self.assertEqual(result['prizes']['5']['value'], 'R$ 5.000,00')
+        self.assertEqual(result['prizes']['5']['winners'], 10)
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_calls_official_api_with_correct_slug_and_contest(self, mock_get):
+        """Regressao dos slugs sem hifen (megasena/maismilionaria/duplasena) -- a URL errada
+        faria a API oficial devolver 400, e nenhum teste anterior checava a URL de fato usada."""
+        self._mock_response(mock_get, {'numero': 2500, 'listaDezenas': ['1'], 'listaRateioPremio': []})
+        fetch_cef_result('Mega-sena', '2500')
+        mock_get.assert_called_once_with(
+            'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/2500', timeout=20
+        )
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_http_error_status_returns_none(self, mock_get):
+        self._mock_response(mock_get, {'numero': 2500, 'listaDezenas': ['1']}, status_ok=False)
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_error_body_without_numero_field_returns_none(self, mock_get):
+        """A API oficial responde 400 com um corpo tipo {'Message': ...} quando o concurso nao existe
+        (ex. numero futuro demais) -- isso e um dict valido, so sem o campo 'numero'."""
+        self._mock_response(mock_get, {'Message': 'The request is invalid.'})
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_non_dict_json_body_returns_none(self, mock_get):
+        self._mock_response(mock_get, ['nao', 'e', 'um', 'dict'])
+        self.assertIsNone(fetch_cef_result('Mega-sena', '2500'))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_duplicate_tier_uses_first_occurrence(self, mock_get):
+        """A Dupla-Sena tem 2 sorteios, e listaRateioPremio repete a mesma descricaoFaixa uma vez por
+        sorteio (achado confirmado ao vivo contra a API) -- fica com a primeira ocorrencia (1o sorteio)."""
+        self._mock_response(mock_get, {
+            'numero': 2600,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 9, 'valorPremio': 5944.77},
+                {'descricaoFaixa': '6 acertos', 'faixa': 5, 'numeroDeGanhadores': 1, 'valorPremio': 999999.0},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '2600')
+        self.assertEqual(result['prizes']['6']['winners'], 0)
+        self.assertEqual(result['prizes']['6']['value'], 'R$ 0,00')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_lotomania_zero_hits_tier_is_extracted(self, mock_get):
+        self._mock_response(mock_get, {
+            'numero': 2600,
+            'listaDezenas': [str(n) for n in range(1, 21)],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '20 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '0 acertos', 'faixa': 7, 'numeroDeGanhadores': 3, 'valorPremio': 500.0},
+            ],
+        })
+        result = fetch_cef_result('Lotomania', '2600')
+        self.assertEqual(result['prizes']['0']['winners'], 3)
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_milionaria_includes_clovers(self, mock_get):
+        self._mock_response(mock_get, {
+            'numero': 50,
+            'listaDezenas': ['12', '21', '24', '26', '35', '49'],
+            'trevosSorteados': ['1', '6'],
+            'listaRateioPremio': [],
+        })
+        result = fetch_cef_result('Milionaria', '50')
+        self.assertEqual(result['clovers'], [1, 6])
 
 
 class CreateBetViewTests(TestCase):
@@ -549,3 +665,103 @@ class ReverseAccessorTests(TestCase):
         other_user = User.objects.create_user(email='outro2@example.com', password='SenhaForte123')
         GameStatistics.objects.create(user=other_user, game='Quina', total_bets=1)
         self.assertEqual(self.user.statistics.count(), 0)
+
+
+class FetchDailyResultsJobTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='cron@example.com', password='SenhaForte123')
+
+    def test_pair_without_any_bet_is_not_touched(self):
+        fetch_daily_results()
+        self.assertEqual(LotteryResult.objects.count(), 0)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_open_pair_with_valid_result_creates_lottery_result(self, mock_fetch):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='100',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [9], 'prizes': {'5': {'value': 'R$ 1.000,00'}},
+        }
+        fetch_daily_results()
+        result = LotteryResult.objects.get(game='Quina', contest='100')
+        self.assertEqual(result.numbers, [1, 2, 3, 4, 5])
+        self.assertEqual(result.clovers, [9])
+        self.assertEqual(result.prizes, {'5': {'value': 'R$ 1.000,00'}})
+        self.assertEqual(result.source, 'CEF')
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_two_bets_same_pair_only_fetch_once_per_run(self, mock_fetch):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='105',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        other_user = User.objects.create_user(email='cron2@example.com', password='SenhaForte123')
+        GeneratedBet.objects.create(
+            user=other_user, game='Quina', contest='105',
+            numbers=[6, 7, 8, 9, 10], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {}}
+        fetch_daily_results()
+        self.assertEqual(mock_fetch.call_count, 1)
+        self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='105').count(), 1)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_rerun_for_same_pair_does_not_duplicate(self, mock_fetch):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='101',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {},
+        }
+        fetch_daily_results()
+        fetch_daily_results()
+        self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='101').count(), 1)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_failure_in_one_pair_does_not_block_another(self, mock_fetch):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='200',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        GeneratedBet.objects.create(
+            user=self.user, game='Lotofacil', contest='300',
+            numbers=list(range(1, 16)), clovers=[], sequential_pairs=0,
+        )
+
+        def side_effect(game, contest):
+            if game == 'Quina':
+                raise Exception('falha simulada de scraping')
+            return {'numbers': [1, 2, 3], 'clovers': [], 'prizes': {}}
+
+        mock_fetch.side_effect = side_effect
+        fetch_daily_results()
+        self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='200').count(), 0)
+        self.assertEqual(LotteryResult.objects.filter(game='Lotofacil', contest='300').count(), 1)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_none_result_does_not_create_or_raise(self, mock_fetch):
+        GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='400',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = None
+        fetch_daily_results()
+        self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='400').count(), 0)
+
+
+class FetchDailyResultsCommandTests(TestCase):
+    """Cobre a integracao command -> jobs.fetch_daily_results (nao coberta pelos testes que chamam
+    a funcao Python diretamente): repasse do --final e descoberta do command pelo Django."""
+
+    @patch('apps.loterias_core.management.commands.fetch_daily_results.fetch_daily_results')
+    def test_default_call_passes_final_false(self, mock_job):
+        call_command('fetch_daily_results')
+        mock_job.assert_called_once_with(final=False)
+
+    @patch('apps.loterias_core.management.commands.fetch_daily_results.fetch_daily_results')
+    def test_final_flag_passes_final_true(self, mock_job):
+        call_command('fetch_daily_results', '--final')
+        mock_job.assert_called_once_with(final=True)
