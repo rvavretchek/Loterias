@@ -8,7 +8,7 @@ O servico Django e publicado no `ubt-host01` (`192.168.50.71`) como `loterias-we
 - Aplicacao: Gunicorn em `loterias-web:8000`
 - Proxy: `nginx-proxy` compartilhado
 - URL: `http://www.loterias.internal/`
-- Persistencia: volumes Docker `loterias_data`, `loterias_tenants` e `loterias_media`
+- Persistencia: volumes Docker `loterias_data` e `loterias_media`
 
 ## Operacao
 
@@ -19,6 +19,8 @@ docker compose --env-file .env -f deploy/lab/docker-compose.yml logs -f loterias
 ```
 
 Os valores `LOTERIAS_SECRET_KEY` e `LOTERIAS_PASSWORD_PEPPER` ficam somente no `.env` do host.
+
+**Cuidado com `--remove-orphans` (incidente de 2026-09-09):** varios projetos deste lab (`loterias-app`, `tupa-app`, `aether-app`, ...) guardam o compose file na mesma convencao de subpasta `deploy/lab/`. Sem um `name:` explicito no compose file, o Docker Compose deriva o nome do projeto do diretorio de trabalho -- e como esse diretorio se chama `lab` em todos eles, todos caem no **mesmo namespace de projeto** por padrao. Rodar `docker compose ... up -d --remove-orphans` a partir de um desses projetos remove os containers dos OUTROS projetos, tratando-os como "orfaos" do mesmo projeto. Este arquivo ja declara `name: loterias` no topo (fixando o namespace, independente do diretorio) -- ao criar um novo projeto neste lab, sempre declarar um `name:` unico no `docker-compose.yml`, nunca depender do nome do diretorio.
 
 O `nginx-proxy` e o CoreDNS possuem configuracao compartilhada em `/opt/infra-lab`. O bloco de proxy aponta para `http://loterias-web:8000`, e os registros DNS de `loterias.internal` e `www.loterias.internal` apontam para `192.168.50.71`.
 
