@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -11,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, GAMES_CONFIG
+from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference, GAMES_CONFIG
 from apps.loterias_core.jobs import fetch_daily_results
 from apps.loterias_core.utils import (
     calculate_statistics,
@@ -760,6 +761,26 @@ class AdminSmokeTests(TestCase):
         response = self.client.get('/admin/loterias_core/hitnotification/')
         self.assertEqual(response.status_code, 200)
 
+    def test_notificationpreference_admin_list_loads(self):
+        response = self.client.get('/admin/loterias_core/notificationpreference/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_notificationpreference_admin_add_form_includes_user_field(self):
+        """Regressao: um form customizado sem 'user' no Meta.fields, se atribuido a
+        ModelAdmin.form, faria o campo user sumir do admin -- a validacao de 'pelo menos 1
+        canal' fica no model.clean() exatamente pra nao precisar de form customizado aqui."""
+        response = self.client.get('/admin/loterias_core/notificationpreference/add/')
+        self.assertContains(response, 'name="user"')
+
+    def test_notificationpreference_admin_blocks_both_channels_disabled(self):
+        target_user = User.objects.create_user(email='prefadmin@example.com', password='SenhaForte123')
+        response = self.client.post(
+            '/admin/loterias_core/notificationpreference/add/', {'user': target_user.pk}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pelo menos um canal')
+        self.assertFalse(NotificationPreference.objects.filter(user=target_user).exists())
+
 
 class ReverseAccessorTests(TestCase):
     """Cobre user.bets e user.statistics (related_name renomeados na Story 1.1), sem teste ate aqui."""
@@ -1120,6 +1141,21 @@ class NotificationsContextProcessorTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.context['unread_notifications_count'], 0)
 
+    def test_site_disabled_preference_zeroes_the_badge(self):
+        """A escolha 'nao avisar no site' (Story 2.6) precisa ter efeito de verdade -- sem isso,
+        desmarcar a caixa nao muda nada pro usuario, contrariando o proprio proposito da story."""
+        NotificationPreference.objects.create(user=self.user, site_enabled=False, email_enabled=True)
+        HitNotification.objects.create(bet=self._bet('5'), won=True)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 0)
+        self.assertFalse(response.context['has_unread_won_notification'])
+
+    def test_site_enabled_preference_still_shows_the_badge(self):
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=False)
+        HitNotification.objects.create(bet=self._bet('6'), won=True)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 1)
+
 
 class NotificationBadgeTemplateTests(TestCase):
     def setUp(self):
@@ -1435,3 +1471,137 @@ class MarkNotificationReadViewTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.notification.refresh_from_db()
         self.assertFalse(self.notification.is_read)
+
+
+class NotificationPreferenceModelTests(TestCase):
+    def test_user_uniqueness_is_enforced_by_the_database(self):
+        user = User.objects.create_user(email='prefunico@example.com', password='SenhaForte123')
+        NotificationPreference.objects.create(user=user)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                NotificationPreference.objects.create(user=user)
+
+    def test_clean_rejects_both_channels_disabled(self):
+        user = User.objects.create_user(email='prefclean@example.com', password='SenhaForte123')
+        preference = NotificationPreference(user=user, site_enabled=False, email_enabled=False)
+        with self.assertRaises(ValidationError):
+            preference.full_clean()
+
+    def test_database_constraint_rejects_both_channels_disabled_even_bypassing_full_clean(self):
+        """`Model.save()` nao chama full_clean() sozinho (gotcha conhecido do Django) -- a
+        CheckConstraint no banco e o backstop real contra qualquer caminho (admin sem o form
+        certo, script, data migration) que grave os 2 canais desativados sem passar por clean()."""
+        user = User.objects.create_user(email='prefconstraint@example.com', password='SenhaForte123')
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                NotificationPreference.objects.create(user=user, site_enabled=False, email_enabled=False)
+
+
+class NotificationPreferencesViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='prefview@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_requires_login(self):
+        self.client.logout()
+        response = self.client.get(reverse('notification_preferences'))
+        self.assertRedirects(response, f"/accounts/login/?next={reverse('notification_preferences')}")
+
+    def test_first_access_shows_defaults_without_saving_a_user_change(self):
+        response = self.client.get(reverse('notification_preferences'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].initial['site_enabled'])
+        self.assertFalse(response.context['form'].initial['email_enabled'])
+        self.assertNotContains(response, 'Preferencia de notificacao atualizada')
+
+    def test_get_or_create_on_first_access_materializes_the_default_row(self):
+        """A ausencia de linha e lida como os defaults (AD-3) -- o get_or_create de leitura
+        grava a linha com os defaults, mas isso nao conta como 'mudanca do usuario'."""
+        self.assertFalse(NotificationPreference.objects.filter(user=self.user).exists())
+        self.client.get(reverse('notification_preferences'))
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertTrue(preference.site_enabled)
+        self.assertFalse(preference.email_enabled)
+
+    def test_saving_only_site_enabled(self):
+        response = self.client.post(reverse('notification_preferences'), {'site_enabled': 'on'})
+        self.assertRedirects(response, reverse('notification_preferences'))
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertTrue(preference.site_enabled)
+        self.assertFalse(preference.email_enabled)
+
+    def test_saving_only_email_enabled(self):
+        response = self.client.post(reverse('notification_preferences'), {'email_enabled': 'on'})
+        self.assertRedirects(response, reverse('notification_preferences'))
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertFalse(preference.site_enabled)
+        self.assertTrue(preference.email_enabled)
+
+    def test_saving_both_enabled(self):
+        response = self.client.post(
+            reverse('notification_preferences'), {'site_enabled': 'on', 'email_enabled': 'on'}
+        )
+        self.assertRedirects(response, reverse('notification_preferences'))
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertTrue(preference.site_enabled)
+        self.assertTrue(preference.email_enabled)
+
+    def test_disabling_both_channels_is_blocked_and_keeps_previous_preference(self):
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        response = self.client.post(reverse('notification_preferences'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pelo menos um canal')
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertTrue(preference.site_enabled)
+        self.assertTrue(preference.email_enabled)
+
+    def test_changing_preference_does_not_touch_existing_hit_notifications(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='30',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        notification = HitNotification.objects.create(bet=bet, won=True, is_read=False)
+        self.client.post(reverse('notification_preferences'), {'email_enabled': 'on'})
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)
+        self.assertTrue(HitNotification.objects.filter(pk=notification.pk).exists())
+
+    def test_anonymous_post_requires_login(self):
+        self.client.logout()
+        response = self.client.post(reverse('notification_preferences'), {'site_enabled': 'on'})
+        self.assertRedirects(response, f"/accounts/login/?next={reverse('notification_preferences')}")
+        self.assertFalse(NotificationPreference.objects.filter(user=self.user).exists())
+
+    def test_default_checkboxes_rendered_correctly_in_html(self):
+        response = self.client.get(reverse('notification_preferences'))
+        html = response.content.decode()
+        self.assertContains(response, 'type="checkbox"', count=2)
+        site_input = re.search(r'<input[^>]*name="site_enabled"[^>]*>', html).group()
+        email_input = re.search(r'<input[^>]*name="email_enabled"[^>]*>', html).group()
+        self.assertIn('checked', site_input)
+        self.assertNotIn('checked', email_input)
+
+    def test_exact_validation_error_message_rendered(self):
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        response = self.client.post(reverse('notification_preferences'), {})
+        self.assertContains(
+            response, 'Pelo menos um canal de aviso (site ou e-mail) precisa continuar ativo.'
+        )
+
+    def test_success_message_shown_after_saving(self):
+        response = self.client.post(
+            reverse('notification_preferences'), {'site_enabled': 'on'}, follow=True
+        )
+        self.assertContains(response, 'Preferencia de notificacao atualizada com sucesso!')
+
+    def test_does_not_read_or_affect_another_users_preference(self):
+        other_user = User.objects.create_user(email='outropreferencia@example.com', password='SenhaForte123')
+        NotificationPreference.objects.create(user=other_user, site_enabled=False, email_enabled=True)
+
+        self.client.post(reverse('notification_preferences'), {'site_enabled': 'on'})
+
+        own_preference = NotificationPreference.objects.get(user=self.user)
+        other_preference = NotificationPreference.objects.get(user=other_user)
+        self.assertTrue(own_preference.site_enabled)
+        self.assertFalse(other_preference.site_enabled)
+        self.assertTrue(other_preference.email_enabled)

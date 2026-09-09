@@ -13,5 +13,6 @@ urlpatterns = [
     path('estatisticas/', views.statistics_view, name='statistics'),
     path('notificacoes/', views.notifications_view, name='notifications'),
     path('notificacoes/<int:pk>/lida/', views.mark_notification_read_view, name='mark_notification_read'),
+    path('notificacoes/preferencias/', views.notification_preferences_view, name='notification_preferences'),
     path('api/gerar/', views.api_create_bet_view, name='api_create_bet'),
 ]

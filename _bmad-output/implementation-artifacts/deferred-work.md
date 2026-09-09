@@ -82,3 +82,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-detalhe-e-leitura-da-notificacao.md`
   summary: "Marcar como lida não tem confirmação nem desfazer -- um clique acidental é permanente (só reversível via admin/shell)."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.5. Comportamento comum em apps similares (ex. notificações do GitHub também não confirmam), e nenhum FR pede confirmação/desfazer -- documentado como decisão de produto em aberto, não um bug.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-preferencia-de-canal-de-notificacao.md`
+  summary: "Duas abas do mesmo usuário salvando `NotificationPreference` diferentes quase ao mesmo tempo -- 'last write wins' silencioso, sem aviso pra aba que 'perdeu'."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.6. Mesmo padrão de concorrência já adiado nas Stories 2.2 (bloqueio de concurso) e 2.5 (marcar como lida) -- resolver exigiria `select_for_update`/versionamento otimista, fora do escopo de uma tela de preferências simples com baixo volume de uso concorrente esperado.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-preferencia-de-canal-de-notificacao.md`
+  summary: "Uma linha de `NotificationPreference` materializada por um GET incidental (visita à tela sem nunca clicar em salvar) não se distingue, olhando só a tabela, de uma escolha real e consciente do usuário -- não há `created_at`/`updated_at` nem flag de origem."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.6. Decisão de design já aceita explicitamente pelo spec original ("Nunca: não criar um segundo model/campo pra 'conta pendente'/estado"). Só vira um problema real se uma feature futura (ex. auditoria, ou a Story 2.7 decidindo se o usuário "escolheu" e-mail de propósito) precisar distinguir os dois casos -- revisitar se isso surgir.

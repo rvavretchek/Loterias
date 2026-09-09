@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.conf import settings
 
@@ -147,3 +148,35 @@ class HitNotification(models.Model):
 
     def __str__(self):
         return f'Notificacao - {self.bet}'
+
+
+class NotificationPreference(models.Model):
+    """Preferencia de canal de aviso de acerto por usuario (site e/ou e-mail)."""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notification_preference',
+        verbose_name='Usuario'
+    )
+    site_enabled = models.BooleanField(default=True, verbose_name='Aviso no site')
+    email_enabled = models.BooleanField(default=False, verbose_name='Aviso por e-mail')
+
+    class Meta:
+        verbose_name = 'Preferencia de Notificacao'
+        verbose_name_plural = 'Preferencias de Notificacao'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(site_enabled=True) | models.Q(email_enabled=True),
+                name='notificationpreference_at_least_one_channel_enabled',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Preferencia de notificacao - {self.user.email}'
+
+    def clean(self):
+        super().clean()
+        if not self.site_enabled and not self.email_enabled:
+            raise ValidationError(
+                'Pelo menos um canal de aviso (site ou e-mail) precisa continuar ativo.'
+            )

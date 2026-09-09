@@ -4,10 +4,11 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db.models import Count
-from .models import GeneratedBet, HitNotification, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
+from .forms import NotificationPreferenceForm
+from .models import GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
@@ -448,3 +449,22 @@ def mark_notification_read_view(request, pk):
     if next_url and next_url.startswith('/'):
         return redirect(next_url)
     return redirect('notifications')
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def notification_preferences_view(request):
+    """Tela de preferencia de canal de aviso de acerto (site e/ou e-mail)."""
+    preference, _ = NotificationPreference.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        form = NotificationPreferenceForm(request.POST, instance=preference)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Preferencia de notificacao atualizada com sucesso!')
+            return redirect('notification_preferences')
+    else:
+        form = NotificationPreferenceForm(instance=preference)
+
+    context = {'form': form}
+    return render(request, 'loterias_core/preferencias_notificacao.html', context)
