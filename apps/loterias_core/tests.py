@@ -9,14 +9,19 @@ from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference, PrizeTier, GAMES_CONFIG
+from apps.loterias_core.models import (
+    GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference,
+    PrizeTier, CaptureFailureAlert, CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS, GAMES_CONFIG,
+)
 from apps.loterias_core.emails import send_hit_notification_email
-from apps.loterias_core.jobs import fetch_daily_results, update_monthly_prize_values
+from apps.loterias_core.jobs import (
+    _alert_operator_of_stale_capture_failures, fetch_daily_results, update_monthly_prize_values,
+)
 from apps.loterias_core.utils import (
     calculate_statistics,
     calculate_bet_prize,
@@ -2057,3 +2062,188 @@ class UpdateMonthlyPrizeValuesCommandTests(TestCase):
     def test_command_calls_the_job(self, mock_job):
         call_command('update_monthly_prize_values')
         mock_job.assert_called_once_with()
+
+
+@override_settings(OPERATOR_ALERT_EMAIL='boss@example.com')
+class CaptureFailureAlertTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='alertjob@example.com', password='SenhaForte123')
+        mail.outbox.clear()
+
+    def _create_stale_bet(self, game='Quina', contest='999', days_old=CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game=game, contest=contest,
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        GeneratedBet.objects.filter(pk=bet.pk).update(
+            created_at=timezone.now() - timedelta(days=days_old)
+        )
+        return bet
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_non_final_execution_never_alerts_even_for_a_stale_pair(self, mock_fetch):
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        fetch_daily_results(final=False)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(CaptureFailureAlert.objects.exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_pair_open_for_fewer_than_the_threshold_days_does_not_alert(self, mock_fetch):
+        self._create_stale_bet(days_old=CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS - 1)
+        mock_fetch.return_value = None
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(CaptureFailureAlert.objects.exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_pair_open_for_the_threshold_days_or_more_sends_exactly_one_alert(self, mock_fetch):
+        """Regressao critica: sem o piso de dias, todo par aberto (a maioria e so um concurso
+        ainda nao sorteado, nao uma falha real -- ver Intent da spec) dispararia alerta todo dia,
+        inundando o operador. So dispara a partir de CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS."""
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Quina', mail.outbox[0].subject)
+        self.assertIn('999', mail.outbox[0].subject)
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_rerunning_final_for_the_same_pair_does_not_resend_the_alert(self, mock_fetch):
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        fetch_daily_results(final=True)
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(CaptureFailureAlert.objects.filter(game='Quina', contest='999').count(), 1)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_multiple_stale_pairs_send_one_alert_email_each_not_an_aggregate(self, mock_fetch):
+        self._create_stale_bet(game='Quina', contest='999')
+        self._create_stale_bet(game='Lotofacil', contest='888')
+        mock_fetch.return_value = None
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 2)
+        subjects = {email.subject for email in mail.outbox}
+        self.assertTrue(any('Quina' in s and '999' in s for s in subjects))
+        self.assertTrue(any('Lotofacil' in s and '888' in s for s in subjects))
+
+    @override_settings(OPERATOR_ALERT_EMAIL='')
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_missing_operator_email_does_not_raise_and_does_not_send(self, mock_fetch):
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        result = fetch_daily_results(final=True)
+        self.assertTrue(result)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(CaptureFailureAlert.objects.exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_missing_operator_email_does_not_permanently_silence_the_alert(self, mock_fetch):
+        """Regressao critica encontrada na revisao: gravar CaptureFailureAlert incondicionalmente
+        (antes de confirmar o envio) faria uma OPERATOR_ALERT_EMAIL esquecida no primeiro deploy
+        silenciar o alerta desse par pra sempre, mesmo depois de configurada corretamente. O
+        registro so pode acontecer apos uma entrega real confirmada."""
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+
+        with override_settings(OPERATOR_ALERT_EMAIL=''):
+            fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(CaptureFailureAlert.objects.exists())
+
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_stale_capture_failure_never_creates_a_hit_notification(self, mock_fetch):
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        fetch_daily_results(final=True)
+        self.assertFalse(HitNotification.objects.exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_failure_in_one_pair_capture_does_not_block_alert_evaluation_of_another(self, mock_fetch):
+        """Confirma o isolamento ja existente da Story 2.1 no loop de CAPTURA -- nao exercita o
+        try/except novo desta story (ver test_exception_evaluating_one_pairs_alert_does_not_block_another
+        pra isso)."""
+        self._create_stale_bet(game='Quina', contest='999')
+        self._create_stale_bet(game='Lotofacil', contest='888')
+
+        def side_effect(game, contest):
+            if game == 'Quina':
+                raise Exception('falha simulada de scraping')
+            return None
+
+        mock_fetch.side_effect = side_effect
+        fetch_daily_results(final=True)
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Lotofacil', contest='888').exists())
+
+    @patch('apps.loterias_core.jobs.send_capture_failure_alert')
+    def test_exception_evaluating_one_pairs_alert_does_not_block_another(self, mock_send_alert):
+        """Exercita o try/except de _alert_operator_of_stale_capture_failures em si (nao o loop de
+        captura pre-existente da Story 2.1) -- uma excecao ao avaliar/enviar o alerta de um par
+        nao pode impedir o par seguinte de ser avaliado."""
+        self._create_stale_bet(game='Quina', contest='999')
+        self._create_stale_bet(game='Lotofacil', contest='888')
+
+        def side_effect(game, contest):
+            if game == 'Quina':
+                raise Exception('falha simulada ao enviar')
+            return True
+
+        mock_send_alert.side_effect = side_effect
+        _alert_operator_of_stale_capture_failures([('Quina', '999'), ('Lotofacil', '888')])
+        self.assertFalse(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Lotofacil', contest='888').exists())
+
+    def test_alert_based_on_the_oldest_bet_when_multiple_bets_exist_for_the_pair(self):
+        """order_by('created_at') tem que escolher o MAIS ANTIGO entre varios bets do mesmo par,
+        nao o unico/mais recente -- um bug usando .last() ou omitindo o order_by passaria
+        despercebido se so existisse 1 bet por par em todo teste."""
+        old_bet = self._create_stale_bet(game='Quina', contest='999', days_old=CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS)
+        self._create_stale_bet(game='Quina', contest='999', days_old=1)
+        _alert_operator_of_stale_capture_failures([('Quina', '999')])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+
+    def test_pair_resolved_during_this_run_is_not_alerted(self):
+        """Reconsulta LotteryResult (nao so o snapshot congelado de open_pairs) antes de alertar
+        -- um par que foi resolvido por uma verificacao manual (check_bet_result_view) durante a
+        janela desta mesma execucao do cron nao pode gerar um alerta de 'falha' obsoleto."""
+        self._create_stale_bet(game='Quina', contest='999')
+        LotteryResult.objects.create(
+            game='Quina', contest='999', numbers=[1, 2, 3, 4, 5], clovers=[], prizes={},
+        )
+        _alert_operator_of_stale_capture_failures([('Quina', '999')])
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(CaptureFailureAlert.objects.exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_three_daily_runs_retry_automatically_and_alert_only_on_final(self, mock_fetch):
+        """Simula o ciclo real de cron (3h/3h15/3h30): 2 tentativas sem --final, depois a
+        --final -- confirma que o retry automatico (idempotente, sem logica nova) e a avaliacao
+        de alerta (so na ultima) funcionam juntas na sequencia real, nao so isoladamente."""
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+
+        fetch_daily_results(final=False)
+        self.assertEqual(len(mail.outbox), 0)
+        fetch_daily_results(final=False)
+        self.assertEqual(len(mail.outbox), 0)
+        fetch_daily_results(final=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='999').exists())
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_final_flag_command_integration_still_evaluates_alerts(self, mock_fetch):
+        """Integra com o management command real (nao mockado) -- confirma que --final chega
+        ate a avaliacao de alerta, nao so que o parametro e repassado (ja coberto por
+        FetchDailyResultsCommandTests com o job mockado)."""
+        self._create_stale_bet()
+        mock_fetch.return_value = None
+        call_command('fetch_daily_results', '--final')
+        self.assertEqual(len(mail.outbox), 1)

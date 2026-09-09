@@ -199,3 +199,23 @@ class PrizeTier(models.Model):
 
     def __str__(self):
         return f'{self.game} - {self.hits} acertos ({self.reference_month:%m/%Y})'
+
+
+CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS = 8
+
+
+class CaptureFailureAlert(models.Model):
+    """Registra que o operador ja foi avisado da falha de captura de um par Jogo/Concurso
+    (Story 2.9) -- garante exatamente 1 e-mail de alerta por par, mesmo que a falha persista por
+    varias execucoes --final."""
+    game = models.CharField(max_length=20, choices=GeneratedBet.GAME_CHOICES, verbose_name='Jogo')
+    contest = models.CharField(max_length=20, verbose_name='Concurso')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+
+    class Meta:
+        verbose_name = 'Alerta de Falha de Captura'
+        verbose_name_plural = 'Alertas de Falha de Captura'
+        unique_together = ('game', 'contest')
+
+    def __str__(self):
+        return f'Alerta - {self.game}/{self.contest}'

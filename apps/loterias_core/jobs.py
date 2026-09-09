@@ -1,9 +1,14 @@
 import logging
+from datetime import timedelta
 
+from django.db.models import Min
 from django.utils import timezone
 
-from .emails import send_hit_notification_email
-from .models import GeneratedBet, HitNotification, LotteryResult, NotificationPreference, PrizeTier
+from .emails import send_capture_failure_alert, send_hit_notification_email
+from .models import (
+    CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS, CaptureFailureAlert, GeneratedBet, HitNotification,
+    LotteryResult, NotificationPreference, PrizeTier,
+)
 from .utils import GAMES_CONFIG, _parse_currency, apply_prize_to_bet, calculate_bet_prize, fetch_cef_result
 
 logger = logging.getLogger(__name__)
@@ -11,22 +16,27 @@ logger = logging.getLogger(__name__)
 
 def fetch_daily_results(final=False):
     """Captura resultados oficiais pendentes e gera notificacao de acerto (rotina de cron,
-    Stories 2.1 e 2.3).
+    Stories 2.1 e 2.3). Chamada 3x por dia via CRONJOBS (3h, 3h15, 3h30) -- o "retry automatico"
+    da Story 2.9 nao precisa de nenhuma logica nova, ja que esta funcao ja e idempotente e sem
+    estado entre chamadas (recalcula `open_pairs` do zero a cada execucao): todo par que falhou
+    numa execucao anterior naturalmente continua em `open_pairs` na proxima.
 
-    `final` ainda nao muda nenhum comportamento nesta story -- e consumido
-    pela Story 2.9 (alerta ao operador quando a ultima tentativa do dia
-    ainda falhar pra um par Jogo/Concurso).
+    `final=True` (3h30) avalia, pra cada par que continuar sem resultado apos esta tentativa, se
+    ja esta aberto ha tempo suficiente pra soar um alerta ao operador (ver
+    _alert_operator_of_stale_capture_failures) -- as execucoes das 3h/3h15 nunca alertam.
     """
     existing_results = set(LotteryResult.objects.values_list('game', 'contest'))
     all_bet_pairs = set(GeneratedBet.objects.values_list('game', 'contest').distinct())
     open_pairs = all_bet_pairs - existing_results
 
     resolved = 0
+    still_open = []
     for game, contest in open_pairs:
         try:
             result = fetch_cef_result(game, contest)
             if not result:
                 logger.info('fetch_daily_results: sem resultado disponivel para %s/%s', game, contest)
+                still_open.append((game, contest))
                 continue
             LotteryResult.objects.update_or_create(
                 game=game,
@@ -41,6 +51,7 @@ def fetch_daily_results(final=False):
             resolved += 1
         except Exception:
             logger.exception('fetch_daily_results: falha ao capturar/gravar resultado para %s/%s', game, contest)
+            still_open.append((game, contest))
             continue
 
     logger.info(
@@ -56,7 +67,62 @@ def fetch_daily_results(final=False):
     except Exception:
         logger.exception('fetch_daily_results: falha ao atualizar PrizeTier (cold-start)')
 
+    if final:
+        _alert_operator_of_stale_capture_failures(still_open)
+
     return True
+
+
+def _alert_operator_of_stale_capture_failures(open_pairs):
+    """Avalia, pra cada par ainda sem LotteryResult apos a execucao --final, se ja esta aberto ha
+    CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS dias ou mais (contados do GeneratedBet mais antigo
+    daquele par) -- nunca no primeiro dia em que fica aberto, ja que a esmagadora maioria dos
+    pares abertos e so um concurso que ainda nao foi sorteado (nao uma falha real, ver Intent da
+    spec da Story 2.9). CaptureFailureAlert garante exatamente 1 e-mail por par, pra sempre --
+    mas so e gravado DEPOIS de confirmar que o e-mail foi de fato despachado (nunca antes): se
+    OPERATOR_ALERT_EMAIL estiver vazio ou o SMTP falhar, o par continua elegivel pra alertar na
+    proxima execucao --final, em vez de ficar silenciado pra sempre por um alerta que nunca saiu.
+    Tambem reconsulta LotteryResult (nao so o snapshot de open_pairs, capturado antes de
+    _notify_covered_bets/update_monthly_prize_values rodarem) pra nao alertar um par que foi
+    resolvido por uma verificacao manual (check_bet_result_view/save_manual_bet_view) durante a
+    janela desta mesma execucao. Todas as consultas de apoio sao pre-carregadas em lote (nao por
+    par, dentro do loop) pra evitar N+1 -- mesmo padrao ja estabelecido em jobs.py/utils.py."""
+    if not open_pairs:
+        return
+
+    games = [game for game, _ in open_pairs]
+    contests = [contest for _, contest in open_pairs]
+
+    already_alerted = set(
+        CaptureFailureAlert.objects.filter(game__in=games, contest__in=contests)
+        .values_list('game', 'contest')
+    )
+    already_resolved = set(
+        LotteryResult.objects.filter(game__in=games, contest__in=contests)
+        .values_list('game', 'contest')
+    )
+    oldest_bet_by_pair = {
+        (row['game'], row['contest']): row['oldest']
+        for row in GeneratedBet.objects.filter(game__in=games, contest__in=contests)
+        .values('game', 'contest').annotate(oldest=Min('created_at'))
+    }
+
+    cutoff = timezone.now() - timedelta(days=CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS)
+    for pair in open_pairs:
+        game, contest = pair
+        try:
+            if pair in already_alerted or pair in already_resolved:
+                continue
+            oldest_created_at = oldest_bet_by_pair.get(pair)
+            if not oldest_created_at or oldest_created_at > cutoff:
+                continue
+            if send_capture_failure_alert(game, contest):
+                CaptureFailureAlert.objects.get_or_create(game=game, contest=contest)
+        except Exception:
+            logger.exception(
+                'fetch_daily_results: falha ao avaliar/enviar alerta de captura pra %s/%s', game, contest
+            )
+            continue
 
 
 def _notify_covered_bets():

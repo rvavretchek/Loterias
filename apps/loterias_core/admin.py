@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import GeneratedBet, GameStatistics, HitNotification, NotificationPreference, PrizeTier
+from .models import (
+    CaptureFailureAlert, GeneratedBet, GameStatistics, HitNotification, NotificationPreference,
+    PrizeTier,
+)
 
 
 @admin.register(GeneratedBet)
@@ -38,3 +41,11 @@ class PrizeTierAdmin(admin.ModelAdmin):
     list_display = ('game', 'hits', 'value', 'winners', 'reference_month')
     list_filter = ('game', 'reference_month')
     search_fields = ('game',)
+
+
+@admin.register(CaptureFailureAlert)
+class CaptureFailureAlertAdmin(admin.ModelAdmin):
+    list_display = ('game', 'contest', 'created_at')
+    list_filter = ('game', 'created_at')
+    search_fields = ('game', 'contest')
+    readonly_fields = ('created_at',)
