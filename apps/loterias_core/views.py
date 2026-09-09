@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -11,7 +9,7 @@ from .models import GeneratedBet, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUEN
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
-    fetch_cef_result, suggest_next_contest
+    fetch_cef_result, suggest_next_contest, apply_prize_to_bet
 )
 
 
@@ -240,11 +238,7 @@ def save_manual_bet_view(request):
             }
         )
         prize = calculate_bet_prize(selected_game, bet.numbers, bet.clovers, result)
-        bet.result_checked = True
-        bet.hits = prize['hits']
-        bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        bet.prize_description = prize['category']
-        bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
+        apply_prize_to_bet(bet, prize)
         if prize['won']:
             messages.success(request, f'Jogo manual salvo e verificado com {prize["hits"]} acertos. Premio: {prize["value"]}.')
         else:
@@ -277,11 +271,7 @@ def check_bet_result_view(request, pk):
     )
 
     prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
-    bet.result_checked = True
-    bet.hits = prize['hits']
-    bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-    bet.prize_description = prize['category']
-    bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
+    apply_prize_to_bet(bet, prize)
 
     if prize['won']:
         messages.success(request, f'Verificacao concluida: {prize["hits"]} acertos e premio de {prize["value"]}.')

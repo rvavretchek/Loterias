@@ -125,3 +125,25 @@ class GameStatistics(models.Model):
 
     def __str__(self):
         return f'Estatisticas - {self.game} ({self.user.email})'
+
+
+class HitNotification(models.Model):
+    """Marca um GeneratedBet que teve pelo menos 1 acerto contra o resultado oficial."""
+    bet = models.OneToOneField(
+        GeneratedBet,
+        on_delete=models.CASCADE,
+        related_name='notification',
+        verbose_name='Jogo'
+    )
+    won = models.BooleanField(default=False, verbose_name='Premiado')
+    is_read = models.BooleanField(default=False, verbose_name='Lida')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+
+    class Meta:
+        verbose_name = 'Notificacao de Acerto'
+        verbose_name_plural = 'Notificacoes de Acerto'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['is_read'])]
+
+    def __str__(self):
+        return f'Notificacao - {self.bet}'

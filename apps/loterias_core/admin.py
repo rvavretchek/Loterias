@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import GeneratedBet, GameStatistics
+from .models import GeneratedBet, GameStatistics, HitNotification
 
 
 @admin.register(GeneratedBet)
@@ -16,3 +16,11 @@ class GameStatisticsAdmin(admin.ModelAdmin):
     list_display = ('game', 'user', 'total_bets', 'last_updated')
     list_filter = ('game', 'last_updated')
     search_fields = ('user__email',)
+
+
+@admin.register(HitNotification)
+class HitNotificationAdmin(admin.ModelAdmin):
+    list_display = ('bet', 'won', 'is_read', 'created_at')
+    list_filter = ('won', 'is_read', 'created_at')
+    search_fields = ('bet__user__email',)
+    readonly_fields = ('created_at',)

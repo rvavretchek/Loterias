@@ -189,7 +189,10 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
         except Exception:
             amount = Decimal('0')
 
-    won = bool(prize_key and hits > 0 and amount > 0)
+    # Nao exige hits > 0: a Lotomania paga por 0 acertos (prize_key ja e sempre 'lotomania'
+    # independente de hits acima), entao o valor da faixa (amount > 0) e o unico gate real --
+    # os demais Jogos ja ficam com prize_key=None (e por isso amount=0) abaixo do piso de acerto.
+    won = bool(prize_key and amount > 0)
     return {
         'won': won,
         'hits': hits,
@@ -275,6 +278,15 @@ def fetch_cef_result(game, contest):
     }
 
 
+def apply_prize_to_bet(bet, prize):
+    """Aplica o retorno de calculate_bet_prize aos campos-cache do GeneratedBet e salva."""
+    bet.result_checked = True
+    bet.hits = prize['hits']
+    bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
+    bet.prize_description = prize['category']
+    bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
+
+
 def check_user_results(user=None):
     """Valida jogos do usuario contra resultados oficiais da CEF e atualiza o status de premio."""
     queryset = GeneratedBet.objects.all()
@@ -288,10 +300,6 @@ def check_user_results(user=None):
         if not result:
             continue
         prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
-        bet.result_checked = True
-        bet.hits = prize['hits']
-        bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
-        bet.prize_description = prize['category']
-        bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
+        apply_prize_to_bet(bet, prize)
 
     return True

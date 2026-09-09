@@ -3,11 +3,12 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.models import User
-from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, GAMES_CONFIG
+from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, GAMES_CONFIG
 from apps.loterias_core.jobs import fetch_daily_results
 from apps.loterias_core.utils import (
     calculate_statistics,
@@ -19,6 +20,7 @@ from apps.loterias_core.utils import (
     normalize_numbers,
     check_duplicate_bet,
     suggest_next_contest,
+    apply_prize_to_bet,
 )
 
 
@@ -178,6 +180,27 @@ class CalculateBetPrizeTests(TestCase):
         self.assertFalse(prize['won'])
         self.assertEqual(prize['hits'], 0)
         self.assertEqual(prize['category'], 'Sem resultado')
+
+    def test_lotomania_zero_hits_wins_when_prize_tier_has_value(self):
+        """Regressao: a Lotomania paga por 0 acertos (regra real do jogo) -- won nao pode
+        exigir hits > 0, senao esse premio nunca e reconhecido."""
+        result = {
+            'numbers': list(range(1, 21)),
+            'clovers': [],
+            'prizes': {'0': {'value': 'R$ 500,00', 'winners': 3}},
+        }
+        prize = calculate_bet_prize('Lotomania', list(range(21, 71)), [], result)
+        self.assertEqual(prize['hits'], 0)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 500,00')
+
+    def test_mega_sena_zero_hits_never_wins(self):
+        """Confirma que remover o `hits > 0` de `won` nao abre uma brecha pros outros jogos:
+        prize_key so existe acima do piso de acerto de cada Jogo, entao amount fica 0 pra hits=0."""
+        result = {'numbers': [1, 2, 3, 4, 5, 6], 'clovers': [], 'prizes': {'6': {'value': 'R$ 1,00'}}}
+        prize = calculate_bet_prize('Mega-sena', [40, 41, 42, 43, 44, 45], [], result)
+        self.assertEqual(prize['hits'], 0)
+        self.assertFalse(prize['won'])
 
     def test_mega_sena_with_six_hits_wins(self):
         result = {
@@ -546,7 +569,7 @@ class SaveManualBetViewTests(TestCase):
         mock_fetch.return_value = {
             'numbers': self.numbers,
             'clovers': [],
-            'prizes': {},
+            'prizes': {'15': {'value': 'R$ 1.000.000,00', 'winners': 1}},
         }
         response = self.client.post(reverse('save_manual_bet'), {
             'jogo': 'Lotofacil',
@@ -560,6 +583,9 @@ class SaveManualBetViewTests(TestCase):
         )
         bet.refresh_from_db()
         self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, len(self.numbers))
+        self.assertEqual(bet.prize, Decimal('1000000.00'))
+        self.assertEqual(bet.prize_description, 'lotofacil')
 
 
 class CheckBetResultViewTests(TestCase):
@@ -576,12 +602,15 @@ class CheckBetResultViewTests(TestCase):
         mock_fetch.return_value = {
             'numbers': [1, 2, 3, 4, 5, 6],
             'clovers': [],
-            'prizes': {'sena': {'value': 'R$ 500.000,00'}},
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
         }
         response = self.client.get(reverse('check_bet_result', args=[self.bet.pk]))
         self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
         self.bet.refresh_from_db()
         self.assertTrue(self.bet.result_checked)
+        self.assertEqual(self.bet.hits, 6)
+        self.assertEqual(self.bet.prize, Decimal('500000.00'))
+        self.assertEqual(self.bet.prize_description, 'sena')
 
     @patch('apps.loterias_core.views.fetch_cef_result')
     def test_result_not_found_keeps_as_unchecked(self, mock_fetch):
@@ -692,13 +721,14 @@ class CheckUserResultsTests(TestCase):
         mock_fetch.return_value = {
             'numbers': [1, 2, 3, 4, 5, 6],
             'clovers': [],
-            'prizes': {'sena': {'value': 'R$ 500.000,00'}},
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
         }
         check_user_results(user=self.user)
         self.bet.refresh_from_db()
         self.assertTrue(self.bet.result_checked)
         self.assertEqual(self.bet.hits, 6)
-        self.assertTrue(self.bet.prize_description)
+        self.assertEqual(self.bet.prize, Decimal('500000.00'))
+        self.assertEqual(self.bet.prize_description, 'sena')
 
     @patch('apps.loterias_core.utils.fetch_cef_result')
     def test_no_result_keeps_bet_unchecked(self, mock_fetch):
@@ -721,6 +751,10 @@ class AdminSmokeTests(TestCase):
 
     def test_gamestatistics_admin_list_loads(self):
         response = self.client.get('/admin/loterias_core/gamestatistics/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_hitnotification_admin_list_loads(self):
+        response = self.client.get('/admin/loterias_core/hitnotification/')
         self.assertEqual(response.status_code, 200)
 
 
@@ -856,3 +890,165 @@ class FetchDailyResultsCommandTests(TestCase):
     def test_final_flag_passes_final_true(self, mock_job):
         call_command('fetch_daily_results', '--final')
         mock_job.assert_called_once_with(final=True)
+
+
+class HitNotificationGenerationTests(TestCase):
+    """Story 2.3: varredura de notificacao de acerto dentro de fetch_daily_results."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='notif@example.com', password='SenhaForte123')
+
+    def test_bet_with_hits_and_existing_result_generates_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9000',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='9000', numbers=[1, 2, 3, 40, 41], clovers=[],
+            prizes={'3': {'value': 'R$ 50,00', 'winners': 10}},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 3)
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+        self.assertFalse(notification.is_read)
+
+    def test_bet_with_hits_but_below_prize_threshold_generates_unwon_notification(self):
+        """hits > 0 e o gatilho de notificacao (nao prize['won']) -- um acerto parcial sem
+        atingir o piso de premio do Jogo ainda gera HitNotification, so que com won=False."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9010',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='9010', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertFalse(notification.won)
+
+    def test_bet_with_zero_hits_does_not_generate_notification_but_updates_cache(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9001',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='9001', numbers=[10, 20, 30, 40, 50], clovers=[], prizes={},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 0)
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+    def test_rerun_does_not_duplicate_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9002',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='9002', numbers=[1, 2, 3, 40, 41], clovers=[], prizes={},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+            fetch_daily_results()
+        self.assertEqual(HitNotification.objects.filter(bet=bet).count(), 1)
+
+    def test_covers_lottery_result_written_by_on_demand_path_before_this_run(self):
+        """A varredura considera todo GeneratedBet ainda sem cobertura, nao so o LotteryResult
+        que a propria chamada gravou -- simula um LotteryResult ja existente antes da execucao."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Lotofacil', contest='9003',
+            numbers=list(range(1, 16)), clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Lotofacil', contest='9003', numbers=list(range(1, 16)), clovers=[],
+            prizes={'15': {'value': 'R$ 1.000.000,00', 'winners': 1}},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
+    def test_bet_without_lottery_result_is_not_processed(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9004',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertFalse(bet.result_checked)
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+    def test_failure_processing_one_bet_does_not_block_another(self):
+        bet_ok = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9005',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        bet_broken = GeneratedBet.objects.create(
+            user=self.user, game='Lotofacil', contest='9006',
+            numbers=list(range(1, 16)), clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='9005', numbers=[1, 2, 3, 40, 41], clovers=[], prizes={},
+        )
+        LotteryResult.objects.create(
+            game='Lotofacil', contest='9006', numbers=list(range(1, 16)), clovers=[], prizes={},
+        )
+        original_calculate = calculate_bet_prize
+
+        def side_effect(game, numbers, clovers, official_result):
+            if game == 'Lotofacil':
+                raise Exception('falha simulada')
+            return original_calculate(game, numbers, clovers, official_result)
+
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch, \
+                patch('apps.loterias_core.jobs.calculate_bet_prize', side_effect=side_effect):
+            mock_fetch.return_value = None
+            fetch_daily_results()
+
+        self.assertTrue(HitNotification.objects.filter(bet=bet_ok).exists())
+        self.assertFalse(HitNotification.objects.filter(bet=bet_broken).exists())
+
+
+class ApplyPrizeToBetTests(TestCase):
+    def test_applies_all_cache_fields(self):
+        user = User.objects.create_user(email='apply@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='9100',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        prize = {'won': True, 'hits': 3, 'value': 'R$ 50,00', 'category': '3'}
+        apply_prize_to_bet(bet, prize)
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 3)
+        self.assertEqual(bet.prize, Decimal('50.00'))
+        self.assertEqual(bet.prize_description, '3')
+
+
+class HitNotificationModelTests(TestCase):
+    def test_bet_uniqueness_is_enforced_by_the_database(self):
+        """A unicidade de HitNotification.bet nao depende so do get_or_create da aplicacao --
+        o proprio OneToOneField/banco rejeita um segundo INSERT pro mesmo bet (AD-4)."""
+        user = User.objects.create_user(email='unico@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='9200',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                HitNotification.objects.create(bet=bet, won=False)
