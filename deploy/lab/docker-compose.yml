@@ -1,3 +1,5 @@
+name: loterias
+
 services:
   loterias-web:
     build:
