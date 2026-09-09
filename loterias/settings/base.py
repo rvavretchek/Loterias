@@ -85,8 +85,13 @@ DATABASES = {
 }
 
 # Cron (rotinas de dominio, ver apps/loterias_core/jobs.py)
+# A entrada mensal de update_monthly_prize_values e redundante na pratica com a chamada de
+# cold-start dentro de fetch_daily_results (roda todo dia, inclusive no dia 1) -- mantida como
+# defesa em profundidade: se o cron diario ficar fora do ar por qualquer motivo num periodo em
+# torno da virada de mes, o disparo mensal dedicado ainda garante ao menos uma tentativa.
 CRONJOBS = [
     ('0 3 * * *', 'django.core.management.call_command', ['fetch_daily_results']),
+    ('0 4 1 * *', 'django.core.management.call_command', ['update_monthly_prize_values']),
 ]
 
 # Password validation

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import GeneratedBet, GameStatistics, HitNotification, NotificationPreference
+from .models import GeneratedBet, GameStatistics, HitNotification, NotificationPreference, PrizeTier
 
 
 @admin.register(GeneratedBet)
@@ -31,3 +31,10 @@ class NotificationPreferenceAdmin(admin.ModelAdmin):
     list_display = ('user', 'site_enabled', 'email_enabled')
     list_filter = ('site_enabled', 'email_enabled')
     search_fields = ('user__email',)
+
+
+@admin.register(PrizeTier)
+class PrizeTierAdmin(admin.ModelAdmin):
+    list_display = ('game', 'hits', 'value', 'winners', 'reference_month')
+    list_filter = ('game', 'reference_month')
+    search_fields = ('game',)

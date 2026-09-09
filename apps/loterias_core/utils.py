@@ -3,8 +3,12 @@ import re
 from decimal import Decimal
 
 import requests
+from django.utils import timezone
 
-from .models import GeneratedBet, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL
+from .models import (
+    GeneratedBet, LotteryResult, PrizeTier,
+    GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL,
+)
 
 
 def normalize_numbers(numbers):
@@ -154,8 +158,75 @@ def calculate_statistics(user, game_name):
     }
 
 
+GAME_PRIZE_CATEGORY = {
+    'Mega-sena': 'sena',
+    'Quina': 'quina',
+    'Lotofacil': 'lotofacil',
+    'Lotomania': 'lotomania',
+    'Milionaria': 'milionaria',
+    'Dupla-Sena': 'dupla_sena',
+}
+
+LEGACY_MIN_HITS = {
+    'Mega-sena': 4,
+    'Quina': 3,
+    'Lotofacil': 11,
+    'Milionaria': 4,
+    'Dupla-Sena': 4,
+}
+
+
+def _parse_currency(raw_value):
+    raw_value = str(raw_value).replace('R$', '').replace('.', '').replace(',', '.')
+    try:
+        return Decimal(raw_value.strip())
+    except Exception:
+        return Decimal('0')
+
+
+def _legacy_hits_is_valid(game, hits):
+    """Comportamento anterior a Story 2.8, preservado como fallback de cold-start (ver
+    calculate_bet_prize): a Lotomania sempre foi tratada como potencialmente valida pra
+    qualquer quantidade de acertos (o valor real da faixa e quem decide `won`)."""
+    if game == 'Lotomania':
+        return True
+    min_hits = LEGACY_MIN_HITS.get(game)
+    return min_hits is not None and hits >= min_hits
+
+
+def _find_prize_tier(game, hits, reference_month):
+    return PrizeTier.objects.filter(
+        game=game, hits=hits, reference_month__lte=reference_month
+    ).order_by('-reference_month').first()
+
+
+def _reference_month_for(captured_at):
+    """Converte um `captured_at` (aware ou None) no primeiro dia do mes correspondente, no fuso
+    local (America/Sao_Paulo) -- nao em UTC. `timezone.now()`/`DateTimeField.auto_now_add` guardam
+    o instante em UTC quando USE_TZ=True; chamar `.date()` direto nele pega a data UTC, que pode
+    cair no dia (e mes) seguinte ao horario local perto da meia-noite de Brasilia."""
+    if captured_at is None:
+        return timezone.localdate().replace(day=1)
+    if hasattr(captured_at, 'date'):
+        if timezone.is_aware(captured_at):
+            captured_at = timezone.localtime(captured_at)
+        return captured_at.date().replace(day=1)
+    return captured_at.replace(day=1)
+
+
 def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=None):
-    """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e status."""
+    """Compara o jogo do usuario com o resultado oficial da CEF e informa premio, acertos e
+    status. A validade de uma quantidade de acertos e decidida nesta ordem de prioridade:
+
+    1. A propria faixa de premiacao do concurso (`prizes` do LotteryResult daquele Jogo+Concurso
+       especifico) -- e um dado real e definitivo daquele sorteio, e o LotteryResult nunca e
+       podado (AD-10). Uma aposta antiga genuinamente premiada nao pode perder o reconhecimento
+       do premio so porque a retencao de 3 meses do PrizeTier (Story 2.8/AD-10) ja descartou o
+       reference_month dela -- o dado do proprio concurso e a fonte da verdade.
+    2. PrizeTier (Story 2.8/AD-10), usado so quando o concurso especifico nao tem essa faixa
+       registrada (ex.: captura incompleta daquele concurso).
+    3. O fallback legado hardcoded (_legacy_hits_is_valid), usado so em cold-start total
+       (nenhum PrizeTier pro Jogo ainda, ver jobs.fetch_daily_results)."""
     if official_result is None:
         return {'won': False, 'hits': 0, 'value': 'R$ 0,00', 'category': 'Sem resultado'}
 
@@ -164,39 +235,33 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
     hits = len(user_numbers & result_numbers)
 
     prizes = official_result.get('prizes', {})
-    prize_key = None
+    concurso_prize_info = prizes.get(str(hits)) if isinstance(prizes, dict) else None
+
+    reference_month = _reference_month_for(official_result.get('captured_at'))
+    tier = _find_prize_tier(game, hits, reference_month)
+
+    if concurso_prize_info is not None:
+        is_valid = True
+    elif tier is not None:
+        is_valid = True
+    elif PrizeTier.objects.filter(game=game).exists():
+        is_valid = False
+    else:
+        is_valid = _legacy_hits_is_valid(game, hits)
+
     amount = Decimal('0')
+    if is_valid:
+        if concurso_prize_info is not None:
+            amount = _parse_currency(concurso_prize_info.get('value', 'R$ 0,00'))
+        elif tier is not None:
+            amount = tier.value
 
-    if game == 'Mega-sena':
-        prize_key = 'sena' if hits >= 4 else None
-    elif game == 'Quina':
-        prize_key = 'quina' if hits >= 3 else None
-    elif game == 'Lotofacil':
-        prize_key = 'lotofacil' if hits >= 11 else None
-    elif game == 'Lotomania':
-        prize_key = 'lotomania' if hits >= 0 else 'lotomania'
-    elif game == 'Milionaria':
-        prize_key = 'milionaria' if hits >= 4 else None
-    elif game == 'Dupla-Sena':
-        prize_key = 'dupla_sena' if hits >= 4 else None
-
-    if prize_key and isinstance(prizes, dict):
-        prize_info = prizes.get(str(hits), {})
-        raw_amount = prize_info.get('value', 'R$ 0,00')
-        raw_amount = str(raw_amount).replace('R$', '').replace('.', '').replace(',', '.')
-        try:
-            amount = Decimal(raw_amount.strip())
-        except Exception:
-            amount = Decimal('0')
-
-    # Nao exige hits > 0: a Lotomania paga por 0 acertos (prize_key ja e sempre 'lotomania'
-    # independente de hits acima), entao o valor da faixa (amount > 0) e o unico gate real --
-    # os demais Jogos ja ficam com prize_key=None (e por isso amount=0) abaixo do piso de acerto.
-    won = bool(prize_key and amount > 0)
+    prize_key = GAME_PRIZE_CATEGORY.get(game) if is_valid else None
+    won = bool(is_valid and amount > 0)
     return {
         'won': won,
         'hits': hits,
-        'value': f'R$ {amount:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+        'value': _format_currency(amount),
         'category': prize_key or 'Sem premio',
         'result': official_result,
     }
@@ -282,7 +347,7 @@ def apply_prize_to_bet(bet, prize):
     """Aplica o retorno de calculate_bet_prize aos campos-cache do GeneratedBet e salva."""
     bet.result_checked = True
     bet.hits = prize['hits']
-    bet.prize = Decimal(str(prize['value'].replace('R$ ', '').replace('.', '').replace(',', '.')))
+    bet.prize = _parse_currency(prize['value'])
     bet.prize_description = prize['category']
     bet.save(update_fields=['result_checked', 'hits', 'prize', 'prize_description', 'updated_at'])
 

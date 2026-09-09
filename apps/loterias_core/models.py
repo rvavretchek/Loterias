@@ -180,3 +180,22 @@ class NotificationPreference(models.Model):
             raise ValidationError(
                 'Pelo menos um canal de aviso (site ou e-mail) precisa continuar ativo.'
             )
+
+
+class PrizeTier(models.Model):
+    """Faixa de premiacao vigente por Jogo/quantidade de acertos, capturada mensalmente
+    (Story 2.8/AD-10). So os 3 reference_month mais recentes por (game, hits) sao retidos."""
+    game = models.CharField(max_length=20, choices=GeneratedBet.GAME_CHOICES, verbose_name='Jogo')
+    hits = models.PositiveIntegerField(verbose_name='Acertos')
+    value = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Valor')
+    winners = models.PositiveIntegerField(default=0, verbose_name='Ganhadores')
+    reference_month = models.DateField(verbose_name='Mes de Referencia')
+
+    class Meta:
+        verbose_name = 'Faixa de Premiacao'
+        verbose_name_plural = 'Faixas de Premiacao'
+        unique_together = ('game', 'hits', 'reference_month')
+        ordering = ['-reference_month']
+
+    def __str__(self):
+        return f'{self.game} - {self.hits} acertos ({self.reference_month:%m/%Y})'

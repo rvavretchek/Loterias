@@ -139,6 +139,7 @@ def bet_detail_view(request, pk):
                 'numbers': official_result.numbers,
                 'clovers': official_result.clovers,
                 'prizes': official_result.prizes,
+                'captured_at': official_result.captured_at,
             }
         )
 

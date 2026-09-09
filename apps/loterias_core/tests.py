@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -14,9 +14,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference, GAMES_CONFIG
+from apps.loterias_core.models import GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference, PrizeTier, GAMES_CONFIG
 from apps.loterias_core.emails import send_hit_notification_email
-from apps.loterias_core.jobs import fetch_daily_results
+from apps.loterias_core.jobs import fetch_daily_results, update_monthly_prize_values
 from apps.loterias_core.utils import (
     calculate_statistics,
     calculate_bet_prize,
@@ -1773,3 +1773,287 @@ class NotificationPreferencesViewTests(TestCase):
         self.assertTrue(own_preference.site_enabled)
         self.assertFalse(other_preference.site_enabled)
         self.assertTrue(other_preference.email_enabled)
+
+
+class UpdateMonthlyPrizeValuesTests(TestCase):
+    def test_captures_one_prize_tier_per_hits_from_latest_lottery_result(self):
+        LotteryResult.objects.create(
+            game='Quina', contest='500', numbers=[1, 2, 3, 4, 5], clovers=[],
+            prizes={
+                '5': {'value': 'R$ 100.000,00', 'winners': 2},
+                '4': {'value': 'R$ 500,00', 'winners': 50},
+            },
+        )
+        update_monthly_prize_values()
+        reference_month = timezone.now().date().replace(day=1)
+        tier5 = PrizeTier.objects.get(game='Quina', hits=5, reference_month=reference_month)
+        tier4 = PrizeTier.objects.get(game='Quina', hits=4, reference_month=reference_month)
+        self.assertEqual(tier5.value, Decimal('100000.00'))
+        self.assertEqual(tier5.winners, 2)
+        self.assertEqual(tier4.value, Decimal('500.00'))
+
+    def test_zero_value_tier_is_still_captured(self):
+        """Um concurso acumulado sem ganhador ainda tem a faixa valida -- nao filtrar por
+        valor/ganhadores > 0, senao a faixa 'some' do PrizeTier num mes acumulado."""
+        LotteryResult.objects.create(
+            game='Mega-sena', contest='600', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+            prizes={'6': {'value': 'R$ 0,00', 'winners': 0}},
+        )
+        update_monthly_prize_values()
+        reference_month = timezone.now().date().replace(day=1)
+        tier = PrizeTier.objects.get(game='Mega-sena', hits=6, reference_month=reference_month)
+        self.assertEqual(tier.value, Decimal('0.00'))
+        self.assertEqual(tier.winners, 0)
+
+    def test_no_lottery_result_for_game_is_skipped_without_error(self):
+        update_monthly_prize_values()
+        self.assertEqual(PrizeTier.objects.count(), 0)
+
+    def test_failure_capturing_one_game_does_not_block_the_others(self):
+        LotteryResult.objects.create(
+            game='Quina', contest='800', numbers=[1, 2, 3, 4, 5], clovers=[],
+            prizes={'5': {'value': 'R$ 1,00', 'winners': 1}},
+        )
+        LotteryResult.objects.create(
+            game='Lotofacil', contest='801', numbers=list(range(1, 16)), clovers=[],
+            prizes={'15': {'value': 'R$ 1,00', 'winners': 1}},
+        )
+
+        def side_effect(*args, **kwargs):
+            if kwargs.get('game') == 'Lotofacil':
+                raise Exception('falha simulada')
+            defaults = kwargs['defaults']
+            return PrizeTier.objects.create(
+                game=kwargs['game'], hits=kwargs['hits'], reference_month=kwargs['reference_month'],
+                value=defaults['value'], winners=defaults['winners'],
+            ), True
+
+        with patch('apps.loterias_core.jobs.PrizeTier.objects.update_or_create', side_effect=side_effect):
+            update_monthly_prize_values()
+
+        self.assertTrue(PrizeTier.objects.filter(game='Quina', hits=5).exists())
+        self.assertFalse(PrizeTier.objects.filter(game='Lotofacil').exists())
+
+    def test_retention_keeps_only_the_3_most_recent_reference_months(self):
+        """As linhas sao criadas fora de ordem cronologica de insercao de proposito -- se a poda um
+        dia passar a ordenar por PK/ordem de criacao em vez de reference_month, este teste tem que
+        quebrar (regressao da revisao: a ordem de PK e a ordem de reference_month coincidirem
+        mascararia esse bug)."""
+        months = [date(2025, 9, 1), date(2026, 1, 1), date(2025, 11, 1), date(2025, 10, 1), date(2025, 12, 1)]
+        for month in months:
+            PrizeTier.objects.create(game='Quina', hits=5, reference_month=month, value=Decimal('10.00'), winners=1)
+        update_monthly_prize_values()
+        remaining = set(PrizeTier.objects.filter(game='Quina', hits=5).values_list('reference_month', flat=True))
+        self.assertEqual(remaining, {date(2026, 1, 1), date(2025, 12, 1), date(2025, 11, 1)})
+
+    def test_idempotent_rerun_updates_the_value_not_only_avoids_duplicating(self):
+        result = LotteryResult.objects.create(
+            game='Lotofacil', contest='700', numbers=list(range(1, 16)), clovers=[],
+            prizes={'15': {'value': 'R$ 1.000,00', 'winners': 1}},
+        )
+        update_monthly_prize_values()
+        first_tier = PrizeTier.objects.get(game='Lotofacil', hits=15)
+        self.assertEqual(first_tier.value, Decimal('1000.00'))
+
+        result.prizes = {'15': {'value': 'R$ 2.500,00', 'winners': 4}}
+        result.save(update_fields=['prizes'])
+        update_monthly_prize_values()
+
+        self.assertEqual(PrizeTier.objects.filter(game='Lotofacil', hits=15).count(), 1)
+        second_tier = PrizeTier.objects.get(game='Lotofacil', hits=15)
+        self.assertEqual(second_tier.value, Decimal('2500.00'))
+        self.assertEqual(second_tier.winners, 4)
+
+    def test_failure_writing_one_tier_does_not_block_sibling_tiers_of_the_same_game(self):
+        """O try/except de gravacao e por faixa, nao por Jogo inteiro -- uma falha isolada na
+        faixa de 5 acertos nao pode impedir a faixa de 4 acertos do mesmo concurso de ser
+        capturada."""
+        LotteryResult.objects.create(
+            game='Quina', contest='900', numbers=[1, 2, 3, 4, 5], clovers=[],
+            prizes={
+                '5': {'value': 'R$ 1,00', 'winners': 1},
+                '4': {'value': 'R$ 2,00', 'winners': 2},
+            },
+        )
+        original_update_or_create = PrizeTier.objects.update_or_create
+
+        def side_effect(*args, **kwargs):
+            if kwargs.get('hits') == 5:
+                raise Exception('falha simulada')
+            return original_update_or_create(*args, **kwargs)
+
+        with patch('apps.loterias_core.jobs.PrizeTier.objects.update_or_create', side_effect=side_effect):
+            update_monthly_prize_values()
+
+        self.assertFalse(PrizeTier.objects.filter(game='Quina', hits=5).exists())
+        self.assertTrue(PrizeTier.objects.filter(game='Quina', hits=4).exists())
+
+    def test_latest_result_picked_by_contest_number_not_by_capture_time(self):
+        """Regressao: captured_at reflete quando a linha foi gravada no banco, nao a ordem real
+        dos concursos -- uma verificacao manual tardia de um concurso antigo nao pode ser tratada
+        como 'o resultado mais recente' do Jogo."""
+        LotteryResult.objects.create(
+            game='Quina', contest='950', numbers=[1, 2, 3, 4, 5], clovers=[],
+            prizes={'5': {'value': 'R$ 999,00', 'winners': 1}},
+        )
+        old_result = LotteryResult.objects.create(
+            game='Quina', contest='800', numbers=[6, 7, 8, 9, 10], clovers=[],
+            prizes={'5': {'value': 'R$ 1,00', 'winners': 99}},
+        )
+        LotteryResult.objects.filter(pk=old_result.pk).update(captured_at=timezone.now())
+
+        update_monthly_prize_values()
+
+        tier = PrizeTier.objects.get(game='Quina', hits=5)
+        self.assertEqual(tier.value, Decimal('999.00'))
+
+
+class CalculateBetPrizeWithPrizeTierTests(TestCase):
+    def test_hits_valid_via_prize_tier_even_below_legacy_minimum(self):
+        """Regressao: antes da Story 2.8 a Mega-Sena exigia >=4 acertos hardcoded (LEGACY_MIN_HITS).
+        Com PrizeTier atestando que existe faixa pra 2 acertos no mes, ela tem que valer mesmo
+        abaixo do piso legado -- so o legado se aplica em cold-start total (nenhum PrizeTier pro Jogo)."""
+        reference_month = timezone.now().date().replace(day=1)
+        PrizeTier.objects.create(
+            game='Mega-sena', hits=2, reference_month=reference_month, value=Decimal('50.00'), winners=100
+        )
+        result = {'numbers': [1, 2, 3, 4, 5, 6], 'clovers': [], 'prizes': {}}
+        prize = calculate_bet_prize('Mega-sena', [1, 2, 40, 41, 42, 43], [], result)
+        self.assertEqual(prize['hits'], 2)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 50,00')
+
+    def test_prize_tier_exists_for_game_but_hits_uncovered_does_not_fall_back_to_legacy(self):
+        """Uma vez que o Jogo ja tem PrizeTier (nao e mais cold-start), uma quantidade de acertos
+        sem faixa correspondente fica invalida -- nao pode recair no piso legado, que so existe
+        pra cobrir o cold-start total."""
+        reference_month = timezone.now().date().replace(day=1)
+        PrizeTier.objects.create(
+            game='Mega-sena', hits=6, reference_month=reference_month, value=Decimal('1000000.00'), winners=1
+        )
+        result = {'numbers': [1, 2, 3, 4, 40, 41], 'clovers': [], 'prizes': {}}
+        prize = calculate_bet_prize('Mega-sena', [1, 2, 3, 4, 50, 51], [], result)
+        self.assertEqual(prize['hits'], 4)
+        self.assertFalse(prize['won'])
+
+    def test_reference_month_selects_most_recent_tier_not_exceeding_captured_at(self):
+        """3 tiers ficam simultaneamente elegiveis (reference_month <= captured_at) com valores
+        diferentes -- precisa escolher o mais proximo (2026-01), nao o mais antigo elegivel
+        (2025-11), senao uma ordenacao invertida (ascendente) passaria por engano."""
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2025, 11, 1), value=Decimal('50.00'), winners=1
+        )
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2025, 12, 1), value=Decimal('80.00'), winners=1
+        )
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2026, 1, 1), value=Decimal('100.00'), winners=1
+        )
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2026, 3, 1), value=Decimal('200.00'), winners=1
+        )
+        captured_at = timezone.now().replace(year=2026, month=1, day=15)
+        result = {'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {}, 'captured_at': captured_at}
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertEqual(prize['value'], 'R$ 100,00')
+
+    def test_amount_falls_back_to_prize_tier_value_when_missing_from_concurso_prizes(self):
+        reference_month = timezone.now().date().replace(day=1)
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=reference_month, value=Decimal('777.00'), winners=1
+        )
+        result = {'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {}}
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 777,00')
+
+    def test_concurso_specific_prizes_remain_ground_truth_even_after_prize_tier_pruning(self):
+        """Regressao critica: uma aposta antiga genuinamente premiada nao pode perder o
+        reconhecimento do premio so porque a retencao de 3 meses do PrizeTier (Story 2.8/AD-10)
+        ja descartou o reference_month dela -- o LotteryResult do proprio concurso (nunca podado,
+        AD-10) e a fonte da verdade e tem prioridade sobre o PrizeTier."""
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2026, 6, 1), value=Decimal('1.00'), winners=1
+        )
+        old_captured_at = timezone.now().replace(year=2025, month=1, day=10)
+        result = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'captured_at': old_captured_at,
+            'prizes': {'5': {'value': 'R$ 250.000,00', 'winners': 2}},
+        }
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 250.000,00')
+
+    def test_no_eligible_tier_and_no_concurso_data_does_not_fall_back_to_legacy(self):
+        """Quando o Jogo ja tem PrizeTier (nao e cold-start) mas nem o concurso especifico nem
+        nenhum PrizeTier elegivel (reference_month <= captured_at) cobrem essa quantidade de
+        acertos, o resultado e invalido -- nao pode recair no piso legado (Quina exigiria so 3
+        acertos no legado, o que mascararia esse bug)."""
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2026, 6, 1), value=Decimal('1.00'), winners=1
+        )
+        old_captured_at = timezone.now().replace(year=2025, month=1, day=10)
+        result = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'captured_at': old_captured_at, 'prizes': {},
+        }
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertFalse(prize['won'])
+
+    def test_lotomania_zero_hits_via_prize_tier_path_not_legacy(self):
+        """Cobre o Code Map da Story 2.8: hits=0 da Lotomania funcionando pelo caminho novo
+        (PrizeTier), nao so pelo fallback legado que ja tratava a Lotomania como sempre valida."""
+        reference_month = timezone.now().date().replace(day=1)
+        PrizeTier.objects.create(
+            game='Lotomania', hits=0, reference_month=reference_month, value=Decimal('500.00'), winners=3
+        )
+        result = {'numbers': list(range(1, 21)), 'clovers': [], 'prizes': {}}
+        prize = calculate_bet_prize('Lotomania', list(range(21, 71)), [], result)
+        self.assertEqual(prize['hits'], 0)
+        self.assertTrue(prize['won'])
+        self.assertEqual(prize['value'], 'R$ 500,00')
+
+    def test_reference_month_uses_local_timezone_not_utc(self):
+        """Regressao de fuso: TIME_ZONE e America/Sao_Paulo -- um captured_at logo apos a meia-noite
+        UTC ainda pode ser o dia (e mes) anterior em Brasilia, e reference_month tem que refletir o
+        mes local, nao o mes UTC."""
+        utc_captured_at = datetime(2026, 2, 1, 2, 0, 0, tzinfo=dt_timezone.utc)
+        PrizeTier.objects.create(
+            game='Quina', hits=5, reference_month=date(2026, 1, 1), value=Decimal('321.00'), winners=1
+        )
+        result = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'captured_at': utc_captured_at, 'prizes': {},
+        }
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertEqual(prize['value'], 'R$ 321,00')
+
+
+class FetchDailyResultsCallsUpdateMonthlyPrizeValuesTests(TestCase):
+    """Cold-start safety (Story 2.8): update_monthly_prize_values roda a cada execucao diaria,
+    nao so no cron mensal -- assim o mes corrente nunca fica sem PrizeTier ate o dia 1 rodar."""
+
+    @patch('apps.loterias_core.jobs.update_monthly_prize_values')
+    def test_fetch_daily_results_calls_update_monthly_prize_values(self, mock_update):
+        fetch_daily_results()
+        mock_update.assert_called_once()
+
+    @patch('apps.loterias_core.jobs.update_monthly_prize_values')
+    def test_fetch_daily_results_survives_update_monthly_prize_values_failure(self, mock_update):
+        mock_update.side_effect = Exception('falha simulada')
+        result = fetch_daily_results()
+        self.assertTrue(result)
+
+    @patch('apps.loterias_core.jobs.update_monthly_prize_values')
+    @patch('apps.loterias_core.jobs._notify_covered_bets')
+    def test_update_monthly_prize_values_runs_after_the_notification_sweep(self, mock_notify, mock_update):
+        call_order = []
+        mock_notify.side_effect = lambda: call_order.append('notify') or 0
+        mock_update.side_effect = lambda: call_order.append('update')
+        fetch_daily_results()
+        self.assertEqual(call_order, ['notify', 'update'])
+
+
+class UpdateMonthlyPrizeValuesCommandTests(TestCase):
+    @patch('apps.loterias_core.management.commands.update_monthly_prize_values.update_monthly_prize_values')
+    def test_command_calls_the_job(self, mock_job):
+        call_command('update_monthly_prize_values')
+        mock_job.assert_called_once_with()
