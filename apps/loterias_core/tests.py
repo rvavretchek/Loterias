@@ -2447,7 +2447,7 @@ class LotteryResultPurgeAdminTests(TestCase):
         selected_pks = re.findall(r'name="_selected_action" value="([^"]+)"', html)
         self.assertEqual(selected_pks, [str(old.pk)])
 
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': selected_pks,
@@ -2472,7 +2472,7 @@ class LotteryResultPurgeAdminTests(TestCase):
         self.client.force_login(viewer)
 
         old = self._create_result(days_old=400)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],
@@ -2497,7 +2497,7 @@ class LotteryResultPurgeAdminTests(TestCase):
     def test_success_message_reports_the_real_deleted_count(self):
         first = self._create_result(contest='1', days_old=400)
         self._create_result(contest='2', days_old=400)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         response = self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [first.pk],
@@ -2528,7 +2528,7 @@ class LotteryResultPurgeAdminTests(TestCase):
             user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
         )
         HitNotification.objects.create(bet=bet, won=True, is_read=False)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],
@@ -2544,7 +2544,7 @@ class LotteryResultPurgeAdminTests(TestCase):
             user=user, game='Quina', contest='1', numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
         )
         HitNotification.objects.create(bet=bet, won=True, is_read=True)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],
@@ -2566,7 +2566,7 @@ class LotteryResultPurgeAdminTests(TestCase):
         GeneratedBet.objects.create(
             user=other_user, game='Quina', contest='1', numbers=[6, 7, 8, 9, 10], clovers=[], sequential_pairs=0,
         )
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],
@@ -2577,7 +2577,7 @@ class LotteryResultPurgeAdminTests(TestCase):
 
     def test_pair_with_no_generatedbet_at_all_is_eligible_for_purge(self):
         old = self._create_result(contest='1', days_old=400)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],
@@ -2591,7 +2591,7 @@ class LotteryResultPurgeAdminTests(TestCase):
         habilitar o botao do admin), mas ambos os resultados elegiveis sao apagados."""
         old1 = self._create_result(game='Quina', contest='1', days_old=400)
         old2 = self._create_result(game='Lotofacil', contest='2', days_old=400)
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old1.pk],
@@ -2611,7 +2611,7 @@ class LotteryResultPurgeAdminTests(TestCase):
             game='Quina', hits=5, reference_month=timezone.now().date().replace(day=1),
             value=Decimal('1.00'), winners=1,
         )
-        cutoff = timezone.now().date() - timedelta(days=1)
+        cutoff = timezone.localdate() - timedelta(days=1)
         self.client.post(self.changelist_url, {
             'action': 'purge_until_date',
             '_selected_action': [old.pk],

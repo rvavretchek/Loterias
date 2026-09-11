@@ -36,6 +36,11 @@ services:
       dockerfile: Dockerfile
     container_name: loterias-cron
     restart: unless-stopped
+    # createcachetable NAO roda aqui de proposito: rodar nos dois containers contra o mesmo
+    # SQLite compartilhado (volume loterias_data) e uma corrida real (createcachetable faz
+    # check-then-create nao atomico) -- o container de cron nunca usa o cache do rate limiter
+    # de confirmacao de e-mail (isso so acontece em requisicoes web), entao so o Dockerfile
+    # (loterias-web) precisa criar a tabela.
     command: sh -c "python manage.py crontab remove; python manage.py crontab add && cron -f"
     environment:
       DJANGO_SETTINGS_MODULE: loterias.settings

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-08-2026 18:06
+last_updated: 09-11-2026 00:00
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -57,10 +57,10 @@ development_status:
   2-11-extração-real-de-valor-e-quantidade-de-ganhadores-por-faixa: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-cadastro-inicial-só-com-e-mail: backlog
-  3-2-reenvio-do-e-mail-de-confirmação: backlog
-  3-3-definição-de-senha-via-link: backlog
-  3-4-vínculo-expirado: backlog
-  3-5-nome-e-sobrenome-obrigatórios-no-primeiro-login: backlog
+  epic-3: in-progress
+  3-1-cadastro-inicial-só-com-e-mail: review
+  3-2-reenvio-do-e-mail-de-confirmação: review
+  3-3-definição-de-senha-via-link: review
+  3-4-vínculo-expirado: review
+  3-5-nome-e-sobrenome-obrigatórios-no-primeiro-login: review
   epic-3-retrospective: optional

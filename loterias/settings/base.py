@@ -48,6 +48,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.accounts.middleware.RequireCompleteAccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
@@ -81,6 +82,16 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.getenv('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
         'OPTIONS': {'timeout': 20},
+    }
+}
+
+# Cache -- DatabaseCache (nao LocMemCache, que e por processo -- com 3 workers do gunicorn o
+# rate limiter nativo do allauth pro reenvio de confirmacao de e-mail (ACCOUNT_RATE_LIMITS)
+# ficaria inconsistente entre workers). Sem Redis de proposito (removido na Story 2.1).
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache_table',
     }
 }
 
@@ -156,26 +167,48 @@ SITE_ID = 1
 # Configuracoes de conta
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_USER_MODEL_EMAIL_FIELD = 'email'
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+# Cadastro (Epic 3/Story 3.1): so e-mail -- sem senha, sem nome/sobrenome. A conta nasce com
+# senha inutilizavel (comportamento padrao do allauth quando nao ha password1 no form) ate a
+# Story 3.3 (definicao de senha via link) ser concluida.
+ACCOUNT_SIGNUP_FIELDS = ['email*']
+ACCOUNT_SIGNUP_EMAIL_ENTER_TWICE = False
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_SIGNUP_EMAIL_ENTER_TWICE = True
 ACCOUNT_SESSION_REMEMBER = True
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
+# Story 3.3: clicar no vinculo nunca loga automaticamente -- CustomAccountAdapter redireciona
+# pra definicao de senha (conta pendente) ou login com mensagem "ja confirmado" (conta ativa).
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False
 ACCOUNT_LOGOUT_ON_GET = True
 ACCOUNT_LOGIN_ON_PASSWORD_RESET = True
 ACCOUNT_PASSWORD_MIN_LENGTH = 8
-ACCOUNT_SIGNUP_PASSWORD_ENTER_TWICE = True
+# Story 3.1, 2o AC: e-mail ja cadastrado nunca revela isso ao tentar cadastrar de novo -- ja e o
+# default do allauth 0.63, explicito aqui pra documentar a decisao.
+ACCOUNT_PREVENT_ENUMERATION = True
+# Story 3.2: cooldown de 60s entre envios, por e-mail -- usa o rate limiter nativo do allauth (ja
+# embutido em should_send_confirmation_mail), backend em CACHES. So UMA regra aqui de proposito:
+# o limiter do allauth guarda o historico de TODAS as regras da mesma acao na MESMA cache key
+# (allauth.core.ratelimit._cache_key nao diferencia por regra) -- com duas regras (60s + 1 dia)
+# compartilhando essa entrada, cliques repetidos dentro do cooldown ainda inserem timestamps
+# na regra diaria (que nao sabe que a outra regra bloqueou), esgotando a cota diaria sem
+# nenhum e-mail ter saido, enquanto o uso "bem-comportado" (respeitando os 60s) nunca acumula
+# o suficiente pra bater no limite diario de verdade -- achado real na revisao, nao hipotetico.
+# O limite de 5/dia (Story 3.2, 3o AC) e implementado separadamente em
+# ResendConfirmationEmailView, com sua PROPRIA cache key, incrementada so quando um e-mail e
+# de fato despachado -- nunca compartilhando estado com este cooldown.
+ACCOUNT_RATE_LIMITS = {
+    'confirm_email': '1/60s/key',
+}
 
 # Custom forms
 ACCOUNT_FORMS = {
     'signup': 'apps.accounts.forms.CustomSignupForm',
+    'reset_password_from_key': 'apps.accounts.forms.InitialOrResetPasswordKeyForm',
 }
 
 # Custom adapter
