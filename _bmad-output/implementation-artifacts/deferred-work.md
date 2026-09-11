@@ -113,3 +113,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tratamento-de-falha-da-captura-de-resultado.md`
   summary: "As 3 execuções diárias de `fetch_daily_results` (3h/3h15/3h30) não têm nenhum lock/mutex contra sobreposição -- se o backlog de pares abertos crescer o suficiente pra uma execução ultrapassar 15 minutos, a próxima pode começar antes da anterior terminar, triplicando picos de tráfego simultâneo contra a API oficial da Caixa."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.9. Mesma categoria de risco já registrada na Story 2.1 (SQLite sem modo WAL, só timeout de 20s via AD-7) -- esta story amplifica o risco (3x mais execuções/dia) sem introduzir mecanismo de lock novo. Não corrigido agora porque o volume real de pares abertos é baixo hoje (poucos usuários); revisitar junto com a entrada de WAL já registrada se o tempo de execução se aproximar de 15 minutos na prática.
+
+## Deferred from: code review of spec-epic-3-novo-fluxo-de-cadastro (2026-09-11)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-3-novo-fluxo-de-cadastro.md`
+  summary: "`createcachetable` não está documentado nos comandos de setup local do `CLAUDE.md` (só `migrate`/`runserver`), nem no runbook do lab (`deploy/lab/README.md`) -- o novo `CACHES` (`DatabaseCache`, Epic 3) exige essa tabela; um dev novo seguindo exatamente o CLAUDE.md quebra no primeiro uso de cache (ex. `ResendConfirmationEmailView`)."
+  evidence: Achado pelo Blind Hunter e Edge Case Hunter, independentemente, na revisão de código do Epic 3 (2026-09-11, pedida pelo Boss antes da retrospectiva). O `Dockerfile`/deploy do lab já rodam `createcachetable` corretamente -- só o fluxo de dev local documentado no CLAUDE.md está desatualizado. Deferido porque a correção edita um arquivo de contexto de agente (CLAUDE.md), fora do escopo de patch automático desta revisão.

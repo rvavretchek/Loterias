@@ -50,7 +50,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True, verbose_name='Telefone')
     bio = models.TextField(blank=True, verbose_name='Biografia')
     profile_completed = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name='Perfil completo',
         help_text='Nome e sobrenome informados no primeiro login (Story 3.5).',
     )

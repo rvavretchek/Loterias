@@ -1,0 +1,41 @@
+<script>
+(function () {
+    // Story 3.2 AC: "botao desabilitado 60s (rate limit real)" -- o rate limit real ja existe no
+    // backend (ACCOUNT_RATE_LIMITS['confirm_email']); este script so da o feedback visual que
+    // faltava (achado na revisao). Usa localStorage (nao so estado em memoria) pra sobreviver ao
+    // reload de pagina que o POST do formulario causa -- a mesma chave e compartilhada entre
+    // verification_sent.html e email_confirm.html, ja que os dois postam pro mesmo endpoint.
+    var COOLDOWN_SECONDS = 60;
+    var STORAGE_KEY = 'resendConfirmationLastSentAt';
+    var form = document.getElementById('resend-confirmation-form');
+    var button = document.getElementById('resend-confirmation-button');
+    if (!form || !button) {
+        return;
+    }
+    var defaultLabel = button.innerHTML;
+
+    function remainingSeconds() {
+        var lastSentAt = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+        var elapsed = Math.floor((Date.now() - lastSentAt) / 1000);
+        return Math.max(0, COOLDOWN_SECONDS - elapsed);
+    }
+
+    function tick() {
+        var remaining = remainingSeconds();
+        if (remaining <= 0) {
+            button.disabled = false;
+            button.innerHTML = defaultLabel;
+            return;
+        }
+        button.disabled = true;
+        button.textContent = 'Aguarde ' + remaining + 's para reenviar';
+        setTimeout(tick, 1000);
+    }
+
+    form.addEventListener('submit', function () {
+        localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    });
+
+    tick();
+})();
+</script>

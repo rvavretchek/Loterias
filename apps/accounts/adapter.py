@@ -19,6 +19,18 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         context['support_email'] = settings.DEFAULT_FROM_EMAIL
         super().send_mail(template_prefix, email, context)
 
+    def save_user(self, request, user, form, commit=True):
+        """AD-8: o campo `User.profile_completed` tem default=True no model (safety net -- qualquer
+        `User` criado fora deste fluxo, ex. Django admin/scripts, nasce com perfil "completo" e
+        nunca cai no gate do RequireCompleteAccountMiddleware por acidente). O fluxo publico de
+        cadastro (Story 3.1) e o UNICO lugar que deve marcar explicitamente profile_completed=False
+        -- achado na revisao: sem esta sobrescrita, o CustomUserAdmin (extends UserAdmin) tambem
+        cria contas via `obj.save()` direto (nunca passa por UserManager.create_user()), e um
+        usuario nao-staff criado pelo admin -- com nome ja preenchido no formulario de criacao --
+        ficava incorretamente marcado como perfil incompleto no primeiro login."""
+        user.profile_completed = False
+        return super().save_user(request, user, form, commit=commit)
+
     def get_email_verification_redirect_url(self, email_address):
         """Story 3.3: confirmar o e-mail nunca loga automaticamente
         (ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION=False) -- em vez disso, redireciona pra definicao de

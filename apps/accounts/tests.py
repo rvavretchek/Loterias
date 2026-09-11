@@ -304,10 +304,24 @@ class SignupFlowTests(TestCase):
 class EmailVerificationRedirectTests(TestCase):
     """Story 3.3: redirecionamento apos confirmar o e-mail."""
 
-    def _confirm(self, user):
+    def _confirm(self, user, extra_query=''):
         email_address = EmailAddress.objects.create(user=user, email=user.email, verified=False, primary=True)
         key = EmailConfirmationHMAC(email_address).key
-        return self.client.post(reverse('account_confirm_email', kwargs={'key': key}), follow=False)
+        url = reverse('account_confirm_email', kwargs={'key': key})
+        return self.client.post(f'{url}{extra_query}', follow=False)
+
+    def test_next_param_is_ignored_for_a_pending_account(self):
+        """Achado na revisao: o allauth checa ?next= ANTES de chamar nosso hook de redirect
+        (ConfirmEmailView.get_redirect_url em allauth/account/views.py) -- um link manipulado com
+        next= pularia a criacao de senha obrigatoria pra uma conta ainda pendente. Decisao do
+        Boss: next nunca tem prioridade aqui, sem excecao."""
+        user = User(email='nextbypass@example.com')
+        user.set_unusable_password()
+        user.save()
+        response = self._confirm(user, extra_query='?next=/jogo/gerar/')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/password/reset/key/', response.url)
+        self.assertNotIn('/jogo/gerar/', response.url)
 
     def test_pending_account_redirects_to_password_creation(self):
         user = User(email='pendente4@example.com')
@@ -337,6 +351,28 @@ class EmailVerificationRedirectTests(TestCase):
         self.client.force_login(user)
         response = self._confirm(user)
         self.assertNotEqual(response.url, reverse('account_login'))
+
+    def test_authenticated_user_confirming_a_different_pending_account_is_logged_out_first(self):
+        """Achado na revisao: sem este teste, a correcao de EC1 (usuario logado abrindo o vinculo
+        de OUTRA conta pendente) dependia inteiramente de um comportamento de biblioteca externa
+        nao coberto aqui -- ConfirmEmailView.logout_other_user() do allauth desloga qualquer
+        usuario autenticado cujo pk difira do dono do e-mail confirmado, ANTES do nosso hook
+        get_email_verification_redirect_url rodar (allauth/account/views.py:220-230). Sem essa
+        garantia, quem estivesse logado como 'bystander' receberia o link de criacao de senha de
+        uma conta alheia."""
+        bystander = User.objects.create_user(email='bystander@example.com', password='SenhaForte123')
+        self.client.force_login(bystander)
+
+        pending = User(email='pendente-alheio@example.com')
+        pending.set_unusable_password()
+        pending.save()
+        response = self._confirm(pending)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/password/reset/key/', response.url)
+        # O link devolvido e pra definir a senha da conta PENDENTE (a dona do e-mail confirmado) --
+        # e o bystander foi deslogado no processo, nao continua com sessao autenticada.
+        self.assertNotEqual(self.client.session.get('_auth_user_id'), str(bystander.pk))
 
 
 class InitialPasswordCreationTests(TestCase):
@@ -495,6 +531,34 @@ class ResendConfirmationEmailTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_resend_shows_identical_messages_for_pending_and_unknown_email(self):
+        """Achado na revisao: send_email_confirmation() (usado pra conta pendente real) dispara
+        sua PROPRIA mensagem nativa do allauth ("Confirmation email sent to <email>"), alem da
+        generica que esta view sempre mostra -- as duas juntas distinguiam "existe e esta
+        pendente" de "nao existe", um vazamento de enumeracao pelo próprio conjunto de mensagens
+        exibido (nao pelo status code nem pelo envio de e-mail, que os outros testes ja cobrem).
+        Comparar o texto das mensagens renderizadas prova que o vazamento foi fechado."""
+        # follow=True aqui e necessario pra CONSUMIR a mensagem nativa que o proprio cadastro ja
+        # dispara (mesmo texto "Confirmation email sent") -- sem isso ela fica pendurada no
+        # cookie de mensagens (so marcada como usada quando efetivamente renderizada em alguma
+        # pagina) e contaminaria a comparacao abaixo com algo que nao tem nada a ver com o
+        # reenvio sendo testado aqui.
+        self.client.post(reverse('account_signup'), {'email': 'pendente-msg@example.com'}, follow=True)
+        mail.outbox.clear()
+        self._clear_rate_limit('pendente-msg@example.com')
+
+        response_pending = self.client.post(
+            reverse('resend_confirmation'), {'email': 'pendente-msg@example.com'}, follow=True
+        )
+        messages_pending = [str(m) for m in response_pending.context['messages']]
+
+        response_unknown = self.client.post(
+            reverse('resend_confirmation'), {'email': 'inexistente-msg@example.com'}, follow=True
+        )
+        messages_unknown = [str(m) for m in response_unknown.context['messages']]
+
+        self.assertEqual(messages_pending, messages_unknown)
+
     def test_resend_uses_session_email_when_form_field_absent(self):
         self.client.post(reverse('account_signup'), {'email': 'sessao@example.com'})
         mail.outbox.clear()
@@ -601,8 +665,10 @@ class RequireCompleteAccountMiddlewareTests(TestCase):
         )
         self.client.force_login(user)
         response = self.client.get('/admin/alguma-coisa/')
-        if response.status_code == 302:
-            self.assertNotIn('complete-profile', response.url)
+        # Achado na revisao: a asserção original só rodava dentro de um "if status == 302",
+        # passando sem checar nada se o admin respondesse outra coisa (ex. 404) -- getattr com
+        # default roda a checagem sempre, sem depender do status code exato que o admin devolve.
+        self.assertNotIn('complete-profile', getattr(response, 'url', ''))
 
     def test_admin_path_prefix_exemption_directly(self):
         """Exercita EXEMPT_PATH_PREFIXES isoladamente, sem depender do proprio Django admin

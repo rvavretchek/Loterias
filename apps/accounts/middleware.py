@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -38,6 +39,11 @@ class RequireCompleteAccountMiddleware:
             and not request.path.startswith(self.EXEMPT_PATH_PREFIXES)
             and request.path not in self._get_exempt_paths()
         ):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                # Achado na revisao: um endpoint JSON (ex. api_create_bet_view) chamado direto
+                # por um usuario com perfil incompleto nao deveria receber um redirect HTML --
+                # um cliente esperando JSON nao sabe interpretar isso.
+                return JsonResponse({'detail': 'Complete seu cadastro (nome e sobrenome) antes de continuar.'}, status=403)
             complete_profile_url = reverse('complete_profile')
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'{complete_profile_url}?{query}')
