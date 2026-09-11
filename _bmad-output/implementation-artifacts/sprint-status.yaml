@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-11-2026 00:00
+last_updated: 09-11-2026 18:40
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -55,6 +55,10 @@ development_status:
   2-9-tratamento-de-falha-da-captura-de-resultado: review
   2-10-purge-manual-de-resultados-oficiais-antigos: review
   2-11-extração-real-de-valor-e-quantidade-de-ganhadores-por-faixa: review
+  2-12-normalização-de-concurso: backlog
+  2-13-validação-de-jogo-em-api_create_bet_view: backlog
+  2-14-bloqueio-real-de-concurso-duplicado: backlog
+  2-15-runbook-de-backfill-inicial-de-notificações: backlog
   epic-2-retrospective: optional
 
   epic-3: in-progress

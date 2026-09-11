@@ -354,6 +354,76 @@ Para que eu saiba quanto realmente ganhei quando o valor daquele sorteio especí
 **E** uma faixa marcada como premiada nunca é gravada com `ganhadores` zerado ou ausente — inconsistência de dado é tratada como falha de extração daquela faixa, não como "zero ganhadores"
 **E** uma Notificação de Acerto criada depois desta mudança usa o valor real daquele concurso quando disponível — mais preciso que o `PrizeTier` genérico nos casos em que os dois divergem (ex.: jackpot acumulado)
 
+### Story 2.12: Normalização de Concurso
+
+Como operador (Boss),
+Eu quero que o campo Concurso seja normalizado de forma consistente em todos os pontos que o recebem,
+Para que duas grafias do mesmo concurso real (ex. `'2500'` e `'02500'`) nunca sejam tratadas como concursos distintos.
+
+**Contexto (promovido de `deferred-work.md`, achado independentemente nas revisões das Stories 2.1, 2.2 e 2.10):** `GeneratedBet.contest` é texto livre, só passa por `.strip()`. Isso permite que duas grafias do mesmo concurso real gerem dois pares distintos em `fetch_daily_results` (potencialmente dois `LotteryResult` diferentes pro mesmo concurso real), furem o bloqueio de concurso já sorteado (Story 2.2), e furam a proteção contra apagar um resultado premiado na purga manual (Story 2.10, que casa `game`+`contest` por igualdade textual exata).
+
+**Critérios de Aceite:**
+
+**Dado** um usuário digita um Concurso em `create_bet_view`, `save_manual_bet_view` ou via `api_create_bet_view`
+**Quando** o valor é salvo em `GeneratedBet.contest`
+**Então** o valor é normalizado de forma consistente (ex. convertido pra inteiro e re-serializado sem zeros à esquerda) antes de gravar
+**E** a mesma normalização se aplica na leitura/comparação usada pelo bloqueio de concurso já sorteado (Story 2.2) e pela proteção da purga manual (Story 2.10)
+**E** `suggest_next_contest` continua devolvendo valores no mesmo formato normalizado
+**E** concursos com valor não numérico continuam rejeitados com mensagem clara (nunca gravados)
+
+*Sem FR numerada nova — correção de lacuna de validação já existente antes do Epic 2, achada em revisão.*
+
+### Story 2.13: Validação de Jogo em api_create_bet_view
+
+Como consumidor da API de criação de jogo,
+Eu quero receber um erro 400 claro quando informo um Jogo inválido,
+Para não receber um erro 500 não tratado.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 1.3):** diferente de `create_bet_view`, `api_create_bet_view` não valida `selected_game not in GAMES_CONFIG` antes de chamar `generate_bet()`. Com um `jogo` inválido no payload JSON, `generate_bet()` retorna `(None, None)` e a chamada seguinte (`count_sequential_pairs(nums)`) faz `len(None)`, levantando `TypeError` não tratado (500).
+
+**Critérios de Aceite:**
+
+**Dado** um payload JSON com `jogo` que não existe em `GAMES_CONFIG`
+**Quando** `api_create_bet_view` recebe a requisição
+**Então** o sistema responde 400 com uma mensagem clara, replicando a validação que `create_bet_view` já faz — nunca um 500 não tratado
+**E** o comportamento com um `jogo` válido permanece inalterado
+
+*Sem FR numerada nova — correção de bug pré-existente, achado em revisão.*
+
+### Story 2.14: Bloqueio Real de Concurso Duplicado
+
+Como jogador,
+Eu quero que o sistema realmente me impeça de gerar duas apostas pro mesmo Jogo+Concurso quando ele avisa que é duplicado,
+Para que o aviso não seja apenas cosmético.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 1.3):** `create_bet_view`/`save_manual_bet_view` mostram `messages.warning()` sobre concurso duplicado mas criam o registro duplicado mesmo assim (falta `return`/interrupção após o aviso).
+
+**Critérios de Aceite:**
+
+**Dado** um usuário já tem um `GeneratedBet` pro mesmo Jogo+Concurso que está tentando gerar/salvar de novo
+**Quando** ele confirma a ação
+**Então** o Boss decide e a story implementa um dos dois comportamentos: (a) bloquear totalmente a duplicata (sem gravar, com mensagem clara), ou (b) permitir a duplicata mas deixar claro no aviso que ela será mesmo criada — a decisão fica registrada nesta story antes da implementação
+**E** o comportamento escolhido é aplicado de forma consistente em `create_bet_view` e `save_manual_bet_view`
+
+*Sem FR numerada nova — correção de bug pré-existente, achado em revisão. Decisão de produto pendente do Boss antes da implementação.*
+
+### Story 2.15: Runbook de Backfill Inicial de Notificações
+
+Como operador (Boss),
+Eu quero um jeito documentado (ou automatizado) de tratar a enxurrada de notificações do primeiro rollout real do Epic 2,
+Para que usuários não vejam como "notificação nova" um acerto que já sabiam há dias.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 2.3; urgência elevada em 2026-09-11 ao se descobrir que o pipeline de deploy estava silenciosamente quebrado desde ~09/09 — o Epic 2 nunca tinha rodado de verdade contra o ambiente do lab até o fix daquele dia, então o primeiro ciclo real e não assistido do cron é iminente):** todo `GeneratedBet` histórico com `hits > 0` já verificado via caminho sob demanda, mas sem `HitNotification` correspondente, vai gerar uma `HitNotification` nova na primeira execução real da varredura por estado (AD-4) — o usuário veria "notificação nova" de um acerto que já conhecia.
+
+**Critérios de Aceite:**
+
+**Dado** o primeiro deploy real do Epic 2 num ambiente com `GeneratedBet` histórico pré-existente
+**Quando** a rotina diária roda pela primeira vez de verdade
+**Então** existe um passo documentado no runbook de deploy (`deploy/lab/README.md`) — ou um management command dedicado — pra marcar como lida (`is_read=True`) toda `HitNotification` gerada nesse backfill inicial, sem impedir notificações genuínas futuras
+**E** o passo é claramente distinguível de uma purga de dados — nenhuma `HitNotification`/`GeneratedBet`/`LotteryResult` é apagado, só o estado de leitura é ajustado
+
+*Sem FR numerada nova — consequência operacional do rollout, achada em revisão da Story 2.3.*
+
 ## Epic 3: Novo Fluxo de Cadastro
 
 Uma pessoa se cadastra só com e-mail, confirma, cria senha, e só depois informa nome/sobrenome — cadastro deliberado em vez do genérico do allauth. Depende do Epic 1 concluído (independente do Epic 2).
