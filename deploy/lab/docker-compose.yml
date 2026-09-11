@@ -41,7 +41,12 @@ services:
     # check-then-create nao atomico) -- o container de cron nunca usa o cache do rate limiter
     # de confirmacao de e-mail (isso so acontece em requisicoes web), entao so o Dockerfile
     # (loterias-web) precisa criar a tabela.
-    command: sh -c "python manage.py crontab remove; python manage.py crontab add && cron -f"
+    # printenv > /etc/environment e necessario porque cron nao herda o ambiente do container
+    # pro processo do job (so HOME/LOGNAME/PATH/SHELL/PWD por padrao) -- sem isso, os jobs
+    # do CRONJOBS caiam no DATABASE_NAME default do Django (BASE_DIR/db.sqlite3, um arquivo
+    # vazio sem schema) em vez do banco real em /app/data/db.sqlite3, falhando em silencio
+    # todo dia sem nenhum log (achado em 2026-09-11, cron nunca tinha rodado com sucesso).
+    command: sh -c "printenv > /etc/environment && python manage.py crontab remove; python manage.py crontab add && cron -f"
     environment:
       DJANGO_SETTINGS_MODULE: loterias.settings
       DEBUG: "False"
