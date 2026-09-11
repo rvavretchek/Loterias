@@ -10,6 +10,11 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError('O e-mail e obrigatorio.')
         email = self.normalize_email(email)
+        # 'Perfil pendente' (Story 3.5) e um conceito exclusivo do fluxo publico de cadastro
+        # so-com-email (que constroi o User direto via o adapter do allauth, nunca por este
+        # manager) -- create_user() e usado por createsuperuser/scripts/testes, que sempre
+        # esperam uma conta pronta pra uso, a nao ser que o chamador diga o contrario.
+        extra_fields.setdefault('profile_completed', True)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -44,6 +49,11 @@ class User(AbstractUser):
     )
     phone = models.CharField(max_length=20, blank=True, verbose_name='Telefone')
     bio = models.TextField(blank=True, verbose_name='Biografia')
+    profile_completed = models.BooleanField(
+        default=False,
+        verbose_name='Perfil completo',
+        help_text='Nome e sobrenome informados no primeiro login (Story 3.5).',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['first_name', 'last_name']

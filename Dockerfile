@@ -17,4 +17,4 @@ RUN mkdir -p /app/data /app/media /app/staticfiles
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn loterias.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && exec gunicorn loterias.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"]
