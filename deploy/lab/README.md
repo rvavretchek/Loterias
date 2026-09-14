@@ -34,6 +34,38 @@ Depois de qualquer `docker compose up -d --remove-orphans` que recrie o `loteria
 
 O `nginx-proxy` e o CoreDNS possuem configuracao compartilhada em `/opt/infra-lab`. O bloco de proxy aponta para `http://loterias-web:8000`, e os registros DNS de `loterias.internal` e `www.loterias.internal` apontam para `192.168.50.71`.
 
+## Runbook: backfill inicial de notificacoes (Story 2.15)
+
+**Rodar UMA VEZ, logo depois de confirmar que o primeiro ciclo real e nao assistido do cron
+(`loterias-cron`, 3h/3h15/3h30) terminou de verdade** -- nao antes, e evitando rodar durante essa
+mesma janela (3h-3h30 horario de Brasilia): `loterias-cron` pode estar criando `HitNotification` novas
+nesse intervalo, e o numero visto no dry-run pode nao bater mais com o que o `--apply` de fato marca
+se rodado durante a janela. Todo `GeneratedBet` historico com acerto ja verificado via checagem sob
+demanda (antes do cron rodar de verdade), mas sem `HitNotification` ainda, ganha uma `HitNotification`
+nova na primeira varredura por estado real -- o usuario veria "notificacao nova" de um acerto que ja
+conhecia. Isso ja aconteceu no lab em 2026-09-14 (4 `HitNotification` geradas assim).
+
+```bash
+cd /opt/integrit/apps/Loterias/deploy/lab
+# 1. Dry-run primeiro -- so mostra quantas seriam marcadas, nao grava nada
+docker compose exec loterias-web python manage.py mark_initial_notifications_read
+
+# 2. Se o numero impresso for compativel com o volume esperado de acerto historico ja conhecido,
+#    aplica de verdade
+docker compose exec loterias-web python manage.py mark_initial_notifications_read --apply
+```
+
+**Nota:** este comando so ajusta o badge/lista de notificacao no site (`is_read=True`) -- se algum
+usuario ja tinha `NotificationPreference.email_enabled=True` antes do primeiro ciclo real do cron, o
+e-mail de acerto premiado (Story 2.7) pode ja ter sido disparado pra um acerto que o usuario ja
+conhecia, e este comando nao desfaz isso (e-mail ja enviado nao pode ser "despublicado"). Fora do
+escopo desta story (AC pede so ajuste do estado de leitura) -- registrado em `deferred-work.md`.
+
+**Claramente distinguivel de uma purga de dados:** o comando nunca apaga
+`HitNotification`/`GeneratedBet`/`LotteryResult` -- so ajusta `HitNotification.is_read` das linhas
+que ja existem no momento da chamada. Por ser uma acao manual pontual (nunca chamada pelo cron), uma
+notificacao genuina criada depois do backfill nunca e afetada.
+
 ## Validacao
 
 ```bash

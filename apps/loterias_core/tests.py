@@ -2,6 +2,7 @@ import json
 import re
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
+from io import StringIO
 from unittest.mock import Mock, patch
 
 from django.conf import settings
@@ -2359,6 +2360,78 @@ class UpdateMonthlyPrizeValuesCommandTests(TestCase):
     def test_command_calls_the_job(self, mock_job):
         call_command('update_monthly_prize_values')
         mock_job.assert_called_once_with()
+
+
+class MarkInitialNotificationsReadCommandTests(TestCase):
+    """Story 2.15: backfill de rollout inicial -- marca notificacoes existentes como lidas, sem
+    apagar nada, sem afetar notificacoes futuras."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='backfill@example.com', password='SenhaForte123')
+
+    def _create_notification(self, contest, is_read=False, won=False):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest=contest,
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        return HitNotification.objects.create(bet=bet, won=won, is_read=is_read)
+
+    def test_dry_run_does_not_change_anything(self):
+        notification = self._create_notification('9300')
+        call_command('mark_initial_notifications_read')
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)
+
+    def test_apply_marks_unread_notifications_as_read(self):
+        notification = self._create_notification('9301')
+        call_command('mark_initial_notifications_read', '--apply')
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+
+    def test_apply_never_deletes_anything(self):
+        self._create_notification('9302')
+        call_command('mark_initial_notifications_read', '--apply')
+        self.assertEqual(HitNotification.objects.count(), 1)
+        self.assertEqual(GeneratedBet.objects.count(), 1)
+
+    def test_apply_leaves_already_read_notifications_untouched(self):
+        already_read = self._create_notification('9303', is_read=True)
+        call_command('mark_initial_notifications_read', '--apply')
+        already_read.refresh_from_db()
+        self.assertTrue(already_read.is_read)
+
+    def test_does_not_affect_notification_created_after_it_ran(self):
+        """Sendo uma acao manual pontual (nunca chamada pelo cron), uma notificacao genuina criada
+        DEPOIS do backfill nao e afetada -- ela simplesmente nao existia no momento da chamada."""
+        call_command('mark_initial_notifications_read', '--apply')
+        later_notification = self._create_notification('9304')
+        self.assertFalse(later_notification.is_read)
+
+    def test_apply_never_touches_lottery_result(self):
+        LotteryResult.objects.create(game='Quina', contest='9305', numbers=[1, 2, 3, 4, 5], clovers=[], prizes={})
+        self._create_notification('9305')
+        call_command('mark_initial_notifications_read', '--apply')
+        self.assertEqual(LotteryResult.objects.count(), 1)
+
+    def test_dry_run_message_and_apply_count_reflect_only_unread_in_mixed_batch(self):
+        """Lote misto (lidas + nao lidas juntas): garante que o filtro/update afeta exatamente o
+        subconjunto certo, e que a mensagem impressa (o numero que o operador usa como gate de
+        seguranca no runbook) reflete a contagem real de nao lidas, nao o total."""
+        self._create_notification('9306', is_read=True)
+        self._create_notification('9307', is_read=True)
+        self._create_notification('9308')
+        self._create_notification('9309')
+        self._create_notification('9310')
+
+        dry_run_out = StringIO()
+        call_command('mark_initial_notifications_read', stdout=dry_run_out)
+        self.assertIn('3 HitNotification', dry_run_out.getvalue())
+        self.assertEqual(HitNotification.objects.filter(is_read=True).count(), 2)
+
+        apply_out = StringIO()
+        call_command('mark_initial_notifications_read', '--apply', stdout=apply_out)
+        self.assertIn('3 HitNotification', apply_out.getvalue())
+        self.assertEqual(HitNotification.objects.filter(is_read=True).count(), 5)
 
 
 @override_settings(OPERATOR_ALERT_EMAIL='boss@example.com')
