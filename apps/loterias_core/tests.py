@@ -663,6 +663,27 @@ class CreateBetViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_api_create_bet_rejects_invalid_game(self):
+        """Story 2.13: jogo invalido devolve 400 claro, nunca um 500 nao tratado."""
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': 'Nao-Existe', 'concurso': '2500'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'Jogo invalido')
+
+    def test_api_create_bet_rejects_unhashable_game_type(self):
+        """Story 2.13: 'in GAMES_CONFIG' quebraria com TypeError pra um tipo nao-hasheavel (ex. lista)
+        -- checagem de tipo evita o mesmo 500 nao tratado que a story existe pra fechar."""
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': ['Mega-sena'], 'concurso': '2500'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'Jogo invalido')
+
     def test_api_create_bet_rejects_non_numeric_contest(self):
         """Story 2.12: api_create_bet_view tambem normaliza/rejeita, mesmo endpoint de preview."""
         response = self.client.post(

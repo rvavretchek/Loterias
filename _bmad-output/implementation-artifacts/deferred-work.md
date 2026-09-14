@@ -129,3 +129,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-normalizacao-de-concurso.md`
   summary: "`normalize_contest('0')`/`('00')` são aceitos e normalizados pra `'0'`, mas nenhum concurso real da CEF é numerado 0 -- não há validação de faixa mínima, só de formato."
   evidence: Achado independentemente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.12. Mesma categoria de lacuna já registrada como deferida na Story 2.9 (nenhuma validação de teto superior pro concurso digitado manualmente) -- a AC desta story pede só normalização de formato (zeros à esquerda) e rejeição de não numérico, nunca validação de faixa/plausibilidade contra o calendário real de sorteios. Revisitar junto com o item já deferido da Story 2.9 se isso se mostrar um problema prático.
+
+## Deferred from: code review of spec-2-13-validacao-de-jogo-em-api-create-bet-view (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-13-validacao-de-jogo-em-api-create-bet-view.md`
+  summary: "`api_create_bet_view` ainda pode devolver 500 não tratado pra payload JSON malformado -- `json.loads(request.body)` levanta `JSONDecodeError` sem corpo não-JSON, e `data.get('concurso', '').strip()` levanta `AttributeError` se `concurso` vier como número/objeto em vez de string."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.13. Pré-existente (linhas anteriores a esta story, não tocadas pelo diff) -- o escopo desta story era especificamente a checagem de `jogo` ausente de `GAMES_CONFIG` (já corrigida, incluindo o caso de tipo não-hasheável). Corrigir de verdade exigiria um `try/except` mais amplo envolvendo todo o parse do payload, fora do escopo de patch trivial desta revisão.

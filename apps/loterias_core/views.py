@@ -394,6 +394,9 @@ def api_create_bet_view(request):
     if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)
 
+    if not isinstance(selected_game, str) or selected_game not in GAMES_CONFIG:
+        return JsonResponse({'error': 'Jogo invalido'}, status=400)
+
     try:
         contest = normalize_contest(contest)
     except ValueError:
