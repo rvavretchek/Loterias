@@ -1,27 +1,14 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-renomear-views-admin-templates.md`
-  summary: "PROMOVIDO para Story 2.13 (Validação de Jogo em api_create_bet_view) em `epics.md`, 2026-09-11 — ver lá."
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-renomear-views-admin-templates.md`
-  summary: "PROMOVIDO para Story 2.14 (Bloqueio Real de Concurso Duplicado) em `epics.md`, 2026-09-11 — ver lá."
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-renomear-views-admin-templates.md`
   summary: Nomes de arquivo de template (`historico.html`, `detalhes_jogo.html`, `estatisticas.html`) continuam em português; considerar renomear pro inglês (`history.html`, `bet_detail.html`, `statistics.html`) numa story futura.
   evidence: Não são identificador de código Python (são string literal de caminho passada pra `render()`, análogo a uma rota) — por isso ficaram fora do mapeamento oficial da Story 1.3, mas o Blind Hunter apontou a inconsistência de views/rotas em inglês apontando pra arquivos com nome em português. Decisão do Boss pendente sobre se vale ampliar o escopo do rename até esse nível.
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-renomear-views-admin-templates.md`
-  summary: "`config.clovers` (o jogo usa trevo?) e `config.clovers_count` (quantos trevos sortear) em `GAMES_CONFIG` têm nomes muito parecidos e nenhum comentário os distingue — risco de confusão futura em `home.html` e em qualquer código novo que leia esse dict."
-  evidence: Achado pelo Blind Hunter na Story 1.3; não é um bug hoje (o uso atual está correto), só um risco de manutenção. Bastaria um comentário no dict `GAMES_CONFIG` em `models.py` explicando a diferença.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-rotina-diaria-de-resultados.md`
   summary: "Dupla-Sena tem 2 sorteios por concurso (confirmado ao vivo contra a API oficial), mas `fetch_cef_result` só captura o `listaDezenas` do 1º sorteio -- o 2º sorteio (`listaDezenasSegundoSorteio` na API) nunca é verificado contra o jogo do usuário."
   evidence: Achado durante a Story 2.1 ao investigar a API oficial da Caixa. `LotteryResult.numbers` é um único `JSONField` (sem campo separado pro 2º sorteio), e `calculate_bet_prize` faz uma interseção simples sem noção de "sorteio 1"/"sorteio 2" -- suportar a Dupla-Sena de verdade exigiria um campo novo no model (`numbers_second_draw` ou similar) e mudar `calculate_bet_prize` pra considerar os dois sorteios separadamente. Fora do escopo de uma story de captura de resultado; precisa de decisão de produto (vale o esforço pra um jogo específico?) antes de uma story dedicada.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-rotina-diaria-de-resultados.md`
-  summary: "PROMOVIDO para Story 2.12 (Normalização de Concurso) em `epics.md`, 2026-09-11 — ver lá."
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-rotina-diaria-de-resultados.md`
   summary: "SQLite não está configurado em modo WAL (`journal_mode=WAL`) -- só `OPTIONS: {'timeout': 20}` foi adicionado nesta story pra mitigar `database is locked` entre `loterias-web` e `loterias-cron` escrevendo no mesmo arquivo."
-  evidence: Achado pelo Blind Hunter/Edge Case Hunter na revisão da Story 2.1 (AD-7 já previa o timeout, mas não WAL). WAL reduziria bem mais a contenção entre os dois processos, mas exige configurar o modo na conexão (via um sinal `connection_created` ou engine customizada) e testar comportamento sob concorrência real -- mudança de infraestrutura maior que um ajuste de settings, melhor como story própria se a contenção se mostrar um problema real em uso.
+  evidence: Achado pelo Blind Hunter/Edge Case Hunter na revisão da Story 2.1 (AD-7 já previa o timeout, mas não WAL). WAL reduziria bem mais a contenção entre os dois processos, mas exige configurar o modo na conexão (via um sinal `connection_created` ou engine customizada) e testar comportamento sob concorrência real -- mudança de infraestrutura maior que um ajuste de settings, melhor como story própria se a contenção se mostrar um problema real em uso. **Reafirmado independentemente nas revisões das Stories 2.9 (3 execuções diárias sem lock) e 2.15 (`mark_initial_notifications_read --apply` sem tratamento de `OperationalError`)** -- mesma causa raiz, mesma decisão de não corrigir agora nas 3 vezes.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-rotina-diaria-de-resultados.md`
   summary: "`fetch_daily_results` processa todos os pares Jogo/Concurso em aberto sequencialmente, sem limite/atraso entre chamadas -- um backlog grande (muitos concursos pendentes acumulados) dispara N requisições imediatas e seguidas contra a API oficial da Caixa, sem proteção contra rate limiting do lado deles."
@@ -34,9 +21,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-rotina-diaria-de-resultados.md`
   summary: "`descricaoFaixa == f'{max_hits} acertos'`/`PRIZE_TIER_PATTERN` em `_extract_prize_tiers` casam por texto exato -- qualquer mudança de wording da API oficial da Caixa faz a extração de prêmio falhar em silêncio (retorna dict vazio), sem log nem alerta."
   evidence: Achado pelo Blind Hunter/Edge Case Hunter na revisão da Story 2.1. Como a API é de terceiro (ainda que oficial da Caixa), uma mudança de formato não é impossível. Hoje não há verificação ativa de "a extração de prêmio parou de funcionar" -- só se perceberia se um usuário reclamasse. Um alerta/log quando `listaRateioPremio` vem não-vazio mas `_extract_prize_tiers` devolve `{}` seria uma melhoria barata, mas nenhuma foi implementada nesta story (mantendo o escopo focado na captura de números/concurso, que era o bug crítico original).
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-bloqueio-de-concurso-ja-sorteado.md`
-  summary: "Mesma causa raiz da Story 2.1 (contest não normalizado) — PROMOVIDO junto para Story 2.12 (Normalização de Concurso) em `epics.md`, 2026-09-11 — ver lá. Nota adicional: `suggest_next_contest` também devolve o valor sem padding (`str(max+1)`), considerar ao implementar."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-bloqueio-de-concurso-ja-sorteado.md`
   summary: "`save_manual_bet_view` grava seu próprio `LotteryResult` (via `fetch_cef_result`+`update_or_create`) logo depois de passar pelo bloqueio que acabou de checar a ausência desse mesmo `LotteryResult` -- em caso de 2 submissões quase simultâneas pro mesmo Jogo+Concurso ainda sem resultado, a primeira a terminar 'fecha a porta' pra segunda, que passa a ser bloqueada mesmo sendo o mesmo caso de uso legítimo (registro retroativo)."
@@ -54,9 +38,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-geracao-de-notificacao-de-acerto.md`
   summary: "Uma vez que um `GeneratedBet` ganha `HitNotification`, ele nunca mais é revisitado -- se o `LotteryResult` correspondente for corrigido depois (`update_or_create` permite sobrescrever), `bet.hits`/`bet.prize`/`bet.prize_description` e `HitNotification.won` ficam congelados com o valor da primeira passagem, divergindo silenciosamente do resultado oficial atualizado."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.3. Cenário raro (correção de resultado oficial após já notificado) e não coberto pela arquitetura atual, que assume resultado imutável uma vez capturado. Resolver exigiria uma trilha de "resultado mudou de conteúdo" (não só de disponibilidade), fora do escopo desta story.
-
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-geracao-de-notificacao-de-acerto.md`
-  summary: "PROMOVIDO para Story 2.15 (Runbook de Backfill Inicial de Notificações) em `epics.md`, 2026-09-11 — urgência elevada porque o Epic 2 nunca tinha rodado de verdade no lab antes de 2026-09-11 (pipeline de deploy estava silenciosamente quebrado, ver [deploy/lab/README.md](deploy/lab/README.md)) — ver lá."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "O badge de notificação some completamente quando a contagem chega a 0 (por design, AC explícito) -- mas isso significa que, depois da Story 2.5 permitir marcar como lida, não sobra nenhum link permanente na navbar pra revisitar notificações já lidas/histórico."
@@ -112,7 +93,7 @@
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tratamento-de-falha-da-captura-de-resultado.md`
   summary: "As 3 execuções diárias de `fetch_daily_results` (3h/3h15/3h30) não têm nenhum lock/mutex contra sobreposição -- se o backlog de pares abertos crescer o suficiente pra uma execução ultrapassar 15 minutos, a próxima pode começar antes da anterior terminar, triplicando picos de tráfego simultâneo contra a API oficial da Caixa."
-  evidence: Achado pelo Blind Hunter na revisão da Story 2.9. Mesma categoria de risco já registrada na Story 2.1 (SQLite sem modo WAL, só timeout de 20s via AD-7) -- esta story amplifica o risco (3x mais execuções/dia) sem introduzir mecanismo de lock novo. Não corrigido agora porque o volume real de pares abertos é baixo hoje (poucos usuários); revisitar junto com a entrada de WAL já registrada se o tempo de execução se aproximar de 15 minutos na prática.
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.9. Mesma causa raiz do item de modo WAL já registrado na Story 2.1 (ver acima) -- esta story amplifica o risco (3x mais execuções/dia). Não corrigido agora porque o volume real de pares abertos é baixo hoje.
 
 ## Deferred from: code review of spec-epic-3-novo-fluxo-de-cadastro (2026-09-11)
 
@@ -154,8 +135,17 @@
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-15-runbook-de-backfill-inicial-de-notificacoes.md`
   summary: "`mark_initial_notifications_read --apply` não trata `OperationalError`/'database is locked' se rodado durante a janela em que `loterias-cron` está escrevendo no mesmo SQLite (3h/3h15/3h30)."
-  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.15. Mesma categoria de risco já registrada nas Stories 2.1/2.9 (SQLite sem modo WAL, só timeout de 20s via `OPTIONS`) -- mitigado na prática pelo runbook avisando pra não rodar durante a janela do cron, não corrigido no código (fora do escopo de patch trivial desta revisão).
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.15. Mesma causa raiz do item de modo WAL já registrado na Story 2.1 (ver acima) -- mitigado na prática pelo runbook avisando pra não rodar durante a janela do cron, não corrigido no código.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-15-runbook-de-backfill-inicial-de-notificacoes.md`
   summary: "Nenhum teste de comando de management neste projeto (incluindo `update_monthly_prize_values`/`fetch_daily_results`, pré-existentes) verifica o texto impresso no stdout -- convenção já estabelecida no projeto, mantida por consistência mesmo tendo sido parcialmente endereçada nesta story com um teste dedicado de lote misto."
   evidence: Achado pelo Verification Gap Reviewer na revisão da Story 2.15. Já mitigado nesta própria story via `test_dry_run_message_and_apply_count_reflect_only_unread_in_mixed_batch` (cobre o caso mais arriscado -- contagem de não-lidas em lote misto); registrado só pra nota de que os outros comandos do projeto continuam sem essa cobertura, caso vire prioridade revisitar todos de uma vez.
+
+## Deferred from: code review of spec-2-17-refazer-segue-regra-duplicata (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-refazer-segue-regra-duplicata.md`
+  summary: "`regenerate_bet_view` continua sendo um endpoint GET simples (sem `@require_POST`/CSRF form, sem confirmação client-side) -- antes da Story 2.17 um disparo acidental (duplo clique, replay de GET do histórico do navegador) só criava uma linha extra inofensiva; agora sobrescreve silenciosamente e sem chance de recuperação os números que o usuário tinha."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.17. Pré-existente (o endpoint já era GET sem proteção antes desta story) -- a mudança desta story aumenta a gravidade da consequência de um disparo acidental, mas corrigir exigiria mudar o método HTTP/formulário no template e adicionar confirmação, fora do escopo de patch trivial (e fora do Given/When/Then da AC, que é só sobre não duplicar).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-refazer-segue-regra-duplicata.md`
+  summary: "Sem `transaction.atomic()`/`select_for_update` -- duas requisições `regenerate_bet` quase simultâneas pro mesmo bet podem ambas ler o registro antes de qualquer uma salvar, e o segundo `save()` sobrescreve silenciosamente o primeiro (um dos 2 conjuntos de números gerados se perde)."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.17. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6/2.14 (check-then-write sem lock, baixo volume de uso concorrente esperado por usuário individual).

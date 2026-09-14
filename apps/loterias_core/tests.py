@@ -936,15 +936,49 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=1,
         )
 
-    def test_regenerating_bet_creates_new_record_and_redirects(self):
+    def test_regenerating_bet_replaces_original_in_place(self):
+        """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
+        GeneratedBet pro mesmo Jogo+Concurso, consistente com o bloqueio de duplicata da Story 2.14."""
+        original_numbers = list(self.bet.numbers)
         response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
-        bets = GeneratedBet.objects.filter(
-            user=self.user, game='Mega-sena', contest='5000'
+        self.assertEqual(
+            GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1
         )
-        self.assertEqual(bets.count(), 2)
-        new_bet = bets.exclude(pk=self.bet.pk).get()
-        self.assertRedirects(response, reverse('bet_detail', args=[new_bet.pk]))
-        self.assertNotEqual(new_bet.pk, self.bet.pk)
+        self.bet.refresh_from_db()
+        self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
+        self.assertNotEqual(self.bet.numbers, original_numbers)
+        self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
+
+    @patch('apps.loterias_core.views.generate_bet')
+    def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
+        """Story 2.17: jogo com trevos (Milionaria) tem os trevos tambem substituidos, nao so os
+        numeros -- cobre o campo que a Mega-sena (sem trevo) nao consegue exercitar. Mocka
+        generate_bet pra evitar teste instavel (o pool de trevos da Milionaria tem so 15
+        combinacoes possiveis, entao um novo sorteio coincidir com o antigo nao e tao raro)."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Milionaria', contest='6000',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
+        )
+        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4])
+        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        bet.refresh_from_db()
+        self.assertEqual(bet.clovers, [3, 4])
+
+    def test_regenerating_resets_manual_and_verification_fields(self):
+        """Story 2.17: um jogo manual ja verificado (result_checked/hits/prize/manual) vira um jogo
+        algoritmico novo apos Refazer -- nenhum desses campos pode sobreviver ao numero antigo."""
+        checked_bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='6001',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+            manual=True, result_checked=True, hits=3, prize=50, prize_description='quadra',
+        )
+        self.client.get(reverse('regenerate_bet', args=[checked_bet.pk]))
+        checked_bet.refresh_from_db()
+        self.assertFalse(checked_bet.manual)
+        self.assertFalse(checked_bet.result_checked)
+        self.assertEqual(checked_bet.hits, 0)
+        self.assertEqual(checked_bet.prize, 0)
+        self.assertEqual(checked_bet.prize_description, '')
 
     def test_blocks_regenerating_for_contest_that_already_has_lottery_result(self):
         LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
