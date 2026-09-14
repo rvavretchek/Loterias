@@ -149,3 +149,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-17-refazer-segue-regra-duplicata.md`
   summary: "Sem `transaction.atomic()`/`select_for_update` -- duas requisições `regenerate_bet` quase simultâneas pro mesmo bet podem ambas ler o registro antes de qualquer uma salvar, e o segundo `save()` sobrescreve silenciosamente o primeiro (um dos 2 conjuntos de números gerados se perde)."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.17. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6/2.14 (check-then-write sem lock, baixo volume de uso concorrente esperado por usuário individual).
+
+## Deferred from: code review of spec-2-16-travar-concurso-admin (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-travar-concurso-admin.md`
+  summary: "Um valor de Concurso com muitos zeros à esquerda (>20 caracteres antes de normalizar, ex. 20 zeros + `'5'`) é rejeitado pela validação nativa de `max_length=20` do Django ANTES de `clean_contest` rodar -- a mensagem de erro fala de tamanho, não do problema real, e um valor que normalizaria pra algo válido é recusado."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.16, confirmado empiricamente (`'0'*20 + '5'` recusado por max_length antes de chegar em `normalize_contest`). Entrada exige um concurso digitado com 20+ caracteres, cenário sem uso prático real -- baixo impacto, não corrigido (exigiria reordenar a validação ou aumentar `max_length`, fora do escopo de patch trivial desta revisão).

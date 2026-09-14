@@ -1121,6 +1121,119 @@ class AdminSmokeTests(TestCase):
         response = self.client.get('/admin/loterias_core/lotteryresult/')
         self.assertEqual(response.status_code, 200)
 
+    def test_generatedbet_admin_normalizes_leading_zero_contest(self):
+        """Story 2.16: admin normaliza Concurso igual as views publicas (Story 2.12)."""
+        target_user = User.objects.create_user(email='betadmin@example.com', password='SenhaForte123')
+        response = self.client.post('/admin/loterias_core/generatedbet/add/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': '02500',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        bet = GeneratedBet.objects.get(user=target_user)
+        self.assertEqual(bet.contest, '2500')
+
+    def test_generatedbet_admin_rejects_non_numeric_contest(self):
+        target_user = User.objects.create_user(email='betadmin2@example.com', password='SenhaForte123')
+        response = self.client.post('/admin/loterias_core/generatedbet/add/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': 'ESPECIAL-2026',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Numero de concurso invalido')
+        self.assertFalse(GeneratedBet.objects.filter(user=target_user).exists())
+
+    def test_lotteryresult_admin_normalizes_leading_zero_contest(self):
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': '03500',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 302)
+        result = LotteryResult.objects.get(game='Mega-sena')
+        self.assertEqual(result.contest, '3500')
+
+    def test_lotteryresult_admin_rejects_non_numeric_contest(self):
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': 'ESPECIAL-2026',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Numero de concurso invalido')
+        self.assertFalse(LotteryResult.objects.filter(game='Mega-sena').exists())
+
+    def test_generatedbet_admin_normalizes_leading_zero_contest_on_edit(self):
+        """Story 2.16: a normalizacao tambem vale ao EDITAR um registro existente, nao so ao criar
+        -- o relato original do bug era especificamente sobre edicao direta pelo admin."""
+        target_user = User.objects.create_user(email='betadmin3@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(
+            user=target_user, game='Mega-sena', contest='4000',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.post(f'/admin/loterias_core/generatedbet/{bet.pk}/change/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': '04001',
+            'numbers': '[7, 8, 9, 10, 11, 12]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        bet.refresh_from_db()
+        self.assertEqual(bet.contest, '4001')
+
+    def test_lotteryresult_admin_normalization_surfaces_real_duplicate_via_unique_together(self):
+        """Story 2.16: prova que a normalizacao realmente fecha o bug original -- depois dela, uma
+        segunda grafia ('05000') do MESMO concurso real ja existente ('5000') colide de verdade
+        contra unique_together, em vez de criar silenciosamente um 2o registro pro mesmo concurso."""
+        LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': '05000',
+            'numbers': '[7, 8, 9, 10, 11, 12]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Resultado Oficial com este Jogo e Concurso já existe')
+        self.assertEqual(LotteryResult.objects.filter(game='Mega-sena').count(), 1)
+
+    def test_capturefailurealert_admin_normalizes_leading_zero_contest(self):
+        response = self.client.post('/admin/loterias_core/capturefailurealert/add/', {
+            'game': 'Mega-sena',
+            'contest': '06000',
+        })
+        self.assertEqual(response.status_code, 302)
+        alert = CaptureFailureAlert.objects.get(game='Mega-sena')
+        self.assertEqual(alert.contest, '6000')
+
 
 class ReverseAccessorTests(TestCase):
     """Cobre user.bets e user.statistics (related_name renomeados na Story 1.1), sem teste ate aqui."""
