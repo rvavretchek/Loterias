@@ -620,8 +620,9 @@ class CreateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
         response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
         mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
-        self.assertIn(('Ja existe um jogo de Mega-sena para o concurso 2500.', 'warning'), mensagens)
+        self.assertIn(('Voce ja tem um jogo de Mega-sena para o concurso 2500. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
 
     def test_blocks_even_when_user_also_has_duplicate_bet(self):
         """As duas checagens coexistem: mesmo com um GeneratedBet duplicado do proprio usuario,
@@ -795,6 +796,22 @@ class SaveManualBetViewTests(TestCase):
         self.assertEqual(bet.numbers, self.numbers)
         self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
         self.assertFalse(bet.result_checked)
+
+    def test_blocks_duplicate_contest_for_same_user(self):
+        """Story 2.14: aviso de duplicata agora bloqueia de verdade -- nao cria o segundo registro."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Lotofacil', contest='3000',
+            numbers=self.numbers, clovers=[], sequential_pairs=0, manual=True,
+        )
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': '3000',
+            'numeros': self.numeros_str,
+        }, follow=True)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+        self.assertRedirects(response, reverse('home'))
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('Voce ja tem um jogo de Lotofacil para o concurso 3000. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
 
     def test_blocks_contest_that_already_has_lottery_result(self):
         LotteryResult.objects.create(game='Lotofacil', contest='3000', numbers=self.numbers, clovers=[], prizes={})

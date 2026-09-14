@@ -27,6 +27,16 @@ def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', 
     return None
 
 
+def _block_if_duplicate_bet(request, user, game, contest, redirect_to='home', **redirect_kwargs):
+    """Bloqueia com mensagem clara se o usuario ja tem um GeneratedBet pro mesmo Jogo+Concurso
+    (Story 2.14 -- decisao do Boss: bloquear totalmente, nao so avisar) -- devolve um redirect
+    pronto se bloqueado, ou None se pode seguir."""
+    if GeneratedBet.objects.filter(user=user, game=game, contest=contest).exists():
+        messages.error(request, f'Voce ja tem um jogo de {game} para o concurso {contest}. Nao e possivel gerar outro para o mesmo Jogo+Concurso.')
+        return redirect(redirect_to, **redirect_kwargs)
+    return None
+
+
 def home(request):
     """Pagina inicial com dashboard."""
     if request.user.is_authenticated:
@@ -82,9 +92,9 @@ def create_bet_view(request):
     if blocked:
         return blocked
 
-    # Verificar se concurso ja existe para este usuario e jogo
-    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
-        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
+    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
+    if blocked:
+        return blocked
 
     attempts = 0
     max_attempts = 1000
@@ -229,8 +239,9 @@ def save_manual_bet_view(request):
     if blocked:
         return blocked
 
-    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
-        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
+    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
+    if blocked:
+        return blocked
 
     sequential_pairs_count = count_sequential_pairs(numbers)
     bet = GeneratedBet.objects.create(

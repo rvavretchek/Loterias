@@ -57,7 +57,7 @@ development_status:
   2-11-extração-real-de-valor-e-quantidade-de-ganhadores-por-faixa: done
   2-12-normalização-de-concurso: done
   2-13-validação-de-jogo-em-api_create_bet_view: done
-  2-14-bloqueio-real-de-concurso-duplicado: backlog
+  2-14-bloqueio-real-de-concurso-duplicado: done
   2-15-runbook-de-backfill-inicial-de-notificações: backlog
   epic-2-retrospective: optional
 
