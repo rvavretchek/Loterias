@@ -94,6 +94,12 @@ class LotteryResult(models.Model):
     numbers = models.JSONField(verbose_name='Numeros sorteados')
     clovers = models.JSONField(default=list, blank=True, verbose_name='Trevos sorteados')
     prizes = models.JSONField(default=dict, blank=True, verbose_name='Premiacoes')
+    numbers_second_draw = models.JSONField(
+        default=list, blank=True, verbose_name='Numeros sorteados (2o sorteio)',
+    )
+    prizes_second_draw = models.JSONField(
+        default=dict, blank=True, verbose_name='Premiacoes (2o sorteio)',
+    )
     source = models.CharField(max_length=50, default='CEF', verbose_name='Origem')
     captured_at = models.DateTimeField(auto_now_add=True, verbose_name='Capturado em')
 

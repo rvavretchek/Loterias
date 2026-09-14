@@ -245,14 +245,35 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
     if official_result is None:
         return {'won': False, 'hits': 0, 'value': 'R$ 0,00', 'category': 'Sem resultado'}
 
-    user_numbers = set(normalize_numbers(user_numbers))
-    result_numbers = set(normalize_numbers(official_result.get('numbers', [])))
-    hits = len(user_numbers & result_numbers)
-
-    prizes = official_result.get('prizes', {})
-    concurso_prize_info = prizes.get(str(hits)) if isinstance(prizes, dict) else None
-
     reference_month = _reference_month_for(official_result.get('captured_at'))
+    result = _calculate_prize_for_draw(
+        game, user_numbers, official_result.get('numbers', []),
+        official_result.get('prizes', {}), reference_month,
+    )
+
+    # Story 2.18: Dupla-Sena tem 2 sorteios por concurso -- confere o jogo do usuario contra os 2
+    # separadamente e fica com o de maior premio (nunca soma os 2, nunca ignora o 2o sorteio).
+    if game == 'Dupla-Sena' and official_result.get('numbers_second_draw'):
+        second_draw_result = _calculate_prize_for_draw(
+            game, user_numbers, official_result['numbers_second_draw'],
+            official_result.get('prizes_second_draw', {}), reference_month,
+        )
+        if _parse_currency(second_draw_result['value']) > _parse_currency(result['value']):
+            result = second_draw_result
+
+    result['result'] = official_result
+    return result
+
+
+def _calculate_prize_for_draw(game, user_numbers, draw_numbers, prizes, reference_month):
+    """Nucleo de calculate_bet_prize pra UM sorteio -- extraido na Story 2.18 pra permitir a
+    Dupla-Sena chamar isso 2x (1 por sorteio) e comparar qual rendeu mais premio, sem duplicar a
+    logica de prioridade (concurso especifico > PrizeTier > fallback legado)."""
+    user_numbers_set = set(normalize_numbers(user_numbers))
+    result_numbers = set(normalize_numbers(draw_numbers))
+    hits = len(user_numbers_set & result_numbers)
+
+    concurso_prize_info = prizes.get(str(hits)) if isinstance(prizes, dict) else None
     tier = _find_prize_tier(game, hits, reference_month)
 
     if concurso_prize_info is not None:
@@ -278,7 +299,6 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
         'hits': hits,
         'value': _format_currency(amount),
         'category': prize_key or 'Sem premio',
-        'result': official_result,
     }
 
 
@@ -296,12 +316,13 @@ def _extract_prize_tiers(tiers):
     faixa de acerto maximo, ja que jogos como Mega-Sena premiam quadra/quina/sena em faixas de valor bem
     diferentes.
 
-    Nao resolve o caso da Dupla-Sena ter 2 sorteios com faixas repetidas (mesma quantidade de acertos
-    aparece 2x, uma por sorteio) -- fica com a primeira ocorrencia (1o sorteio); registrado em
-    deferred-work.md, sem story dedicada ainda (aguarda decisao de produto). Importante pra essa
-    dedup: uma faixa SEMPRE reserva `hits_key` em `result` na primeira ocorrencia que casar o
-    regex (mesmo quando `winners` fica None por falha de extracao, ver abaixo) -- nunca "pula" a
-    faixa inteira, senao a 2a ocorrencia (2o sorteio) silenciosamente tomaria o lugar da 1a.
+    A Dupla-Sena tem 2 sorteios com faixas repetidas (mesma quantidade de acertos aparece 2x, uma
+    por sorteio) -- esta funcao sempre fica com a primeira ocorrencia. `fetch_cef_result` (Story
+    2.18) usa essa propriedade a seu favor: chama esta funcao 1x sobre a lista inteira (extrai so
+    o 1o sorteio, dedup natural) e 1x sobre so a segunda metade (extrai o 2o sorteio a parte).
+    Importante pra essa dedup: uma faixa SEMPRE reserva `hits_key` em `result` na primeira
+    ocorrencia que casar o regex (mesmo quando `winners` fica None por falha de extracao, ver
+    abaixo) -- nunca "pula" a faixa inteira, senao uma ocorrencia posterior tomaria o lugar da 1a.
 
     `winners` vira None (Story 2.11) quando a faixa tem valor de premio positivo mas a API nao
     informou a quantidade de ganhadores (None, nao simplesmente 0) -- e tratado como falha de
@@ -338,7 +359,15 @@ def _extract_prize_tiers(tiers):
 def fetch_cef_result(game, contest):
     """Busca o resultado oficial do jogo e concurso na API oficial da CEF
     (`servicebus2.caixa.gov.br/portaldeloterias/api`). Se a API estiver indisponivel, ou o concurso
-    devolvido nao bater com o pedido, retorna None -- nunca aceita um resultado de outro concurso."""
+    devolvido nao bater com o pedido, retorna None -- nunca aceita um resultado de outro concurso.
+
+    Story 2.18: Dupla-Sena tem 2 sorteios por concurso. `listaRateioPremio` traz as faixas dos 2
+    sorteios concatenadas (1o sorteio primeiro, mesmas quantidades de acertos repetidas pro 2o) --
+    `_extract_prize_tiers` sobre a lista inteira ja extrai só o 1o sorteio (dedup por chave mantem
+    a 1a ocorrencia); a segunda metade da lista e extraida separadamente pro 2o sorteio. Os 2
+    campos de 2o sorteio ficam sempre presentes no dict devolvido (vazios pra qualquer jogo que nao
+    seja Dupla-Sena, ou se a API nao trouxer o 2o sorteio), pra chamadores nao precisarem checar
+    `game == 'Dupla-Sena'` toda vez."""
     game_slug = {
         'Mega-sena': 'megasena',
         'Milionaria': 'maismilionaria',
@@ -366,7 +395,20 @@ def fetch_cef_result(game, contest):
         if not numbers:
             return None
         clovers = [int(t) for t in data.get('trevosSorteados') or []]
-        prizes = _extract_prize_tiers(data.get('listaRateioPremio') or [])
+        raw_tiers = data.get('listaRateioPremio') or []
+        prizes = _extract_prize_tiers(raw_tiers)
+
+        numbers_second_draw = []
+        prizes_second_draw = {}
+        if game == 'Dupla-Sena':
+            numbers_second_draw = [int(n) for n in data.get('listaDezenasSegundoSorteio') or []]
+            if numbers_second_draw and len(raw_tiers) % 2 == 0:
+                # so divide a lista ao meio quando o total e par (estrutura conhecida: N faixas do
+                # 1o sorteio + N faixas identicas do 2o) -- uma contagem impar indicaria formato
+                # inesperado da API, e adivinhar o corte arriscaria atribuir a faixa errada ao
+                # sorteio errado. Nesse caso raro, prizes_second_draw fica vazio (numbers_second_draw
+                # ainda e capturado) em vez de um split as-cegas.
+                prizes_second_draw = _extract_prize_tiers(raw_tiers[len(raw_tiers) // 2:])
     except Exception:
         return None
 
@@ -376,6 +418,8 @@ def fetch_cef_result(game, contest):
         'numbers': numbers,
         'clovers': clovers,
         'prizes': prizes,
+        'numbers_second_draw': numbers_second_draw,
+        'prizes_second_draw': prizes_second_draw,
     }
 
 

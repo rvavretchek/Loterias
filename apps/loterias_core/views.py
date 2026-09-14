@@ -155,6 +155,8 @@ def bet_detail_view(request, pk):
                 'numbers': official_result.numbers,
                 'clovers': official_result.clovers,
                 'prizes': official_result.prizes,
+                'numbers_second_draw': official_result.numbers_second_draw,
+                'prizes_second_draw': official_result.prizes_second_draw,
                 'captured_at': official_result.captured_at,
             }
         )
@@ -263,6 +265,8 @@ def save_manual_bet_view(request):
                 'numbers': result.get('numbers', []),
                 'clovers': result.get('clovers', []),
                 'prizes': result.get('prizes', {}),
+                'numbers_second_draw': result.get('numbers_second_draw', []),
+                'prizes_second_draw': result.get('prizes_second_draw', {}),
                 'source': 'CEF',
             }
         )
@@ -295,6 +299,8 @@ def check_bet_result_view(request, pk):
             'numbers': result.get('numbers', []),
             'clovers': result.get('clovers', []),
             'prizes': result.get('prizes', {}),
+            'numbers_second_draw': result.get('numbers_second_draw', []),
+            'prizes_second_draw': result.get('prizes_second_draw', {}),
             'source': 'CEF',
         }
     )

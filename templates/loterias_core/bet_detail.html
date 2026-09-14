@@ -92,7 +92,12 @@
                     {% if resultado_oficial %}
                     <p><strong>Concurso:</strong> {{ resultado_oficial.contest }}</p>
                     <p><strong>Jogo:</strong> {{ resultado_oficial.game }}</p>
+                    {% if resultado_oficial.numbers_second_draw %}
+                    <p><strong>Números sorteados (1º sorteio):</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+                    <p><strong>Números sorteados (2º sorteio):</strong> {% for num in resultado_oficial.numbers_second_draw %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+                    {% else %}
                     <p><strong>Números sorteados:</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+                    {% endif %}
                     <p><strong>Origem:</strong> {{ resultado_oficial.source }}</p>
                     {% endif %}
 

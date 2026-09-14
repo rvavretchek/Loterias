@@ -284,6 +284,75 @@ class CalculateBetPrizeTests(TestCase):
         self.assertTrue(prize['won'])
         self.assertEqual(prize['value'], 'R$ 900,00')
 
+    def test_dupla_sena_uses_second_draw_when_its_prize_is_higher(self):
+        """Story 2.18: usuario bate so 4 no 1o sorteio (premio menor) mas 6 no 2o (premio maior) --
+        calculate_bet_prize usa o de maior premio, nunca o 1o sorteio por padrao."""
+        result = {
+            'numbers': [1, 2, 3, 4, 50, 60],
+            'numbers_second_draw': [10, 20, 30, 40, 50, 60],
+            'clovers': [],
+            'prizes': {'4': {'value': 'R$ 100,00', 'winners': 500}},
+            'prizes_second_draw': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [10, 20, 30, 40, 50, 60], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+        self.assertTrue(prize['won'])
+
+    def test_dupla_sena_keeps_first_draw_when_it_is_the_better_prize(self):
+        """Story 2.18: quando o 1o sorteio rende mais que o 2o, o resultado fica com o 1o (nunca
+        troca pra pior, e nunca soma os 2)."""
+        result = {
+            'numbers': [10, 20, 30, 40, 50, 60],
+            'numbers_second_draw': [1, 2, 3, 4, 50, 60],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+            'prizes_second_draw': {'4': {'value': 'R$ 100,00', 'winners': 500}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [10, 20, 30, 40, 50, 60], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+
+    def test_dupla_sena_without_second_draw_data_falls_back_to_first_draw_only(self):
+        """Story 2.18: official_result sem numbers_second_draw (dado capturado antes desta story,
+        ou 2o sorteio ainda nao publicado) nao quebra -- calculate_bet_prize usa so o 1o sorteio."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5, 6],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+
+    def test_dupla_sena_keeps_first_draw_on_tie(self):
+        """Story 2.18: quando os 2 sorteios rendem o MESMO valor (aqui, por faixas diferentes que
+        coincidem no valor), o 1o sorteio vence por padrao -- comparacao usa `>` estrito, nunca
+        `>=`; desempate documentado e testado, nao implicito."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5, 6],
+            'numbers_second_draw': [1, 2, 3, 4, 7, 8],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+            'prizes_second_draw': {'4': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], result)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+        self.assertEqual(prize['hits'], 6)
+
+    def test_non_dupla_sena_game_ignores_second_draw_fields_even_if_present(self):
+        """Story 2.18: a comparacao de 2 sorteios e exclusiva da Dupla-Sena -- mesmo que
+        numbers_second_draw venha preenchido por engano, outro jogo nunca considera."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5],
+            'numbers_second_draw': [10, 20, 30, 40, 50],
+            'clovers': [],
+            'prizes': {'5': {'value': 'R$ 1.000,00', 'winners': 1}},
+            'prizes_second_draw': {'5': {'value': 'R$ 999.999,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertEqual(prize['value'], 'R$ 1.000,00')
+
 
 class FetchCefResultTests(TestCase):
     """fetch_cef_result chama a API oficial da CEF (servicebus2.caixa.gov.br) -- sempre mockar requests.get."""
@@ -388,6 +457,60 @@ class FetchCefResultTests(TestCase):
         result = fetch_cef_result('Dupla-Sena', '2600')
         self.assertEqual(result['prizes']['6']['winners'], 0)
         self.assertEqual(result['prizes']['6']['value'], 'R$ 0,00')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_captures_second_draw_numbers_and_prizes(self, mock_get):
+        """Story 2.18: com listaDezenasSegundoSorteio presente, os numeros do 2o sorteio sao
+        capturados, e a 2a metade de listaRateioPremio (faixas do 2o sorteio) vira prizes_second_draw
+        -- separado do prizes (1o sorteio), nunca misturado."""
+        self._mock_response(mock_get, {
+            'numero': 3007,
+            'listaDezenas': ['10', '24', '26', '31', '32', '48'],
+            'listaDezenasSegundoSorteio': ['09', '23', '32', '33', '39', '48'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 9, 'valorPremio': 7366.49},
+                {'descricaoFaixa': '4 acertos', 'faixa': 3, 'numeroDeGanhadores': 595, 'valorPremio': 127.34},
+                {'descricaoFaixa': '3 acertos', 'faixa': 4, 'numeroDeGanhadores': 11016, 'valorPremio': 3.43},
+                {'descricaoFaixa': '6 acertos', 'faixa': 5, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 6, 'numeroDeGanhadores': 14, 'valorPremio': 4262.04},
+                {'descricaoFaixa': '4 acertos', 'faixa': 7, 'numeroDeGanhadores': 714, 'valorPremio': 106.11},
+                {'descricaoFaixa': '3 acertos', 'faixa': 8, 'numeroDeGanhadores': 12129, 'valorPremio': 3.12},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '3007')
+        self.assertEqual(result['numbers_second_draw'], [9, 23, 32, 33, 39, 48])
+        self.assertEqual(result['prizes']['5']['winners'], 9)
+        self.assertEqual(result['prizes_second_draw']['5']['winners'], 14)
+        self.assertEqual(result['prizes_second_draw']['5']['value'], 'R$ 4.262,04')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_without_second_draw_field_leaves_it_empty(self, mock_get):
+        """Story 2.18: se a API ainda nao publicou listaDezenasSegundoSorteio (ex. captura entre o
+        1o e o 2o sorteio do mesmo concurso), numbers_second_draw fica vazio, sem quebrar."""
+        self._mock_response(mock_get, {
+            'numero': 3008,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '3008')
+        self.assertEqual(result['numbers_second_draw'], [])
+        self.assertEqual(result['prizes_second_draw'], {})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_non_dupla_sena_game_always_has_empty_second_draw_fields(self, mock_get):
+        """Story 2.18: os 2 campos de 2o sorteio ficam sempre presentes no dict devolvido, mesmo
+        pra jogos que nunca tem 2 sorteios -- chamadores nao precisam checar o jogo antes de ler."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['numbers_second_draw'], [])
+        self.assertEqual(result['prizes_second_draw'], {})
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_lotomania_zero_hits_tier_is_extracted(self, mock_get):
@@ -1294,6 +1417,56 @@ class FetchDailyResultsJobTests(TestCase):
         self.assertEqual(result.source, 'CEF')
 
     @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_dupla_sena_second_draw_is_persisted(self, mock_fetch):
+        """Story 2.18: fetch_daily_results persiste numbers_second_draw/prizes_second_draw junto
+        com o 1o sorteio."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3007',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [9, 23, 32, 33, 39, 48],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {'6': {'value': 'R$ 0,00'}},
+        }
+        fetch_daily_results()
+        result = LotteryResult.objects.get(game='Dupla-Sena', contest='3007')
+        self.assertEqual(result.numbers_second_draw, [9, 23, 32, 33, 39, 48])
+        self.assertEqual(result.prizes_second_draw, {'6': {'value': 'R$ 0,00'}})
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_dupla_sena_without_second_draw_yet_stays_open_for_next_run(self, mock_fetch):
+        """Story 2.18: se o 2o sorteio ainda nao veio na captura, o par continua em open_pairs na
+        proxima execucao -- nunca fica incompleto pra sempre so porque ja existe um LotteryResult."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3009',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {},
+        }
+        fetch_daily_results()
+        self.assertEqual(mock_fetch.call_count, 1)
+
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [9, 23, 32, 33, 39, 48],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {'6': {'value': 'R$ 0,00'}},
+        }
+        fetch_daily_results()
+        self.assertEqual(mock_fetch.call_count, 2)
+        result = LotteryResult.objects.get(game='Dupla-Sena', contest='3009')
+        self.assertEqual(result.numbers_second_draw, [9, 23, 32, 33, 39, 48])
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
     def test_two_bets_same_pair_only_fetch_once_per_run(self, mock_fetch):
         GeneratedBet.objects.create(
             user=self.user, game='Quina', contest='105',
@@ -1391,6 +1564,32 @@ class HitNotificationGenerationTests(TestCase):
             fetch_daily_results()
         bet.refresh_from_db()
         self.assertEqual(bet.hits, 0)
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
+    def test_dupla_sena_notification_uses_second_draw_when_it_pays_more(self):
+        """Story 2.18, ponta a ponta: bet que so bate no 2o sorteio da Dupla-Sena (premio maior que
+        o 1o) gera HitNotification com o hits/premio do 2o sorteio, passando por
+        fetch_daily_results -> _notify_covered_bets -> calculate_bet_prize -- nao so a unidade
+        isolada de calculate_bet_prize."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3007',
+            numbers=[9, 23, 32, 33, 39, 48], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Dupla-Sena', contest='3007',
+            numbers=[10, 24, 26, 31, 32, 48],
+            numbers_second_draw=[9, 23, 32, 33, 39, 48],
+            clovers=[],
+            prizes={'1': {'value': 'R$ 0,00', 'winners': 0}},
+            prizes_second_draw={'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertEqual(bet.hits, 6)
+        self.assertEqual(bet.prize, Decimal('500000.00'))
         notification = HitNotification.objects.get(bet=bet)
         self.assertTrue(notification.won)
 
