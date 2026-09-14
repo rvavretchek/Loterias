@@ -21,6 +21,10 @@ cp .env.example .env
 # Migrar o banco de dados
 python manage.py migrate
 
+# Criar a tabela de cache (CACHES usa DatabaseCache -- exigido pelo fluxo de cadastro do Epic 3,
+# ex. ResendConfirmationEmailView; sem isso, o primeiro uso de cache quebra)
+python manage.py createcachetable
+
 # Rodar o servidor de desenvolvimento
 python manage.py runserver
 

@@ -3,7 +3,10 @@ from django.db import models
 from django.conf import settings
 
 
-# Configuracoes dos jogos
+# Configuracoes dos jogos. 'clovers': quantos trevos o jogo exige escolher (0 se o jogo nao usa
+# trevo). 'clovers_count': tamanho do pool de trevos disponiveis pra escolher (0 se nao aplicavel).
+# Na +Milionaria, por exemplo, o jogador escolhe 2 trevos ('clovers') dentre 6 possiveis
+# ('clovers_count').
 MEGA_SENA = {'name': 'Mega-sena', 'bets_count': 6, 'numbers_count': 60, 'clovers': 0, 'clovers_count': 0}
 MILIONARIA = {'name': 'Milionaria', 'bets_count': 6, 'numbers_count': 50, 'clovers': 2, 'clovers_count': 6}
 LOTOMANIA = {'name': 'Lotomania', 'bets_count': 50, 'numbers_count': 100, 'clovers': 0, 'clovers_count': 0}

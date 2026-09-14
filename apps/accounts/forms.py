@@ -1,4 +1,5 @@
 from django import forms
+from django.core.validators import MaxLengthValidator
 from allauth.account.forms import ResetPasswordKeyForm, SignupForm
 from .models import User
 
@@ -57,18 +58,32 @@ class InitialOrResetPasswordKeyForm(ResetPasswordKeyForm):
 class ProfileCompletionForm(forms.ModelForm):
     """Story 3.5: nome/sobrenome obrigatorios no primeiro login apos definir senha."""
 
+    NAME_MAX_LENGTH = 30  # mesmo limite que o CustomSignupForm original tinha explicitamente
+
     class Meta:
         model = User
         fields = ('first_name', 'last_name')
         widgets = {
-            'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome'}),
-            'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Sobrenome'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome', 'maxlength': 30}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Sobrenome', 'maxlength': 30}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['first_name'].required = True
-        self.fields['last_name'].required = True
+        # Achado na revisao: um ModelForm puro herda o max_length=150 padrao de AbstractUser --
+        # o cap explicito de 30 caracteres que o CustomSignupForm original tinha se perdeu
+        # silenciosamente na migracao pra este form. So trocar `.max_length` nao bastaria: o
+        # CharField ja construiu um MaxLengthValidator(150) no __init__ (baseado no campo do
+        # model) e trocar o atributo depois nao reconstroi o validador -- por isso ele e
+        # substituido explicitamente abaixo, nao so o atributo usado pro `maxlength` do HTML.
+        for field_name in ('first_name', 'last_name'):
+            field = self.fields[field_name]
+            field.required = True
+            field.max_length = self.NAME_MAX_LENGTH
+            field.validators = [
+                v for v in field.validators if not isinstance(v, MaxLengthValidator)
+            ]
+            field.validators.append(MaxLengthValidator(self.NAME_MAX_LENGTH))
 
     def save(self, commit=True):
         user = super().save(commit=False)

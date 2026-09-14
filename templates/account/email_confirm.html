@@ -33,16 +33,17 @@
                             (vinculos valem por poucos dias) ou se ja foi usado antes.
                         </p>
 
-                        <form method="post" action="{% url 'resend_confirmation' %}" class="mt-3">
+                        <form method="post" action="{% url 'resend_confirmation' %}" class="mt-3" id="resend-confirmation-form">
                             {% csrf_token %}
                             <div class="mb-2">
                                 <input type="email" name="email" class="form-control" placeholder="seu@email.com"
                                        value="{{ request.session.pending_signup_email|default:'' }}" required>
                             </div>
-                            <button type="submit" class="btn btn-outline-primary w-100">
+                            <button type="submit" class="btn btn-outline-primary w-100" id="resend-confirmation-button">
                                 <i class="bi bi-arrow-repeat me-2"></i>Reenviar e-mail de confirmacao
                             </button>
                         </form>
+                        {% include 'account/_resend_cooldown_script.html' %}
 
                         <a href="{% url 'account_login' %}" class="d-block mt-3 text-primary">Ja confirmou? Faca login</a>
                     {% endif %}

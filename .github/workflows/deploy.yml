@@ -12,3 +12,13 @@ jobs:
       - name: Aplicar state Salt em todos os hosts
         run: |
           sudo salt '*' state.apply deploy pillar="{\"project_name\": \"${{ github.event.repository.name }}\", \"git_url\": \"${{ github.server_url }}/${{ github.repository }}.git\", \"git_branch\": \"${{ github.ref_name }}\"}"
+
+      # O state Salt 'subir_Loterias' (cmd.run) tem 2 bugs conhecidos (ver deploy/lab/README.md,
+      # incidente 2026-09-11): 1) onlyif sempre falso, entao "docker compose up" nunca roda via
+      # state.apply; 2) mesmo rodando, nao tem --build/registry, entao so recria com a imagem ja
+      # em cache. Ate alguem com acesso ao Salt master corrigir o .sls, este step contorna os dois
+      # rodando o rebuild+up de verdade via 'salt cmd.run' (execucao ad hoc, nao passa pelo state
+      # quebrado) direto no host da aplicacao.
+      - name: Rebuild e subir os containers da Loterias (contorna bug do state Salt)
+        run: |
+          sudo salt 'ubt-host01' cmd.run 'cd /opt/integrit/apps/Loterias/deploy/lab && docker compose build --no-cache && docker compose up -d --remove-orphans && docker exec nginx-proxy nginx -s reload'
