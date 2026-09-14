@@ -36,9 +36,9 @@ loterias_django/
 └── requirements.txt
 ```
 
-## 🔧 Instalacao
+## 🔧 Instalação
 
-### 1. Clone o repositorio
+### 1. Clone o repositório
 
 ```bash
 cd loterias_django
@@ -53,7 +53,7 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate  # Windows
 ```
 
-### 3. Instale as dependencias
+### 3. Instale as dependências
 
 ```bash
 pip install -r requirements.txt
@@ -66,7 +66,7 @@ cp .env.example .env
 # Edite o arquivo .env com suas configuracoes
 ```
 
-### 5. Execute as migracoes
+### 5. Execute as migrações
 
 ```bash
 python manage.py migrate
