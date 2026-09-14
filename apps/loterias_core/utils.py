@@ -115,10 +115,25 @@ def check_duplicate_bet(user, game_name, numbers, clovers):
     ).exists()
 
 
+def normalize_contest(raw):
+    """Normaliza um numero de concurso digitado pelo usuario pra uma forma canonica (Story 2.12):
+    remove zeros a esquerda convertendo pra inteiro e re-serializando, garantindo que duas grafias
+    do mesmo concurso real (ex. '2500' e '02500') nunca sejam tratadas como concursos distintos em
+    nenhum ponto que compara/grava `contest` (bloqueio de concurso ja sorteado, duplicata,
+    LotteryResult, purga manual). Levanta ValueError pra qualquer valor vazio ou nao numerico --
+    nunca grava/compara um concurso invalido silenciosamente."""
+    stripped = raw.strip()
+    if not stripped.isdecimal():
+        raise ValueError(f'Numero de concurso invalido: {raw!r}')
+    return str(int(stripped))
+
+
 def suggest_next_contest(game_name):
     """Sugere o proximo numero de concurso pro Jogo, a partir do maior concurso numerico ja
-    conhecido em LotteryResult (+1). Concursos nao numericos (especiais/comemorativos) sao
-    ignorados. Retorna None se nao houver nenhum LotteryResult conhecido pro Jogo ainda."""
+    conhecido em LotteryResult (+1). Desde a Story 2.12, todo concurso valido e numerico (nao existe
+    concurso genuinamente alfanumerico -- ate um especial/comemorativo tem numero ordinario na CEF);
+    o parse defensivo abaixo so ignora entrada nao numerica que porventura exista em dado legado.
+    Retorna None se nao houver nenhum LotteryResult conhecido pro Jogo ainda."""
     known_contests = []
     for contest in LotteryResult.objects.filter(game=game_name).values_list('contest', flat=True):
         try:

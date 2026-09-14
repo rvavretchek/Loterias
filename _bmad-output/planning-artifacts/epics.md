@@ -405,7 +405,11 @@ Para que o aviso não seja apenas cosmético.
 **Então** o Boss decide e a story implementa um dos dois comportamentos: (a) bloquear totalmente a duplicata (sem gravar, com mensagem clara), ou (b) permitir a duplicata mas deixar claro no aviso que ela será mesmo criada — a decisão fica registrada nesta story antes da implementação
 **E** o comportamento escolhido é aplicado de forma consistente em `create_bet_view` e `save_manual_bet_view`
 
-*Sem FR numerada nova — correção de bug pré-existente, achado em revisão. Decisão de produto pendente do Boss antes da implementação.*
+**Decisão do Boss (2026-09-14):** opção (a) — bloquear totalmente a duplicata. Implementado via
+`_block_if_duplicate_bet` (mesmo padrão de `_block_if_contest_already_drawn`) em
+`apps/loterias_core/views.py`, ver `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`.
+
+*Sem FR numerada nova — correção de bug pré-existente, achado em revisão.*
 
 ### Story 2.15: Runbook de Backfill Inicial de Notificações
 

@@ -119,3 +119,43 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-epic-3-novo-fluxo-de-cadastro.md`
   summary: "`createcachetable` não está documentado nos comandos de setup local do `CLAUDE.md` (só `migrate`/`runserver`), nem no runbook do lab (`deploy/lab/README.md`) -- o novo `CACHES` (`DatabaseCache`, Epic 3) exige essa tabela; um dev novo seguindo exatamente o CLAUDE.md quebra no primeiro uso de cache (ex. `ResendConfirmationEmailView`)."
   evidence: Achado pelo Blind Hunter e Edge Case Hunter, independentemente, na revisão de código do Epic 3 (2026-09-11, pedida pelo Boss antes da retrospectiva). O `Dockerfile`/deploy do lab já rodam `createcachetable` corretamente -- só o fluxo de dev local documentado no CLAUDE.md está desatualizado. Deferido porque a correção edita um arquivo de contexto de agente (CLAUDE.md), fora do escopo de patch automático desta revisão.
+
+## Deferred from: code review of spec-2-12-normalizacao-de-concurso (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-normalizacao-de-concurso.md`
+  summary: "`contest` continua editável como texto livre no Django admin (`GeneratedBetAdmin`/`LotteryResultAdmin`, não está em `readonly_fields`) -- um operador digitando `'02500'` direto no admin recria exatamente o bug que a Story 2.12 corrigiu nos 3 pontos de entrada via views, porque o admin nunca passa por `normalize_contest`."
+  evidence: Achado pelo Edge Case Hunter (confirmado lendo `apps/loterias_core/admin.py`, `contest` ausente de `readonly_fields` nas duas classes) na revisão da Story 2.12. Pré-existente (o campo sempre foi editável, não é uma regressão desta story) e fora do Given/When/Then literal da AC (que só lista `create_bet_view`/`save_manual_bet_view`/`api_create_bet_view`), mas contradiz o objetivo declarado da story ("normalizado de forma consistente em todos os pontos que o recebem"). Corrigir exigiria `save_model`/validação customizada no `ModelAdmin`, fora do escopo de patch trivial desta revisão -- decisão de produto sobre se vale a pena travar edição manual de `contest` no admin.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-normalizacao-de-concurso.md`
+  summary: "`normalize_contest('0')`/`('00')` são aceitos e normalizados pra `'0'`, mas nenhum concurso real da CEF é numerado 0 -- não há validação de faixa mínima, só de formato."
+  evidence: Achado independentemente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.12. Mesma categoria de lacuna já registrada como deferida na Story 2.9 (nenhuma validação de teto superior pro concurso digitado manualmente) -- a AC desta story pede só normalização de formato (zeros à esquerda) e rejeição de não numérico, nunca validação de faixa/plausibilidade contra o calendário real de sorteios. Revisitar junto com o item já deferido da Story 2.9 se isso se mostrar um problema prático.
+
+## Deferred from: code review of spec-2-13-validacao-de-jogo-em-api-create-bet-view (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-13-validacao-de-jogo-em-api-create-bet-view.md`
+  summary: "`api_create_bet_view` ainda pode devolver 500 não tratado pra payload JSON malformado -- `json.loads(request.body)` levanta `JSONDecodeError` sem corpo não-JSON, e `data.get('concurso', '').strip()` levanta `AttributeError` se `concurso` vier como número/objeto em vez de string."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.13. Pré-existente (linhas anteriores a esta story, não tocadas pelo diff) -- o escopo desta story era especificamente a checagem de `jogo` ausente de `GAMES_CONFIG` (já corrigida, incluindo o caso de tipo não-hasheável). Corrigir de verdade exigiria um `try/except` mais amplo envolvendo todo o parse do payload, fora do escopo de patch trivial desta revisão.
+
+## Deferred from: code review of spec-2-14-bloqueio-real-de-concurso-duplicado (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`
+  summary: "`_block_if_duplicate_bet` (check-then-create) não tem `UniqueConstraint(user, game, contest)` no banco nem `transaction.atomic()`/`select_for_update` -- duas submissões quase simultâneas do mesmo usuário pro mesmo Jogo+Concurso ainda podem passar as duas pelo `.exists()` antes de qualquer uma criar, gerando 2 registros duplicados apesar da mensagem agora dizer 'não é possível'."
+  evidence: Achado convergente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.14. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6 (mesmo padrão check-then-create, mesmo racional de baixo volume de uso concorrente esperado). Corrigir de verdade exigiria uma `UniqueConstraint`+migration e tratamento de `IntegrityError` nos 2 pontos de entrada -- mudança de schema, fora do escopo de patch trivial desta revisão.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`
+  summary: "`regenerate_bet_view` continua criando sem checagem um segundo `GeneratedBet` pro mesmo usuário+Jogo+Concurso do jogo original (pinado pelo teste existente `test_regenerating_bet_creates_new_record_and_redirects`, que espera `count() == 2`) -- inconsistente com a garantia nova de `create_bet_view`/`save_manual_bet_view` ('não é possível gerar outro pro mesmo Jogo+Concurso')."
+  evidence: Achado pelo Verification Gap Reviewer na revisão da Story 2.14. Fora do escopo desta story por decisão explícita do próprio AC em `epics.md` ("aplicado... em `create_bet_view` e `save_manual_bet_view`", sem mencionar `regenerate_bet_view`) -- mas o resultado de produto é inconsistente entre as duas telas. Decisão do Boss pendente sobre se `regenerate_bet_view` deveria seguir a mesma regra (ou se "refazer" é intencionalmente uma exceção, já que troca só os números sorteados mantendo o mesmo Jogo+Concurso do bet original).
+
+## Deferred from: code review of spec-2-15-runbook-de-backfill-inicial-de-notificacoes (2026-09-14)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-runbook-de-backfill-inicial-de-notificacoes.md`
+  summary: "`mark_initial_notifications_read` só ajusta `HitNotification.is_read` (badge/lista do site) -- se algum usuário já tinha `NotificationPreference.email_enabled=True` antes do primeiro ciclo real do cron, o e-mail de acerto premiado (Story 2.7) já teria sido disparado pra um acerto que o usuário já conhecia, e o backfill não desfaz isso (e-mail já enviado não pode ser recolhido)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 2.15. Confirmado no lab (2026-09-14) que nenhum usuário tinha `NotificationPreference` com `email_enabled=True` até agora (todos usam o default `email_enabled=False`), então nenhum e-mail real chegou a ser disparado por esse caminho -- mas o gap é real pra quando a preferência de e-mail for ativada por algum usuário antes do próximo rollout/reset. Fora do escopo desta story: a AC pede explicitamente só ajuste do estado de leitura ("só o estado de leitura é ajustado"), nunca supressão de e-mail. Corrigir de verdade exigiria uma janela de graça (ex.: não enviar e-mail pra `HitNotification` cujo `GeneratedBet.result_checked` já era `True` antes da criação) -- decisão de produto, fora do escopo de patch trivial.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-runbook-de-backfill-inicial-de-notificacoes.md`
+  summary: "`mark_initial_notifications_read --apply` não trata `OperationalError`/'database is locked' se rodado durante a janela em que `loterias-cron` está escrevendo no mesmo SQLite (3h/3h15/3h30)."
+  evidence: Achado pelo Edge Case Hunter na revisão da Story 2.15. Mesma categoria de risco já registrada nas Stories 2.1/2.9 (SQLite sem modo WAL, só timeout de 20s via `OPTIONS`) -- mitigado na prática pelo runbook avisando pra não rodar durante a janela do cron, não corrigido no código (fora do escopo de patch trivial desta revisão).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-runbook-de-backfill-inicial-de-notificacoes.md`
+  summary: "Nenhum teste de comando de management neste projeto (incluindo `update_monthly_prize_values`/`fetch_daily_results`, pré-existentes) verifica o texto impresso no stdout -- convenção já estabelecida no projeto, mantida por consistência mesmo tendo sido parcialmente endereçada nesta story com um teste dedicado de lote misto."
+  evidence: Achado pelo Verification Gap Reviewer na revisão da Story 2.15. Já mitigado nesta própria story via `test_dry_run_message_and_apply_count_reflect_only_unread_in_mixed_batch` (cobre o caso mais arriscado -- contagem de não-lidas em lote misto); registrado só pra nota de que os outros comandos do projeto continuam sem essa cobertura, caso vire prioridade revisitar todos de uma vez.

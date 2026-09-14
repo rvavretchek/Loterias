@@ -12,7 +12,7 @@ from .models import GeneratedBet, HitNotification, NotificationPreference, Lotte
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
-    fetch_cef_result, suggest_next_contest, apply_prize_to_bet
+    fetch_cef_result, suggest_next_contest, apply_prize_to_bet, normalize_contest
 )
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,16 @@ def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', 
     usuario) -- devolve um redirect pronto se bloqueado, ou None se pode seguir."""
     if LotteryResult.objects.filter(game=game, contest=contest).exists():
         messages.error(request, f'O concurso {contest} de {game} ja foi sorteado. Escolha outro concurso.')
+        return redirect(redirect_to, **redirect_kwargs)
+    return None
+
+
+def _block_if_duplicate_bet(request, user, game, contest, redirect_to='home', **redirect_kwargs):
+    """Bloqueia com mensagem clara se o usuario ja tem um GeneratedBet pro mesmo Jogo+Concurso
+    (Story 2.14 -- decisao do Boss: bloquear totalmente, nao so avisar) -- devolve um redirect
+    pronto se bloqueado, ou None se pode seguir."""
+    if GeneratedBet.objects.filter(user=user, game=game, contest=contest).exists():
+        messages.error(request, f'Voce ja tem um jogo de {game} para o concurso {contest}. Nao e possivel gerar outro para o mesmo Jogo+Concurso.')
         return redirect(redirect_to, **redirect_kwargs)
     return None
 
@@ -72,13 +82,19 @@ def create_bet_view(request):
         messages.error(request, 'Jogo invalido.')
         return redirect('home')
 
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        messages.error(request, f'Numero de concurso invalido: {contest}.')
+        return redirect('home')
+
     blocked = _block_if_contest_already_drawn(request, selected_game, contest)
     if blocked:
         return blocked
 
-    # Verificar se concurso ja existe para este usuario e jogo
-    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
-        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
+    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
+    if blocked:
+        return blocked
 
     attempts = 0
     max_attempts = 1000
@@ -199,6 +215,12 @@ def save_manual_bet_view(request):
         messages.error(request, 'Jogo invalido.')
         return redirect('home')
 
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        messages.error(request, f'Numero de concurso invalido: {contest}.')
+        return redirect('home')
+
     numbers = sorted(normalize_numbers(raw_numbers))
     config = GAMES_CONFIG[selected_game]
     expected = config['bets_count']
@@ -217,8 +239,9 @@ def save_manual_bet_view(request):
     if blocked:
         return blocked
 
-    if GeneratedBet.objects.filter(user=request.user, game=selected_game, contest=contest).exists():
-        messages.warning(request, f'Ja existe um jogo de {selected_game} para o concurso {contest}.')
+    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
+    if blocked:
+        return blocked
 
     sequential_pairs_count = count_sequential_pairs(numbers)
     bet = GeneratedBet.objects.create(
@@ -381,6 +404,14 @@ def api_create_bet_view(request):
 
     if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)
+
+    if not isinstance(selected_game, str) or selected_game not in GAMES_CONFIG:
+        return JsonResponse({'error': 'Jogo invalido'}, status=400)
+
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        return JsonResponse({'error': f'Numero de concurso invalido: {contest}'}, status=400)
 
     nums, clovers = generate_bet(selected_game, request.user)
     sequential_pairs_count = count_sequential_pairs(nums)
