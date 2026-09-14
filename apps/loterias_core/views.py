@@ -12,7 +12,7 @@ from .models import GeneratedBet, HitNotification, NotificationPreference, Lotte
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
-    fetch_cef_result, suggest_next_contest, apply_prize_to_bet
+    fetch_cef_result, suggest_next_contest, apply_prize_to_bet, normalize_contest
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,12 @@ def create_bet_view(request):
 
     if selected_game not in GAMES_CONFIG:
         messages.error(request, 'Jogo invalido.')
+        return redirect('home')
+
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        messages.error(request, f'Numero de concurso invalido: {contest}.')
         return redirect('home')
 
     blocked = _block_if_contest_already_drawn(request, selected_game, contest)
@@ -197,6 +203,12 @@ def save_manual_bet_view(request):
 
     if selected_game not in GAMES_CONFIG:
         messages.error(request, 'Jogo invalido.')
+        return redirect('home')
+
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        messages.error(request, f'Numero de concurso invalido: {contest}.')
         return redirect('home')
 
     numbers = sorted(normalize_numbers(raw_numbers))
@@ -381,6 +393,11 @@ def api_create_bet_view(request):
 
     if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)
+
+    try:
+        contest = normalize_contest(contest)
+    except ValueError:
+        return JsonResponse({'error': f'Numero de concurso invalido: {contest}'}, status=400)
 
     nums, clovers = generate_bet(selected_game, request.user)
     sequential_pairs_count = count_sequential_pairs(nums)

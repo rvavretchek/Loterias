@@ -33,6 +33,7 @@ from apps.loterias_core.utils import (
     check_duplicate_bet,
     suggest_next_contest,
     apply_prize_to_bet,
+    normalize_contest,
 )
 
 
@@ -141,6 +142,29 @@ class CheckDuplicateBetTests(TestCase):
         self.assertTrue(
             check_duplicate_bet(self.user, 'Mega-sena', [1, 2, 3, 4, 5, 6], [])
         )
+
+
+class NormalizeContestTests(TestCase):
+    def test_strips_leading_zeros(self):
+        self.assertEqual(normalize_contest('02500'), '2500')
+
+    def test_leaves_already_normalized_value_unchanged(self):
+        self.assertEqual(normalize_contest('2500'), '2500')
+
+    def test_strips_whitespace_before_validating(self):
+        self.assertEqual(normalize_contest('  2500  '), '2500')
+
+    def test_rejects_non_numeric_value(self):
+        with self.assertRaises(ValueError):
+            normalize_contest('ESPECIAL-2026')
+
+    def test_rejects_empty_value(self):
+        with self.assertRaises(ValueError):
+            normalize_contest('   ')
+
+    def test_rejects_negative_looking_value(self):
+        with self.assertRaises(ValueError):
+            normalize_contest('-2500')
 
 
 class SuggestNextContestTests(TestCase):
@@ -574,6 +598,31 @@ class CreateBetViewTests(TestCase):
         mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
         self.assertIn(('O concurso 2500 de Mega-sena ja foi sorteado. Escolha outro concurso.', 'error'), mensagens)
 
+    def test_saves_contest_normalized_without_leading_zeros(self):
+        """Story 2.12: '02500' e o mesmo concurso real que '2500' -- grava sempre normalizado."""
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'})
+        bet = GeneratedBet.objects.get(user=self.user)
+        self.assertEqual(bet.contest, '2500')
+        self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
+
+    def test_blocks_leading_zero_spelling_of_already_drawn_contest(self):
+        """Story 2.12: '02500' normaliza pra '2500' antes do bloqueio -- duas grafias do mesmo
+        concurso real nunca furam a checagem de concurso ja sorteado."""
+        LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+
+    def test_leading_zero_spelling_counts_as_duplicate_bet(self):
+        """Story 2.12: '02500' normaliza pra '2500' antes da checagem de duplicata do usuario."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='2500',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('Ja existe um jogo de Mega-sena para o concurso 2500.', 'warning'), mensagens)
+
     def test_blocks_even_when_user_also_has_duplicate_bet(self):
         """As duas checagens coexistem: mesmo com um GeneratedBet duplicado do proprio usuario,
         o bloqueio de concurso ja sorteado vence e nenhum segundo registro e criado."""
@@ -587,9 +636,21 @@ class CreateBetViewTests(TestCase):
         mensagens = [m.level_tag for m in response.context['messages']]
         self.assertEqual(mensagens, ['error'])
 
-    def test_allows_special_contest_without_lottery_result(self):
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': 'ESPECIAL-2026'})
+    def test_allows_numeric_contest_without_lottery_result(self):
+        """Story 2.12: mesmo um concurso especial/comemorativo (ex. Mega da Virada) tem um numero
+        de concurso ordinario e numerico na CEF -- nao existe concurso genuinamente alfanumerico.
+        Este teste confirma que um concurso numerico sem LotteryResult ainda (nao sorteado ainda)
+        continua sendo aceito normalmente."""
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '9999'})
         self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+
+    def test_rejects_non_numeric_contest(self):
+        """Story 2.12: concurso nao numerico e sempre invalido -- nunca gravado."""
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': 'ESPECIAL-2026'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('Numero de concurso invalido: ESPECIAL-2026.', 'error'), mensagens)
 
     def test_api_create_bet_is_not_blocked_by_already_drawn_contest(self):
         """Fora do escopo desta story: api_create_bet_view continua gerando normalmente mesmo
@@ -601,6 +662,16 @@ class CreateBetViewTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_api_create_bet_rejects_non_numeric_contest(self):
+        """Story 2.12: api_create_bet_view tambem normaliza/rejeita, mesmo endpoint de preview."""
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': 'Quina', 'concurso': 'ESPECIAL-2026'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'Numero de concurso invalido: ESPECIAL-2026')
 
     def test_api_generate_bet_returns_json(self):
         response = self.client.post(
@@ -714,15 +785,51 @@ class SaveManualBetViewTests(TestCase):
         self.assertEqual(GeneratedBet.objects.count(), 0)
         self.assertRedirects(response, reverse('home'))
 
+    def test_blocks_leading_zero_spelling_of_already_drawn_contest(self):
+        """Story 2.12: '03000' normaliza pra '3000' antes do bloqueio."""
+        LotteryResult.objects.create(game='Lotofacil', contest='3000', numbers=self.numbers, clovers=[], prizes={})
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': '03000',
+            'numeros': self.numeros_str,
+        })
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+
     @patch('apps.loterias_core.views.fetch_cef_result')
-    def test_allows_special_contest_without_lottery_result(self, mock_fetch):
+    def test_saves_contest_normalized_without_leading_zeros(self, mock_fetch):
         mock_fetch.return_value = None
+        self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': '03000',
+            'numeros': self.numeros_str,
+        })
+        bet = GeneratedBet.objects.get(user=self.user)
+        self.assertEqual(bet.contest, '3000')
+
+    @patch('apps.loterias_core.views.fetch_cef_result')
+    def test_allows_numeric_contest_without_lottery_result(self, mock_fetch):
+        """Story 2.12: mesmo um concurso especial/comemorativo (ex. Mega da Virada) tem um numero
+        de concurso ordinario e numerico na CEF -- nao existe concurso genuinamente alfanumerico."""
+        mock_fetch.return_value = None
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil',
+            'concurso': '9999',
+            'numeros': self.numeros_str,
+        })
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+
+    def test_rejects_non_numeric_contest(self):
+        """Story 2.12: concurso nao numerico e sempre invalido -- nunca gravado."""
         response = self.client.post(reverse('save_manual_bet'), {
             'jogo': 'Lotofacil',
             'concurso': 'ESPECIAL-2026',
             'numeros': self.numeros_str,
-        })
-        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+        }, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertRedirects(response, reverse('home'))
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('Numero de concurso invalido: ESPECIAL-2026.', 'error'), mensagens)
 
     @patch('apps.loterias_core.views.fetch_cef_result')
     def test_manual_bet_with_cef_result_updates_prize(self, mock_fetch):
