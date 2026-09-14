@@ -155,6 +155,8 @@ def bet_detail_view(request, pk):
                 'numbers': official_result.numbers,
                 'clovers': official_result.clovers,
                 'prizes': official_result.prizes,
+                'numbers_second_draw': official_result.numbers_second_draw,
+                'prizes_second_draw': official_result.prizes_second_draw,
                 'captured_at': official_result.captured_at,
             }
         )
@@ -167,7 +169,7 @@ def bet_detail_view(request, pk):
         'premio_info': prize_info,
     }
 
-    return render(request, 'loterias_core/detalhes_jogo.html', context)
+    return render(request, 'loterias_core/bet_detail.html', context)
 
 
 @login_required
@@ -196,7 +198,7 @@ def history_view(request):
         'ordenacao': ordering,
     }
 
-    return render(request, 'loterias_core/historico.html', context)
+    return render(request, 'loterias_core/history.html', context)
 
 
 @login_required
@@ -263,6 +265,8 @@ def save_manual_bet_view(request):
                 'numbers': result.get('numbers', []),
                 'clovers': result.get('clovers', []),
                 'prizes': result.get('prizes', {}),
+                'numbers_second_draw': result.get('numbers_second_draw', []),
+                'prizes_second_draw': result.get('prizes_second_draw', {}),
                 'source': 'CEF',
             }
         )
@@ -295,6 +299,8 @@ def check_bet_result_view(request, pk):
             'numbers': result.get('numbers', []),
             'clovers': result.get('clovers', []),
             'prizes': result.get('prizes', {}),
+            'numbers_second_draw': result.get('numbers_second_draw', []),
+            'prizes_second_draw': result.get('prizes_second_draw', {}),
             'source': 'CEF',
         }
     )
@@ -312,7 +318,8 @@ def check_bet_result_view(request, pk):
 
 @login_required
 def regenerate_bet_view(request, pk):
-    """Refaz um jogo existente gerando novos numeros."""
+    """Refaz um jogo existente gerando novos numeros -- substitui o GeneratedBet original in-place
+    (Story 2.17), nunca cria um segundo registro pro mesmo Jogo+Concurso."""
     original_bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
 
     blocked = _block_if_contest_already_drawn(request, original_bet.game, original_bet.contest, redirect_to='bet_detail', pk=pk)
@@ -341,18 +348,26 @@ def regenerate_bet_view(request, pk):
 
     sequential_pairs_count = count_sequential_pairs(new_bet)
 
-    # Criar novo jogo baseado no original
-    new_record = GeneratedBet.objects.create(
-        user=request.user,
-        game=original_bet.game,
-        contest=original_bet.contest,
-        numbers=new_bet,
-        clovers=new_clovers if new_clovers else [],
-        sequential_pairs=sequential_pairs_count
-    )
+    # Story 2.17: substitui o jogo original in-place, em vez de criar um segundo registro pro
+    # mesmo Jogo+Concurso -- consistente com o bloqueio real de duplicata da Story 2.14.
+    # manual=False porque o jogo agora e algoritmico, nao mais o que o usuario digitou; os campos
+    # de verificacao sao resetados porque o numero mudou -- qualquer hits/prize antigo pertence ao
+    # jogo anterior, nunca ao novo (alcancavel mesmo com _block_if_contest_already_drawn: a purga
+    # manual da Story 2.10 pode apagar o LotteryResult de um par sem HitNotification associada,
+    # ex. um bet verificado sem premio, deixando result_checked/hits/prize obsoletos no GeneratedBet
+    # enquanto o bloqueio nao acusa mais nada).
+    original_bet.numbers = new_bet
+    original_bet.clovers = new_clovers if new_clovers else []
+    original_bet.sequential_pairs = sequential_pairs_count
+    original_bet.manual = False
+    original_bet.result_checked = False
+    original_bet.hits = 0
+    original_bet.prize = 0
+    original_bet.prize_description = ''
+    original_bet.save()
 
     messages.success(request, f'Novo jogo de {original_bet.game} gerado com sucesso!')
-    return redirect('bet_detail', pk=new_record.pk)
+    return redirect('bet_detail', pk=original_bet.pk)
 
 
 @login_required
@@ -378,7 +393,7 @@ def statistics_view(request):
         'jogos_disponiveis': GAMES_CONFIG,
     }
 
-    return render(request, 'loterias_core/estatisticas.html', context)
+    return render(request, 'loterias_core/statistics.html', context)
 
 
 @login_required

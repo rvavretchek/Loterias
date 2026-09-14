@@ -428,6 +428,71 @@ Para que usuários não vejam como "notificação nova" um acerto que já sabiam
 
 *Sem FR numerada nova — consequência operacional do rollout, achada em revisão da Story 2.3.*
 
+### Story 2.16: Travar Concurso Não Normalizado no Django Admin
+
+Como operador (Boss),
+Eu quero que o campo Concurso também seja normalizado quando editado direto pelo admin,
+Para que a garantia da Story 2.12 (uma grafia canônica por concurso real) valha em todos os pontos que recebem esse campo, não só nas 3 views públicas.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 2.12):** `contest` continua editável como texto livre em `GeneratedBetAdmin`/`LotteryResultAdmin` (ausente de `readonly_fields`), nunca passando por `normalize_contest`.
+
+**Critérios de Aceite:**
+**Dado** um operador edita/cria um `GeneratedBet` ou `LotteryResult` direto pelo Django admin
+**Quando** ele salva com um Concurso não normalizado (ex. `'02500'`) ou não numérico
+**Então** o admin normaliza/rejeita da mesma forma que `normalize_contest` já faz nas views públicas — nunca grava um valor não canônico
+**E** o comportamento de edição de campos não relacionados ao Concurso permanece inalterado
+
+*Sem FR numerada nova — fecha lacuna já registrada na Story 2.12, decisão do Boss em 2026-09-14.*
+
+### Story 2.17: Refazer Segue a Regra de Bloqueio de Duplicata
+
+Como jogador,
+Eu quero que "Refazer" um jogo siga a mesma regra de duplicata que gerar/salvar já segue,
+Para que o sistema não me deixe com 2 jogos pro mesmo Jogo+Concurso por um caminho enquanto bloqueia por outro.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 2.14):** `regenerate_bet_view` cria um segundo `GeneratedBet` pro mesmo usuário+Jogo+Concurso do jogo original sem nenhuma checagem, inconsistente com o bloqueio real que a Story 2.14 adicionou em `create_bet_view`/`save_manual_bet_view`.
+
+**Critérios de Aceite:**
+**Dado** um usuário clica em "Refazer" num `GeneratedBet` existente
+**Quando** a view gera o novo jogo
+**Então** o `GeneratedBet` original é substituído (números/trevos/pares sequenciais atualizados in-place) em vez de um segundo registro ser criado pro mesmo Jogo+Concurso
+**E** o teste existente `test_regenerating_bet_creates_new_record_and_redirects` é atualizado pra refletir esse novo comportamento (substituição, não duplicação)
+
+*Sem FR numerada nova — fecha lacuna já registrada na Story 2.14, decisão do Boss em 2026-09-14.*
+
+### Story 2.18: Suporte ao 2º Sorteio da Dupla-Sena
+
+Como jogador da Dupla-Sena,
+Eu quero que meu jogo seja conferido contra os 2 sorteios do concurso, não só o 1º,
+Para que eu não perca a notificação de um acerto real no 2º sorteio.
+
+**Contexto (promovido de `deferred-work.md`, achado na Story 2.1):** a Dupla-Sena tem 2 sorteios por concurso (confirmado ao vivo contra a API oficial, campos `listaDezenas`/`listaDezenasSegundoSorteio`), mas `fetch_cef_result`/`LotteryResult` só capturam e conferem o 1º.
+
+**Critérios de Aceite:**
+**Dado** um concurso de Dupla-Sena já sorteado, com os 2 sorteios disponíveis na API oficial
+**Quando** `fetch_cef_result` captura o resultado
+**Então** os números do 2º sorteio são capturados num campo novo (`LotteryResult.numbers_second_draw` ou equivalente), sem afetar `numbers` (1º sorteio) já usado pelos demais jogos
+**E** `calculate_bet_prize` para Dupla-Sena confere o jogo do usuário contra os 2 sorteios separadamente, usando o de maior prêmio quando os 2 têm acerto
+**E** os demais jogos (sem 2º sorteio) continuam funcionando exatamente como hoje
+
+*Sem FR numerada nova — fecha lacuna já registrada desde a Story 2.1, decisão do Boss em 2026-09-14.*
+
+### Story 2.19: Renomear Arquivos de Template pra Inglês
+
+Como desenvolvedor,
+Eu quero que nomes de arquivo de template sigam a mesma convenção em inglês já usada por views/rotas,
+Para eliminar a inconsistência de rotas em inglês apontando pra arquivos com nome em português.
+
+**Contexto (promovido de `deferred-work.md`, achado na revisão da Story 1.3):** `historico.html`, `detalhes_jogo.html`, `estatisticas.html` continuam em português; a Story 1.3 deixou esse nível fora do mapeamento oficial (nome de arquivo não é identificador de código Python).
+
+**Critérios de Aceite:**
+**Dado** os templates `templates/loterias_core/historico.html`, `detalhes_jogo.html`, `estatisticas.html`
+**Quando** são renomeados pra `history.html`, `bet_detail.html`, `statistics.html`
+**Então** toda referência (`render()`, `{% extends %}`, `{% include %}`) é atualizada de acordo
+**E** o comportamento das telas permanece idêntico — nenhuma mudança de conteúdo/estilo, só o nome do arquivo
+
+*Sem FR numerada nova — fecha lacuna já registrada na Story 1.3, decisão do Boss em 2026-09-14.*
+
 ## Epic 3: Novo Fluxo de Cadastro
 
 Uma pessoa se cadastra só com e-mail, confirma, cria senha, e só depois informa nome/sobrenome — cadastro deliberado em vez do genérico do allauth. Depende do Epic 1 concluído (independente do Epic 2).

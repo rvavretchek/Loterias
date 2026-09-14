@@ -12,10 +12,42 @@ from .models import (
     CaptureFailureAlert, GeneratedBet, GameStatistics, HitNotification, LotteryResult,
     NotificationPreference, PrizeTier,
 )
+from .utils import normalize_contest
+
+
+class _NormalizedContestFormMixin(forms.ModelForm):
+    """Story 2.16: aplica a mesma normalizacao de Concurso das views publicas (Story 2.12) ao
+    formulario do admin -- sem isso, um operador editando `contest` direto pelo admin recria o bug
+    de duas grafias pro mesmo concurso real que a Story 2.12 corrigiu nas views."""
+    def clean_contest(self):
+        raw = self.cleaned_data['contest']
+        try:
+            return normalize_contest(raw)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+
+
+class GeneratedBetAdminForm(_NormalizedContestFormMixin):
+    class Meta:
+        model = GeneratedBet
+        fields = '__all__'
+
+
+class LotteryResultAdminForm(_NormalizedContestFormMixin):
+    class Meta:
+        model = LotteryResult
+        fields = '__all__'
+
+
+class CaptureFailureAlertAdminForm(_NormalizedContestFormMixin):
+    class Meta:
+        model = CaptureFailureAlert
+        fields = '__all__'
 
 
 @admin.register(GeneratedBet)
 class GeneratedBetAdmin(admin.ModelAdmin):
+    form = GeneratedBetAdminForm
     list_display = ('game', 'contest', 'user', 'sequential_pairs', 'created_at')
     list_filter = ('game', 'created_at', 'sequential_pairs')
     search_fields = ('contest', 'user__email', 'user__first_name')
@@ -54,6 +86,7 @@ class PrizeTierAdmin(admin.ModelAdmin):
 
 @admin.register(CaptureFailureAlert)
 class CaptureFailureAlertAdmin(admin.ModelAdmin):
+    form = CaptureFailureAlertAdminForm
     list_display = ('game', 'contest', 'created_at')
     list_filter = ('game', 'created_at')
     search_fields = ('game', 'contest')
@@ -79,6 +112,7 @@ class PurgeUntilDateForm(forms.Form):
 @admin.register(LotteryResult)
 class LotteryResultAdmin(admin.ModelAdmin):
     """Story 2.10: LotteryResult nunca tinha sido registrado no admin ate agora."""
+    form = LotteryResultAdminForm
     list_display = ('game', 'contest', 'captured_at', 'source')
     list_filter = ('game', 'source')
     search_fields = ('contest',)

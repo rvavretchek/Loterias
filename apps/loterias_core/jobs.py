@@ -25,7 +25,16 @@ def fetch_daily_results(final=False):
     ja esta aberto ha tempo suficiente pra soar um alerta ao operador (ver
     _alert_operator_of_stale_capture_failures) -- as execucoes das 3h/3h15 nunca alertam.
     """
-    existing_results = set(LotteryResult.objects.values_list('game', 'contest'))
+    # Story 2.18: um LotteryResult de Dupla-Sena capturado sem o 2o sorteio ainda (a API ainda nao
+    # publicou `listaDezenasSegundoSorteio` no momento da captura) nao conta como "resolvido" --
+    # senao o par nunca mais seria revisitado, e o 2o sorteio ficaria pra sempre incompleto.
+    existing_results = {
+        (game, contest)
+        for game, contest, numbers_second_draw in LotteryResult.objects.values_list(
+            'game', 'contest', 'numbers_second_draw'
+        )
+        if game != 'Dupla-Sena' or numbers_second_draw
+    }
     all_bet_pairs = set(GeneratedBet.objects.values_list('game', 'contest').distinct())
     open_pairs = all_bet_pairs - existing_results
 
@@ -45,6 +54,8 @@ def fetch_daily_results(final=False):
                     'numbers': result.get('numbers', []),
                     'clovers': result.get('clovers', []),
                     'prizes': result.get('prizes', {}),
+                    'numbers_second_draw': result.get('numbers_second_draw', []),
+                    'prizes_second_draw': result.get('prizes_second_draw', {}),
                     'source': 'CEF',
                 }
             )
@@ -154,6 +165,8 @@ def _notify_covered_bets():
                 'numbers': result.numbers,
                 'clovers': result.clovers,
                 'prizes': result.prizes,
+                'numbers_second_draw': result.numbers_second_draw,
+                'prizes_second_draw': result.prizes_second_draw,
                 'captured_at': result.captured_at,
             }
             prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, official_result)

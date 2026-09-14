@@ -1,15 +1,15 @@
 # 🎰 Gerador de Loterias - Django
 
-Sistema web moderno para geracao de apostas de loterias brasileiras, desenvolvido com Django, SQLite e multitenancy.
+Sistema web moderno para geração de apostas de loterias brasileiras, desenvolvido com Django, SQLite e multitenancy.
 
 ## ✨ Funcionalidades
 
-- **Geracao Inteligente**: Algoritmo que respeita regras de sequencia e evita repeticoes
-- **Autenticacao por E-mail**: Cadastro e login via e-mail com verificacao (django-allauth)
-- **Temas Diurno/Noturno**: Interface moderna com alternancia entre tema claro e escuro
-- **Historico Completo**: Mantem registro de todos os jogos gerados
-- **Estatisticas**: Analise de numeros mais frequentes e padroes
-- **6 Loterias**: Mega-Sena, Milionaria, Lotomania, Lotofacil, Quina, Dupla-Sena
+- **Geração Inteligente**: Algoritmo que respeita regras de sequencia e evita repetições
+- **Autenticação por E-mail**: Cadastro e login via e-mail com verificação (django-allauth)
+- **Temas Diurno/Noturno**: Interface moderna com alternância entre tema claro e escuro
+- **Histórico Completo**: Mantem registro de todos os jogos gerados
+- **Estatísticas**: Analise de números mais frequentes e padrões
+- **6 Loterias**: Mega-Sena, Milionária, Lotomania, Lotofacil, Quina, Dupla-Sena
 
 ## 🚀 Tecnologias
 
@@ -72,7 +72,7 @@ cp .env.example .env
 python manage.py migrate
 ```
 
-### 6. Crie um superusuario
+### 6. Crie um superusuário
 
 ```bash
 python manage.py createsuperuser
@@ -86,7 +86,7 @@ python manage.py runserver
 
 Acesse: http://localhost:8000
 
-## 📧 Configuracao de E-mail
+## 📧 Configuração de E-mail
 
 Para envio de e-mails reais, configure no `.env`:
 
@@ -116,7 +116,7 @@ python manage.py shell
 python manage.py collectstatic
 ```
 
-## 🔒 Seguranca
+## 🔒 Segurança
 
 - CSRF protection habilitado
 - XSS filtering
@@ -125,7 +125,7 @@ python manage.py collectstatic
 - Email verification obrigatoria
 - HTTPS em producao
 
-## 📄 Licenca
+## 📄 Licença
 
 MIT License
 

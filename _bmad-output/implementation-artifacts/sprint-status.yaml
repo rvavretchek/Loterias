@@ -59,6 +59,10 @@ development_status:
   2-13-validação-de-jogo-em-api_create_bet_view: done
   2-14-bloqueio-real-de-concurso-duplicado: done
   2-15-runbook-de-backfill-inicial-de-notificações: done
+  2-16-travar-concurso-não-normalizado-no-django-admin: done
+  2-17-refazer-segue-a-regra-de-bloqueio-de-duplicata: done
+  2-18-suporte-ao-2º-sorteio-da-dupla-sena: done
+  2-19-renomear-arquivos-de-template-pra-inglês: done
   epic-2-retrospective: optional
 
   epic-3: done

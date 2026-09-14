@@ -284,6 +284,75 @@ class CalculateBetPrizeTests(TestCase):
         self.assertTrue(prize['won'])
         self.assertEqual(prize['value'], 'R$ 900,00')
 
+    def test_dupla_sena_uses_second_draw_when_its_prize_is_higher(self):
+        """Story 2.18: usuario bate so 4 no 1o sorteio (premio menor) mas 6 no 2o (premio maior) --
+        calculate_bet_prize usa o de maior premio, nunca o 1o sorteio por padrao."""
+        result = {
+            'numbers': [1, 2, 3, 4, 50, 60],
+            'numbers_second_draw': [10, 20, 30, 40, 50, 60],
+            'clovers': [],
+            'prizes': {'4': {'value': 'R$ 100,00', 'winners': 500}},
+            'prizes_second_draw': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [10, 20, 30, 40, 50, 60], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+        self.assertTrue(prize['won'])
+
+    def test_dupla_sena_keeps_first_draw_when_it_is_the_better_prize(self):
+        """Story 2.18: quando o 1o sorteio rende mais que o 2o, o resultado fica com o 1o (nunca
+        troca pra pior, e nunca soma os 2)."""
+        result = {
+            'numbers': [10, 20, 30, 40, 50, 60],
+            'numbers_second_draw': [1, 2, 3, 4, 50, 60],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+            'prizes_second_draw': {'4': {'value': 'R$ 100,00', 'winners': 500}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [10, 20, 30, 40, 50, 60], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+
+    def test_dupla_sena_without_second_draw_data_falls_back_to_first_draw_only(self):
+        """Story 2.18: official_result sem numbers_second_draw (dado capturado antes desta story,
+        ou 2o sorteio ainda nao publicado) nao quebra -- calculate_bet_prize usa so o 1o sorteio."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5, 6],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], result)
+        self.assertEqual(prize['hits'], 6)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+
+    def test_dupla_sena_keeps_first_draw_on_tie(self):
+        """Story 2.18: quando os 2 sorteios rendem o MESMO valor (aqui, por faixas diferentes que
+        coincidem no valor), o 1o sorteio vence por padrao -- comparacao usa `>` estrito, nunca
+        `>=`; desempate documentado e testado, nao implicito."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5, 6],
+            'numbers_second_draw': [1, 2, 3, 4, 7, 8],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+            'prizes_second_draw': {'4': {'value': 'R$ 500.000,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], result)
+        self.assertEqual(prize['value'], 'R$ 500.000,00')
+        self.assertEqual(prize['hits'], 6)
+
+    def test_non_dupla_sena_game_ignores_second_draw_fields_even_if_present(self):
+        """Story 2.18: a comparacao de 2 sorteios e exclusiva da Dupla-Sena -- mesmo que
+        numbers_second_draw venha preenchido por engano, outro jogo nunca considera."""
+        result = {
+            'numbers': [1, 2, 3, 4, 5],
+            'numbers_second_draw': [10, 20, 30, 40, 50],
+            'clovers': [],
+            'prizes': {'5': {'value': 'R$ 1.000,00', 'winners': 1}},
+            'prizes_second_draw': {'5': {'value': 'R$ 999.999,00', 'winners': 1}},
+        }
+        prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
+        self.assertEqual(prize['value'], 'R$ 1.000,00')
+
 
 class FetchCefResultTests(TestCase):
     """fetch_cef_result chama a API oficial da CEF (servicebus2.caixa.gov.br) -- sempre mockar requests.get."""
@@ -388,6 +457,60 @@ class FetchCefResultTests(TestCase):
         result = fetch_cef_result('Dupla-Sena', '2600')
         self.assertEqual(result['prizes']['6']['winners'], 0)
         self.assertEqual(result['prizes']['6']['value'], 'R$ 0,00')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_captures_second_draw_numbers_and_prizes(self, mock_get):
+        """Story 2.18: com listaDezenasSegundoSorteio presente, os numeros do 2o sorteio sao
+        capturados, e a 2a metade de listaRateioPremio (faixas do 2o sorteio) vira prizes_second_draw
+        -- separado do prizes (1o sorteio), nunca misturado."""
+        self._mock_response(mock_get, {
+            'numero': 3007,
+            'listaDezenas': ['10', '24', '26', '31', '32', '48'],
+            'listaDezenasSegundoSorteio': ['09', '23', '32', '33', '39', '48'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 2, 'numeroDeGanhadores': 9, 'valorPremio': 7366.49},
+                {'descricaoFaixa': '4 acertos', 'faixa': 3, 'numeroDeGanhadores': 595, 'valorPremio': 127.34},
+                {'descricaoFaixa': '3 acertos', 'faixa': 4, 'numeroDeGanhadores': 11016, 'valorPremio': 3.43},
+                {'descricaoFaixa': '6 acertos', 'faixa': 5, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+                {'descricaoFaixa': '5 acertos', 'faixa': 6, 'numeroDeGanhadores': 14, 'valorPremio': 4262.04},
+                {'descricaoFaixa': '4 acertos', 'faixa': 7, 'numeroDeGanhadores': 714, 'valorPremio': 106.11},
+                {'descricaoFaixa': '3 acertos', 'faixa': 8, 'numeroDeGanhadores': 12129, 'valorPremio': 3.12},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '3007')
+        self.assertEqual(result['numbers_second_draw'], [9, 23, 32, 33, 39, 48])
+        self.assertEqual(result['prizes']['5']['winners'], 9)
+        self.assertEqual(result['prizes_second_draw']['5']['winners'], 14)
+        self.assertEqual(result['prizes_second_draw']['5']['value'], 'R$ 4.262,04')
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_dupla_sena_without_second_draw_field_leaves_it_empty(self, mock_get):
+        """Story 2.18: se a API ainda nao publicou listaDezenasSegundoSorteio (ex. captura entre o
+        1o e o 2o sorteio do mesmo concurso), numbers_second_draw fica vazio, sem quebrar."""
+        self._mock_response(mock_get, {
+            'numero': 3008,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': '6 acertos', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+            ],
+        })
+        result = fetch_cef_result('Dupla-Sena', '3008')
+        self.assertEqual(result['numbers_second_draw'], [])
+        self.assertEqual(result['prizes_second_draw'], {})
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_non_dupla_sena_game_always_has_empty_second_draw_fields(self, mock_get):
+        """Story 2.18: os 2 campos de 2o sorteio ficam sempre presentes no dict devolvido, mesmo
+        pra jogos que nunca tem 2 sorteios -- chamadores nao precisam checar o jogo antes de ler."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['01', '05', '18', '22', '28', '30'],
+            'listaRateioPremio': [],
+        })
+        result = fetch_cef_result('Mega-sena', '2500')
+        self.assertEqual(result['numbers_second_draw'], [])
+        self.assertEqual(result['prizes_second_draw'], {})
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_lotomania_zero_hits_tier_is_extracted(self, mock_get):
@@ -936,15 +1059,49 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=1,
         )
 
-    def test_regenerating_bet_creates_new_record_and_redirects(self):
+    def test_regenerating_bet_replaces_original_in_place(self):
+        """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
+        GeneratedBet pro mesmo Jogo+Concurso, consistente com o bloqueio de duplicata da Story 2.14."""
+        original_numbers = list(self.bet.numbers)
         response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
-        bets = GeneratedBet.objects.filter(
-            user=self.user, game='Mega-sena', contest='5000'
+        self.assertEqual(
+            GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1
         )
-        self.assertEqual(bets.count(), 2)
-        new_bet = bets.exclude(pk=self.bet.pk).get()
-        self.assertRedirects(response, reverse('bet_detail', args=[new_bet.pk]))
-        self.assertNotEqual(new_bet.pk, self.bet.pk)
+        self.bet.refresh_from_db()
+        self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
+        self.assertNotEqual(self.bet.numbers, original_numbers)
+        self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
+
+    @patch('apps.loterias_core.views.generate_bet')
+    def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
+        """Story 2.17: jogo com trevos (Milionaria) tem os trevos tambem substituidos, nao so os
+        numeros -- cobre o campo que a Mega-sena (sem trevo) nao consegue exercitar. Mocka
+        generate_bet pra evitar teste instavel (o pool de trevos da Milionaria tem so 15
+        combinacoes possiveis, entao um novo sorteio coincidir com o antigo nao e tao raro)."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Milionaria', contest='6000',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
+        )
+        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4])
+        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        bet.refresh_from_db()
+        self.assertEqual(bet.clovers, [3, 4])
+
+    def test_regenerating_resets_manual_and_verification_fields(self):
+        """Story 2.17: um jogo manual ja verificado (result_checked/hits/prize/manual) vira um jogo
+        algoritmico novo apos Refazer -- nenhum desses campos pode sobreviver ao numero antigo."""
+        checked_bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='6001',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+            manual=True, result_checked=True, hits=3, prize=50, prize_description='quadra',
+        )
+        self.client.get(reverse('regenerate_bet', args=[checked_bet.pk]))
+        checked_bet.refresh_from_db()
+        self.assertFalse(checked_bet.manual)
+        self.assertFalse(checked_bet.result_checked)
+        self.assertEqual(checked_bet.hits, 0)
+        self.assertEqual(checked_bet.prize, 0)
+        self.assertEqual(checked_bet.prize_description, '')
 
     def test_blocks_regenerating_for_contest_that_already_has_lottery_result(self):
         LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
@@ -1087,6 +1244,119 @@ class AdminSmokeTests(TestCase):
         response = self.client.get('/admin/loterias_core/lotteryresult/')
         self.assertEqual(response.status_code, 200)
 
+    def test_generatedbet_admin_normalizes_leading_zero_contest(self):
+        """Story 2.16: admin normaliza Concurso igual as views publicas (Story 2.12)."""
+        target_user = User.objects.create_user(email='betadmin@example.com', password='SenhaForte123')
+        response = self.client.post('/admin/loterias_core/generatedbet/add/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': '02500',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        bet = GeneratedBet.objects.get(user=target_user)
+        self.assertEqual(bet.contest, '2500')
+
+    def test_generatedbet_admin_rejects_non_numeric_contest(self):
+        target_user = User.objects.create_user(email='betadmin2@example.com', password='SenhaForte123')
+        response = self.client.post('/admin/loterias_core/generatedbet/add/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': 'ESPECIAL-2026',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Numero de concurso invalido')
+        self.assertFalse(GeneratedBet.objects.filter(user=target_user).exists())
+
+    def test_lotteryresult_admin_normalizes_leading_zero_contest(self):
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': '03500',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 302)
+        result = LotteryResult.objects.get(game='Mega-sena')
+        self.assertEqual(result.contest, '3500')
+
+    def test_lotteryresult_admin_rejects_non_numeric_contest(self):
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': 'ESPECIAL-2026',
+            'numbers': '[1, 2, 3, 4, 5, 6]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Numero de concurso invalido')
+        self.assertFalse(LotteryResult.objects.filter(game='Mega-sena').exists())
+
+    def test_generatedbet_admin_normalizes_leading_zero_contest_on_edit(self):
+        """Story 2.16: a normalizacao tambem vale ao EDITAR um registro existente, nao so ao criar
+        -- o relato original do bug era especificamente sobre edicao direta pelo admin."""
+        target_user = User.objects.create_user(email='betadmin3@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(
+            user=target_user, game='Mega-sena', contest='4000',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.post(f'/admin/loterias_core/generatedbet/{bet.pk}/change/', {
+            'user': target_user.pk,
+            'game': 'Mega-sena',
+            'contest': '04001',
+            'numbers': '[7, 8, 9, 10, 11, 12]',
+            'clovers': '[]',
+            'manual': False,
+            'result_checked': False,
+            'hits': 0,
+            'prize': '0',
+            'prize_description': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        bet.refresh_from_db()
+        self.assertEqual(bet.contest, '4001')
+
+    def test_lotteryresult_admin_normalization_surfaces_real_duplicate_via_unique_together(self):
+        """Story 2.16: prova que a normalizacao realmente fecha o bug original -- depois dela, uma
+        segunda grafia ('05000') do MESMO concurso real ja existente ('5000') colide de verdade
+        contra unique_together, em vez de criar silenciosamente um 2o registro pro mesmo concurso."""
+        LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena',
+            'contest': '05000',
+            'numbers': '[7, 8, 9, 10, 11, 12]',
+            'clovers': '[]',
+            'prizes': '{}',
+            'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Resultado Oficial com este Jogo e Concurso já existe')
+        self.assertEqual(LotteryResult.objects.filter(game='Mega-sena').count(), 1)
+
+    def test_capturefailurealert_admin_normalizes_leading_zero_contest(self):
+        response = self.client.post('/admin/loterias_core/capturefailurealert/add/', {
+            'game': 'Mega-sena',
+            'contest': '06000',
+        })
+        self.assertEqual(response.status_code, 302)
+        alert = CaptureFailureAlert.objects.get(game='Mega-sena')
+        self.assertEqual(alert.contest, '6000')
+
 
 class ReverseAccessorTests(TestCase):
     """Cobre user.bets e user.statistics (related_name renomeados na Story 1.1), sem teste ate aqui."""
@@ -1145,6 +1415,56 @@ class FetchDailyResultsJobTests(TestCase):
         self.assertEqual(result.clovers, [9])
         self.assertEqual(result.prizes, {'5': {'value': 'R$ 1.000,00'}})
         self.assertEqual(result.source, 'CEF')
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_dupla_sena_second_draw_is_persisted(self, mock_fetch):
+        """Story 2.18: fetch_daily_results persiste numbers_second_draw/prizes_second_draw junto
+        com o 1o sorteio."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3007',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [9, 23, 32, 33, 39, 48],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {'6': {'value': 'R$ 0,00'}},
+        }
+        fetch_daily_results()
+        result = LotteryResult.objects.get(game='Dupla-Sena', contest='3007')
+        self.assertEqual(result.numbers_second_draw, [9, 23, 32, 33, 39, 48])
+        self.assertEqual(result.prizes_second_draw, {'6': {'value': 'R$ 0,00'}})
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_dupla_sena_without_second_draw_yet_stays_open_for_next_run(self, mock_fetch):
+        """Story 2.18: se o 2o sorteio ainda nao veio na captura, o par continua em open_pairs na
+        proxima execucao -- nunca fica incompleto pra sempre so porque ja existe um LotteryResult."""
+        GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3009',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {},
+        }
+        fetch_daily_results()
+        self.assertEqual(mock_fetch.call_count, 1)
+
+        mock_fetch.return_value = {
+            'numbers': [10, 24, 26, 31, 32, 48],
+            'numbers_second_draw': [9, 23, 32, 33, 39, 48],
+            'clovers': [],
+            'prizes': {'6': {'value': 'R$ 0,00'}},
+            'prizes_second_draw': {'6': {'value': 'R$ 0,00'}},
+        }
+        fetch_daily_results()
+        self.assertEqual(mock_fetch.call_count, 2)
+        result = LotteryResult.objects.get(game='Dupla-Sena', contest='3009')
+        self.assertEqual(result.numbers_second_draw, [9, 23, 32, 33, 39, 48])
 
     @patch('apps.loterias_core.jobs.fetch_cef_result')
     def test_two_bets_same_pair_only_fetch_once_per_run(self, mock_fetch):
@@ -1244,6 +1564,32 @@ class HitNotificationGenerationTests(TestCase):
             fetch_daily_results()
         bet.refresh_from_db()
         self.assertEqual(bet.hits, 0)
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
+    def test_dupla_sena_notification_uses_second_draw_when_it_pays_more(self):
+        """Story 2.18, ponta a ponta: bet que so bate no 2o sorteio da Dupla-Sena (premio maior que
+        o 1o) gera HitNotification com o hits/premio do 2o sorteio, passando por
+        fetch_daily_results -> _notify_covered_bets -> calculate_bet_prize -- nao so a unidade
+        isolada de calculate_bet_prize."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Dupla-Sena', contest='3007',
+            numbers=[9, 23, 32, 33, 39, 48], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Dupla-Sena', contest='3007',
+            numbers=[10, 24, 26, 31, 32, 48],
+            numbers_second_draw=[9, 23, 32, 33, 39, 48],
+            clovers=[],
+            prizes={'1': {'value': 'R$ 0,00', 'winners': 0}},
+            prizes_second_draw={'6': {'value': 'R$ 500.000,00', 'winners': 1}},
+        )
+        with patch('apps.loterias_core.jobs.fetch_cef_result') as mock_fetch:
+            mock_fetch.return_value = None
+            fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertEqual(bet.hits, 6)
+        self.assertEqual(bet.prize, Decimal('500000.00'))
         notification = HitNotification.objects.get(bet=bet)
         self.assertTrue(notification.won)
 
