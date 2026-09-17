@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-14-2026 13:00
+last_updated: 09-16-2026 20:30
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -43,7 +43,7 @@ development_status:
   1-5-renomear-campos-remanescentes-em-português-no-model-user: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-rotina-diária-de-resultados: done
   2-2-bloqueio-de-concurso-já-sorteado: done
   2-3-geração-de-notificação-de-acerto: done
@@ -63,7 +63,7 @@ development_status:
   2-17-refazer-segue-a-regra-de-bloqueio-de-duplicata: done
   2-18-suporte-ao-2º-sorteio-da-dupla-sena: done
   2-19-renomear-arquivos-de-template-pra-inglês: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-cadastro-inicial-só-com-e-mail: done
@@ -86,3 +86,59 @@ action_items:
     owner: "proxima sessao de dev"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-09-14.md"
+  - id: "epic-2-retro-item-1-fix-stale-hitnotification-regenerate"
+    epic: 2
+    action: "Deletar HitNotification obsoleta em regenerate_bet_view quando o resultado
+      foi purgado (F1)"
+    owner: "proxima sessao de dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-2-fix-open-redirect-mark-notification-read"
+    epic: 2
+    action: "Corrigir guarda de redirect aberto em mark_notification_read_view (bloquear
+      next=//...) (F2)"
+    owner: "proxima sessao de dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-3-fix-matched-numbers-dupla-sena-segundo-sorteio"
+    epic: 2
+    action: "notifications_view: considerar 2o sorteio da Dupla-Sena e trevos no calculo
+      de matched_numbers (F3)"
+    owner: "proxima sessao de dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-4-reforcar-testes-guardas-combinadas"
+    epic: 2
+    action: "Reforcar asserção de mensagem em test_blocks_even_when_user_also_has_duplicate_bet
+      e adicionar teste combinado equivalente pra save_manual_bet_view (F4)"
+    owner: "proxima sessao de dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-5-convencao-compartilhada-concorrencia"
+    epic: 2
+    action: "Definir convencao/helper compartilhado de concorrencia (select_for_update/UniqueConstraint)
+      em vez de redecidir por story"
+    owner: "proxima revisao de arquitetura"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-6-mover-regras-concurso-pro-model"
+    epic: 2
+    action: "Mover regras de integridade de Concurso (ja-sorteado, duplicata, normalizacao)
+      da camada de view pro model/manager"
+    owner: "proxima revisao de arquitetura"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-7-avaliar-split-tests-py"
+    epic: 2
+    action: "Avaliar dividir apps/loterias_core/tests.py (3196 linhas) por area antes
+      do proximo epico adicionar mais cobertura"
+    owner: "proxima sessao que tocar tests.py"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-2-retro-item-8-smoke-test-infra-deploy"
+    epic: 2
+    action: "Considerar smoke-test de ambiente na Definition of Done de stories que
+      tocam deploy/cron"
+    owner: "proxima retro/PRD"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
