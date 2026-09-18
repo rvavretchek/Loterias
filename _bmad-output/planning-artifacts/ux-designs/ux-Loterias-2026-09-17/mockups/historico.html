@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Key Screen — Histórico com filtros</title>
+<style>
+/*
+  Governed by EXPERIENCE.md (adendo 2026-09-17):
+  - Information Architecture: "/historico/" (existente, history_view) — ganha filter-bar (FR-24)
+  - Component Patterns: filter-bar (novo, FR-24 — sempre visivel, nao colapsavel; badges
+    removiveis por filtro ativo, GET/querystring, cumulativos); number-badge (existente,
+    estendido — flex-wrap p/ Lotomania; Dupla-Sena com 2 sub-linhas rotuladas "1o sorteio"/"2o
+    sorteio", empilhadas, nunca lado a lado)
+  - State Patterns: nao mostrado aqui "Historico — nenhum resultado pro filtro aplicado"
+    (estado alternativo, esta renderizacao mostra resultados presentes)
+  - Accessibility Floor: badges de filtro removiveis sao <button> reais, focaveis via teclado
+  - Key Flow: UJ-1, resolucao (passo 5 — revisita de jogos antigos via filtro)
+  Tokens: DESIGN.md frontmatter (light theme); .numero-bola reaproveitado sem alteracao visual.
+*/
+:root {
+  --bg-primary:#f8f9fa; --bg-secondary:#ffffff; --bg-card:#ffffff; --bg-navbar:#ffffff;
+  --text-primary:#212529; --text-secondary:#6c757d; --text-muted:#adb5bd;
+  --border-color:#dee2e6; --accent-primary:#0d6efd; --success:#198754;
+  --shadow: rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; padding:24px 16px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+  background:#e9ecef; color:var(--text-primary);
+}
+.caption { max-width:1080px; margin:0 auto 12px; font-size:13px; color:#495057; }
+.caption b { color:#212529; }
+.browser-frame {
+  max-width:1080px; margin:0 auto; background:#fff; border-radius:10px; overflow:hidden;
+  box-shadow:0 8px 30px rgba(0,0,0,.14); border:1px solid #d0d5db;
+}
+.browser-chrome { background:#e9ecef; padding:10px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #d0d5db; }
+.chrome-dot { width:10px; height:10px; border-radius:50%; }
+.chrome-address { flex:1; background:#fff; border:1px solid #d0d5db; border-radius:6px; padding:5px 12px; font-size:12px; color:#495057; margin-left:8px; }
+
+.container { max-width:1000px; margin:0 auto; padding:26px 24px 34px; }
+.page-title { display:flex; align-items:center; gap:10px; font-size:1.3rem; font-weight:700; margin:0 0 2px; }
+.page-sub { color:var(--text-secondary); margin:0 0 18px; font-size:.9rem; }
+
+.card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; box-shadow:0 2px 8px var(--shadow); }
+
+.filter-bar { padding:16px 20px; margin-bottom:14px; }
+.filter-row { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
+.filter-group { display:flex; flex-direction:column; gap:6px; }
+.filter-label { font-size:.78rem; font-weight:600; color:var(--text-secondary); }
+.form-select, .form-control { border:1px solid var(--border-color); border-radius:8px; padding:8px 12px; font-size:.88rem; color:var(--text-primary); background:#fff; }
+.form-select { width:170px; }
+.form-control.date { width:150px; }
+.check-group { display:flex; align-items:center; gap:8px; padding-bottom:9px; }
+.btn { display:inline-flex; align-items:center; gap:6px; border-radius:8px; padding:8px 18px; font-weight:600; font-size:.85rem; border:1px solid transparent; cursor:pointer; text-decoration:none; }
+.btn-primary { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
+
+.active-filters { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.filter-badge { display:inline-flex; align-items:center; gap:8px; background:rgba(13,110,253,.1); color:var(--accent-primary); border:none; border-radius:999px; padding:6px 8px 6px 14px; font-size:.82rem; font-weight:600; cursor:pointer; }
+.filter-badge svg { flex-shrink:0; }
+
+.game-list { display:flex; flex-direction:column; gap:12px; }
+.game-card { padding:16px 20px; }
+.game-card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.game-meta { display:flex; align-items:center; gap:12px; }
+.badge { display:inline-block; padding:4px 10px; border-radius:6px; font-size:.78rem; font-weight:600; }
+.badge-game { background:var(--accent-primary); color:#fff; }
+.contest { font-weight:600; font-size:.9rem; }
+.game-date { color:var(--text-secondary); font-size:.82rem; }
+.badge-premiado { background:rgba(25,135,84,.14); color:var(--success); display:inline-flex; align-items:center; gap:5px; }
+
+.numeros-wrap { display:flex; flex-wrap:wrap; gap:6px; }
+.numero-bola {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:36px; height:36px; border-radius:50%;
+  background:linear-gradient(135deg, var(--accent-primary), #0056b3);
+  color:#fff; font-weight:700; font-size:12px; box-shadow:0 2px 4px var(--shadow); flex-shrink:0;
+}
+.draw-row { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+.draw-row:last-child { margin-bottom:0; }
+.draw-label { font-size:.78rem; font-weight:600; color:var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="caption"><b>Histórico com filtros</b> — FR-24, UJ-1 (resolução). Barra de filtros sempre visível, "Só premiados" ativo como badge removível; lista abaixo cobre um jogo comum (Mega-Sena), Lotomania (muitos números, flex-wrap) e Dupla-Sena (2 sorteios empilhados).</div>
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <span class="chrome-dot" style="background:#ff5f56"></span>
+    <span class="chrome-dot" style="background:#ffbd2e"></span>
+    <span class="chrome-dot" style="background:#27c93f"></span>
+    <span class="chrome-address">app.loterias.exemplo/historico/?premiado=1</span>
+  </div>
+
+  <div class="container">
+    <h1 class="page-title">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>
+      Histórico de Jogos
+    </h1>
+    <p class="page-sub">Todos os jogos gerados por você</p>
+
+    <div class="card filter-bar">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="filter-label">Jogo</label>
+          <select class="form-select">
+            <option>Todos os jogos</option>
+            <option>Mega-Sena</option>
+            <option>+Milionária</option>
+            <option>Lotomania</option>
+            <option>Lotofácil</option>
+            <option>Quina</option>
+            <option>Dupla-Sena</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">De</label>
+          <input class="form-control date" type="text" value="dd/mm/aaaa" readonly>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Até</label>
+          <input class="form-control date" type="text" value="dd/mm/aaaa" readonly>
+        </div>
+        <div class="check-group">
+          <input type="checkbox" checked>
+          <label class="filter-label" style="font-weight:600;">Só premiados</label>
+        </div>
+        <button class="btn btn-primary">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8L4 5Z"/></svg>
+          Filtrar
+        </button>
+      </div>
+    </div>
+
+    <div class="active-filters">
+      <button class="filter-badge">
+        Só premiados
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg>
+      </button>
+    </div>
+
+    <div class="game-list">
+
+      <div class="card game-card">
+        <div class="game-card-head">
+          <div class="game-meta">
+            <span class="badge badge-game">Mega-Sena</span>
+            <span class="contest">Concurso 2822</span>
+            <span class="game-date">15/09/2026</span>
+          </div>
+          <span class="badge-premiado">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4Z"/></svg>
+            Premiado
+          </span>
+        </div>
+        <div class="numeros-wrap">
+          <span class="numero-bola">05</span>
+          <span class="numero-bola">12</span>
+          <span class="numero-bola">23</span>
+          <span class="numero-bola">34</span>
+          <span class="numero-bola">41</span>
+          <span class="numero-bola">56</span>
+        </div>
+      </div>
+
+      <div class="card game-card">
+        <div class="game-card-head">
+          <div class="game-meta">
+            <span class="badge badge-game">Lotomania</span>
+            <span class="contest">Concurso 2743</span>
+            <span class="game-date">10/09/2026</span>
+          </div>
+          <span class="badge-premiado">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4Z"/></svg>
+            Premiado
+          </span>
+        </div>
+        <div class="numeros-wrap">
+          <span class="numero-bola">00</span><span class="numero-bola">04</span><span class="numero-bola">08</span>
+          <span class="numero-bola">12</span><span class="numero-bola">16</span><span class="numero-bola">20</span>
+          <span class="numero-bola">24</span><span class="numero-bola">28</span><span class="numero-bola">32</span>
+          <span class="numero-bola">36</span><span class="numero-bola">40</span><span class="numero-bola">44</span>
+          <span class="numero-bola">48</span><span class="numero-bola">52</span><span class="numero-bola">56</span>
+          <span class="numero-bola">60</span><span class="numero-bola">64</span><span class="numero-bola">68</span>
+          <span class="numero-bola">72</span><span class="numero-bola">76</span>
+        </div>
+      </div>
+
+      <div class="card game-card">
+        <div class="game-card-head">
+          <div class="game-meta">
+            <span class="badge badge-game">Dupla-Sena</span>
+            <span class="contest">Concurso 2601</span>
+            <span class="game-date">05/09/2026</span>
+          </div>
+          <span class="badge-premiado">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4Z"/></svg>
+            Premiado
+          </span>
+        </div>
+        <div class="draw-row">
+          <span class="draw-label">1º sorteio:</span>
+          <div class="numeros-wrap">
+            <span class="numero-bola">03</span>
+            <span class="numero-bola">11</span>
+            <span class="numero-bola">19</span>
+            <span class="numero-bola">27</span>
+            <span class="numero-bola">35</span>
+            <span class="numero-bola">44</span>
+          </div>
+        </div>
+        <div class="draw-row">
+          <span class="draw-label">2º sorteio:</span>
+          <div class="numeros-wrap">
+            <span class="numero-bola">07</span>
+            <span class="numero-bola">14</span>
+            <span class="numero-bola">22</span>
+            <span class="numero-bola">30</span>
+            <span class="numero-bola">38</span>
+            <span class="numero-bola">46</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
