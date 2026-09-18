@@ -1,0 +1,187 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Regras de Geração - {{ game_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Story 4.3 (FR-18): rule-toggle-row -- label + switch SIM/NAO + campo Valor. */
+    .rule-toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.25rem; padding: 1.1rem 0; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
+    .rule-toggle-row:last-child { border-bottom: none; }
+    .rule-info { flex: 1; min-width: 220px; }
+    .rule-help { max-width: 440px; }
+    .rule-controls { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+    .rule-switch { display: flex; align-items: center; gap: 0.5rem; min-width: 5rem; margin: 0; padding-left: 0; }
+    .rule-switch .form-check-input { margin: 0; width: 2.75em; height: 1.5em; float: none; }
+    .rule-value { width: 200px; }
+    .rule-value:disabled { background-color: var(--bs-secondary-bg, #e9ecef); color: var(--text-muted, #adb5bd); }
+    .rule-value-int { width: 110px; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 860px;">
+    <a class="text-decoration-none text-secondary small d-inline-block mb-3" href="{% url 'home' %}">
+        <i class="bi bi-chevron-left" aria-hidden="true"></i> Voltar aos jogos
+    </a>
+
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+        <h1 class="h4 fw-bold mb-0">Regras de Geração — {{ game_name }}</h1>
+        <div class="d-flex align-items-center gap-3">
+            {% if is_customized %}
+            <span class="badge rounded-pill bg-success-subtle text-success-emphasis px-3 py-2" id="regras-indicador">
+                <i class="bi bi-check-lg" aria-hidden="true"></i> Personalizado por você
+            </span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-restaurar">
+                Restaurar padrão
+            </button>
+            {% else %}
+            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis px-3 py-2" id="regras-indicador">
+                <i class="bi bi-gear" aria-hidden="true"></i> Usando regras padrão do sistema
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" id="form-regras" novalidate>
+        {% csrf_token %}
+        <div class="card">
+            <div class="card-body py-2 px-4">
+                {% for row in rows %}
+                <div class="rule-toggle-row" data-rule="{{ row.rule_name }}">
+                    <div class="rule-info">
+                        <label class="fw-semibold mb-1" for="enabled-{{ row.rule_name }}">{{ row.label }}</label>
+                        {% if row.help %}<p class="rule-help small text-secondary mb-0" id="help-{{ row.rule_name }}">{{ row.help }}</p>{% endif %}
+                        {% if row.error %}<p class="text-danger small mb-0 mt-1" id="error-{{ row.rule_name }}" role="alert">{{ row.error }}</p>{% endif %}
+                    </div>
+                    <div class="rule-controls">
+                        <div class="form-check form-switch rule-switch">
+                            <input class="form-check-input rule-toggle" type="checkbox" role="switch"
+                                   id="enabled-{{ row.rule_name }}" name="enabled_{{ row.rule_name }}"
+                                   {% if row.help %}aria-describedby="help-{{ row.rule_name }}"{% endif %}
+                                   {% if row.enabled %}checked{% endif %}>
+                            <span class="rule-switch-text small fw-semibold" aria-hidden="true">{% if row.enabled %}Sim{% else %}Não{% endif %}</span>
+                        </div>
+                        {% if row.kind == 'choice' %}
+                        <select class="form-select rule-value" id="value-{{ row.rule_name }}" name="value_{{ row.rule_name }}"
+                                aria-label="Valor: {{ row.label }}"
+                                {% if row.error %}aria-invalid="true" aria-describedby="error-{{ row.rule_name }}"{% endif %}
+                                {% if not row.enabled %}disabled{% endif %}>
+                            <option value="">Selecione</option>
+                            {% for code, text in row.choices %}
+                            <option value="{{ code }}" {% if row.value == code %}selected{% endif %}>{{ text }}</option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <input type="number" class="form-control rule-value rule-value-int" id="value-{{ row.rule_name }}"
+                               name="value_{{ row.rule_name }}" min="1" max="{{ row.max }}" step="1" placeholder="—"
+                               aria-label="Valor: {{ row.label }}"
+                               {% if row.error %}aria-invalid="true" aria-describedby="error-{{ row.rule_name }}"{% endif %}
+                               value="{% if row.value != None %}{{ row.value }}{% endif %}"
+                               {% if not row.enabled %}disabled{% endif %}>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="regras-live" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+
+        <p class="small text-secondary mt-3 d-flex gap-2">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            As mudanças valem a partir do próximo jogo gerado — jogos já gerados não são recalculados.
+        </p>
+
+        <div class="d-flex justify-content-end mt-3">
+            <button type="submit" class="btn btn-primary px-4" id="btn-salvar-regras">Salvar Regras</button>
+        </div>
+    </form>
+</div>
+
+{% if is_customized %}
+<div class="modal fade" id="modal-restaurar" tabindex="-1" aria-labelledby="modal-restaurar-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="modal-restaurar-titulo">Restaurar padrão?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                Suas regras personalizadas de {{ game_name }} serão apagadas e o jogo volta a usar as regras padrão do sistema.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" name="restaurar" value="1" class="btn btn-danger">Restaurar padrão</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if requires_sequence_protection %}
+<div class="modal fade" id="modal-sem-sequencia" tabindex="-1" aria-labelledby="modal-sem-sequencia-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="modal-sem-sequencia-titulo">Salvar sem proteção de sequência?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                Nenhuma regra de sequência está ligada para {{ game_name }}. Os jogos gerados poderão ter qualquer quantidade de números em sequência.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-sem-sequencia">Salvar mesmo assim</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{{ sequence_rule_names|json_script:"sequence-rule-names" }}
+<script>
+(function () {
+    var form = document.getElementById('form-regras');
+    var live = document.getElementById('regras-live');
+
+    // O campo Valor nunca some: o switch so alterna o atributo disabled nativo.
+    document.querySelectorAll('.rule-toggle').forEach(function (toggle) {
+        toggle.addEventListener('change', function () {
+            var row = toggle.closest('.rule-toggle-row');
+            var field = row.querySelector('.rule-value');
+            var text = row.querySelector('.rule-switch-text');
+            var label = row.querySelector('.rule-info label').textContent.trim();
+            field.disabled = !toggle.checked;
+            text.textContent = toggle.checked ? 'Sim' : 'Não';
+            live.textContent = label + ': ' + (toggle.checked ? 'ligada, campo Valor habilitado.' : 'desligada, campo Valor desabilitado.');
+        });
+    });
+
+    {% if requires_sequence_protection %}
+    var sequenceRules = JSON.parse(document.getElementById('sequence-rule-names').textContent);
+    var modalEl = document.getElementById('modal-sem-sequencia');
+    var saveButton = document.getElementById('btn-salvar-regras');
+    var confirmed = false;
+
+    function hasSequenceProtection() {
+        return sequenceRules.some(function (name) {
+            var toggle = document.getElementById('enabled-' + name);
+            return toggle && toggle.checked;
+        });
+    }
+
+    form.addEventListener('submit', function (event) {
+        if (confirmed || hasSequenceProtection()) { return; }
+        event.preventDefault();
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    });
+    document.getElementById('btn-confirmar-sem-sequencia').addEventListener('click', function () {
+        confirmed = true;
+        form.submit();
+    });
+    modalEl.addEventListener('hidden.bs.modal', function () { saveButton.focus(); });
+    {% endif %}
+})();
+</script>
+{% endblock %}

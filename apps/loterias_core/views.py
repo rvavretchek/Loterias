@@ -1,14 +1,20 @@
 import logging
+import re
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count
 from .forms import NotificationPreferenceForm
-from .models import GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE
+from .models import (
+    GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GenerationRule,
+    GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, RULE_DEFINITIONS, RULE_NAMES_BY_GAME,
+    SEQUENCE_RULE_NAMES, DISTRIBUTION_CHOICES,
+)
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
@@ -498,3 +504,119 @@ def notification_preferences_view(request):
 
     context = {'form': form}
     return render(request, 'loterias_core/preferencias_notificacao.html', context)
+
+
+# Jogos com grid do volante confirmado (PRD 8.5) -- so pra montar o texto de ajuda de linha/coluna.
+_GRID_HELP = {
+    'limit_row_count': 'Considera as linhas do volante oficial da {game} na Caixa.',
+    'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa.',
+}
+
+
+def _game_from_slug(slug):
+    for game_name in GAMES_CONFIG:
+        if game_name.lower() == slug:
+            return game_name
+    return None
+
+
+def _build_rule_rows(game, saved_by_name, posted=None):
+    """Monta as linhas do formulario a partir do que esta salvo ou, se houver POST invalido, do
+    que foi enviado. Devolve (rows, has_errors)."""
+    config = GAMES_CONFIG[game]
+    rows = []
+    has_errors = False
+    for rule_name in RULE_NAMES_BY_GAME[game]:
+        definition = RULE_DEFINITIONS[rule_name]
+        saved = saved_by_name.get(rule_name)
+        kind = definition['kind']
+        stored_value = None
+        if saved is not None:
+            stored_value = saved.numeric_value if kind == 'int' else saved.choice_value
+        row = {
+            'rule_name': rule_name,
+            'label': definition['label'],
+            'kind': kind,
+            'help': _GRID_HELP[rule_name].format(game=config['name']) if rule_name in _GRID_HELP else '',
+            'enabled': bool(saved and saved.enabled),
+            'value': stored_value,
+            'error': '',
+            'max': config['numbers_count'],
+            'choices': DISTRIBUTION_CHOICES if kind == 'choice' else None,
+            'submitted_value': None,  # None = nao enviado (campo desabilitado): preserva o salvo
+        }
+        if posted is not None:
+            row['enabled'] = f'enabled_{rule_name}' in posted
+            raw = posted.get(f'value_{rule_name}')
+            if raw is not None:
+                raw = raw.strip()
+                row['submitted_value'] = raw
+                row['value'] = raw
+            if row['enabled']:
+                row['error'] = _validate_rule_value(kind, raw or '', config['numbers_count'])
+                has_errors = has_errors or bool(row['error'])
+        rows.append(row)
+    return rows, has_errors
+
+
+def _validate_rule_value(kind, raw, maximum):
+    if kind == 'choice':
+        if raw not in dict(DISTRIBUTION_CHOICES):
+            return 'Escolha um tipo de distribuição.'
+        return ''
+    if not re.fullmatch(r'[0-9]{1,6}', raw) or not 1 <= int(raw) <= maximum:
+        return f'Informe um número inteiro entre 1 e {maximum}.'
+    return ''
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def regras_geracao_view(request, jogo):
+    """Tela de edicao das Regras de Geracao de um Jogo (Story 4.3, FR-18/FR-23). Salvar grava uma
+    linha por regra do Jogo (nunca deleta); so 'Restaurar padrao' apaga as linhas do user+game."""
+    game = _game_from_slug(jogo)
+    if game is None:
+        raise Http404('Jogo inexistente.')
+
+    user_rules = GenerationRule.objects.filter(user=request.user, game=game)
+
+    if request.method == 'POST':
+        if 'restaurar' in request.POST:
+            user_rules.delete()
+            messages.success(request, f'Regras de {GAMES_CONFIG[game]["name"]} restauradas para o padrão do sistema.')
+            return redirect('generation_rules', jogo=jogo)
+
+        saved_by_name = {rule.rule_name: rule for rule in user_rules}
+        rows, has_errors = _build_rule_rows(game, saved_by_name, posted=request.POST)
+        if not has_errors:
+            with transaction.atomic():  # tudo ou nada: nunca um conjunto de regras salvo pela metade
+                for row in rows:
+                    defaults = {'enabled': row['enabled']}
+                    if row['enabled']:
+                        if row['kind'] == 'int':
+                            defaults.update(numeric_value=int(row['submitted_value']), choice_value=None)
+                        else:
+                            defaults.update(choice_value=row['submitted_value'], numeric_value=None)
+                    # Desligada: nao toca nos valores -- preserva o que estava salvo.
+                    GenerationRule.objects.update_or_create(
+                        user=request.user, game=game, rule_name=row['rule_name'], defaults=defaults,
+                    )
+            messages.success(
+                request,
+                f'Regras de {GAMES_CONFIG[game]["name"]} salvas.',
+            )
+            return redirect('generation_rules', jogo=jogo)
+        messages.error(request, 'Corrija os campos destacados para salvar as regras.')
+    else:
+        saved_by_name = {rule.rule_name: rule for rule in user_rules}
+        rows, has_errors = _build_rule_rows(game, saved_by_name)
+
+    context = {
+        'game_key': game,
+        'game_name': GAMES_CONFIG[game]['name'],
+        'rows': rows,
+        'is_customized': user_rules.exists(),
+        'requires_sequence_protection': game in GAMES_WITH_SEQUENCE_RULE,
+        'sequence_rule_names': SEQUENCE_RULE_NAMES,
+    }
+    return render(request, 'loterias_core/regras_geracao.html', context)

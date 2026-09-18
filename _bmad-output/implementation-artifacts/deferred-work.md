@@ -182,3 +182,9 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-icone-por-jogo-no-seletor.md`
   summary: "O comportamento JS do seletor (`selectGame`: atualizar ícone/nome/resumo da área 'jogo selecionado', sugestão de concurso, restauração via bfcache/back) não tem teste automatizado — os testes só cobrem o HTML/CSS renderizado; o projeto não tem infra de teste de frontend (Selenium/Playwright/Jest)."
   evidence: Achado pelo Blind Hunter na revisão da Story 4.2. Validado só manualmente no navegador pelo Boss. Revisitar se mais lógica de JS entrar nas Stories 4.3+ (toggle das Regras de Geração, confirmação FR-23) — aí vale montar um harness mínimo de teste de JS/E2E.
+
+## Deferred from: build da Story 4.3 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-model-generationrule-e-tela-de-edicao.md`
+  summary: "O aviso 'sem proteção de sequência' (FR-23) só existe no navegador (modal em JS); um POST direto ou sem JavaScript salva tudo desligado sem confirmação, e nenhum teste exercita o JS da tela (switch/modais)."
+  evidence: Achado pelo Blind/Edge Case Hunter na revisão da Story 4.3. Baixo risco (usuário logado editando as próprias regras), mas junto com o item da 4.2 reforça a falta de infra de teste de frontend — revisitar ao montar um harness de JS/E2E.

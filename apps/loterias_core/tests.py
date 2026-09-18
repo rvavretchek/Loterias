@@ -18,6 +18,7 @@ from apps.accounts.models import User
 from apps.loterias_core.models import (
     GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference,
     PrizeTier, CaptureFailureAlert, CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS, GAMES_CONFIG,
+    GenerationRule, RULE_NAMES_BY_GAME, RULE_DEFINITIONS,
 )
 from apps.loterias_core.emails import send_hit_notification_email
 from apps.loterias_core.jobs import (
@@ -3294,3 +3295,182 @@ class LotteryResultPurgeAdminTests(TestCase):
         update_monthly_prize_values()
         fetch_daily_results()
         self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+
+class RuleNamesByGameTests(TestCase):
+    def test_keys_match_games_config_and_names_are_defined(self):
+        self.assertEqual(set(RULE_NAMES_BY_GAME), set(GAMES_CONFIG))
+        for names in RULE_NAMES_BY_GAME.values():
+            self.assertEqual(len(names), len(set(names)))
+            for name in names:
+                self.assertIn(name, RULE_DEFINITIONS)
+
+    def test_row_and_column_rules_only_for_confirmed_grids(self):
+        for game in ('Milionaria', 'Quina', 'Dupla-Sena', 'Lotomania'):
+            self.assertNotIn('limit_row_count', RULE_NAMES_BY_GAME[game])
+            self.assertNotIn('limit_column_count', RULE_NAMES_BY_GAME[game])
+        for game in ('Mega-sena', 'Lotofacil'):
+            self.assertIn('limit_row_count', RULE_NAMES_BY_GAME[game])
+            self.assertIn('limit_column_count', RULE_NAMES_BY_GAME[game])
+
+
+class GenerationRuleModelTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rule-model@example.com', password='SenhaForte123')
+
+    def test_unique_per_user_game_rule(self):
+        GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count', enabled=True, numeric_value=2)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+
+    def test_check_constraint_rejects_both_values(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(
+                user=self.user, game='Quina', rule_name='distribution_type',
+                numeric_value=1, choice_value='homogenea',
+            )
+
+    def test_disabled_row_without_value_is_allowed(self):
+        rule = GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+        self.assertFalse(rule.enabled)
+        self.assertIsNone(rule.numeric_value)
+
+    def test_clean_rejects_rule_name_from_another_game(self):
+        rule = GenerationRule(user=self.user, game='Quina', rule_name='limit_row_count')
+        with self.assertRaises(ValidationError):
+            rule.clean()
+
+
+class GenerationRulesViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
+        self.other = User.objects.create_user(email='rules-other@example.com', password='SenhaForte123')
+        self.url = reverse('generation_rules', kwargs={'jogo': 'mega-sena'})
+        self.client.force_login(self.user)
+
+    def _post(self, data, url=None):
+        return self.client.post(url or self.url, data)
+
+    def test_anonymous_redirects_to_login(self):
+        self.client.logout()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('login', response.url)
+
+    def test_unknown_game_is_404(self):
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'xpto'}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_first_visit_shows_default_with_disabled_value_fields(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usando regras padrão do sistema')
+        self.assertNotContains(response, 'data-bs-target="#modal-restaurar"')
+        for name in RULE_NAMES_BY_GAME['Mega-sena']:
+            self.assertContains(response, f'name="value_{name}"')
+        self.assertContains(response, 'aria-describedby="help-limit_row_count"')
+        self.assertFalse(GenerationRule.objects.exists())
+        html = response.content.decode()
+        for name in RULE_NAMES_BY_GAME['Mega-sena']:
+            field = html[html.index('id="value-%s"' % name):]
+            field = field[:field.index('>')]
+            self.assertIn('disabled', field, name)
+
+    def test_enabled_rule_renders_editable_value_and_restore_modal_when_customized(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        html = self.client.get(self.url).content.decode()
+        enabled_field = html[html.index('id="value-limit_sequence_count"'):]
+        self.assertNotIn('disabled', enabled_field[:enabled_field.index('>')])
+        disabled_field = html[html.index('id="value-limit_sequence_pairs"'):]
+        self.assertIn('disabled', disabled_field[:disabled_field.index('>')])
+        self.assertIn('data-bs-target="#modal-restaurar"', html)
+        self.assertIn('name="restaurar"', html)
+
+    def test_save_writes_one_row_per_rule_and_shows_customized(self):
+        response = self._post({
+            'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2',
+            'enabled_distribution_type': 'on', 'value_distribution_type': 'homogenea',
+        })
+        self.assertRedirects(response, self.url)
+        rows = GenerationRule.objects.filter(user=self.user, game='Mega-sena')
+        self.assertEqual(rows.count(), len(RULE_NAMES_BY_GAME['Mega-sena']))
+        self.assertEqual(rows.get(rule_name='limit_sequence_count').numeric_value, 2)
+        self.assertTrue(rows.get(rule_name='limit_sequence_count').enabled)
+        self.assertEqual(rows.get(rule_name='distribution_type').choice_value, 'homogenea')
+        self.assertFalse(rows.get(rule_name='limit_row_count').enabled)
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Personalizado por você')
+        self.assertContains(response, 'value="2"')
+
+    def test_unchecking_keeps_row_disabled_and_preserves_value(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '3'})
+        # Toggle desligado: o navegador nao envia o campo desabilitado.
+        self._post({})
+        rule = GenerationRule.objects.get(user=self.user, game='Mega-sena', rule_name='limit_sequence_count')
+        self.assertFalse(rule.enabled)
+        self.assertEqual(rule.numeric_value, 3)
+        self.assertEqual(GenerationRule.objects.filter(user=self.user, game='Mega-sena').count(), 5)
+
+    def test_invalid_values_save_nothing_and_show_range_error(self):
+        for bad in ('', '0', '61', '2.5', 'abc', '-1'):
+            response = self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': bad})
+            self.assertEqual(response.status_code, 200, bad)
+            self.assertContains(response, 'entre 1 e 60', msg_prefix=bad)
+            self.assertFalse(GenerationRule.objects.exists(), bad)
+
+    def test_huge_digit_string_is_a_validation_error_not_a_crash(self):
+        response = self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '9' * 5000})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'entre 1 e 60')
+        self.assertFalse(GenerationRule.objects.exists())
+
+    def test_invalid_post_preserves_what_the_user_typed(self):
+        response = self._post({
+            'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2',
+            'enabled_limit_sequence_pairs': 'on', 'value_limit_sequence_pairs': '99',
+        })
+        self.assertContains(response, 'entre 1 e 60')
+        html = response.content.decode()
+        self.assertIn('value="2"', html)
+        self.assertIn('value="99"', html)
+
+    def test_invalid_choice_is_rejected(self):
+        response = self._post({'enabled_distribution_type': 'on', 'value_distribution_type': 'xyz'})
+        self.assertContains(response, 'Escolha um tipo de distribuição.')
+        self.assertFalse(GenerationRule.objects.exists())
+
+    def test_restore_deletes_only_this_user_and_game(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+        GenerationRule.objects.create(user=self.other, game='Mega-sena', rule_name='limit_sequence_count')
+        response = self._post({'restaurar': '1'})
+        self.assertRedirects(response, self.url)
+        self.assertFalse(GenerationRule.objects.filter(user=self.user, game='Mega-sena').exists())
+        self.assertTrue(GenerationRule.objects.filter(user=self.user, game='Quina').exists())
+        self.assertTrue(GenerationRule.objects.filter(user=self.other, game='Mega-sena').exists())
+
+    def test_users_are_isolated(self):
+        GenerationRule.objects.create(
+            user=self.other, game='Mega-sena', rule_name='limit_sequence_count', enabled=True, numeric_value=4,
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Usando regras padrão do sistema')
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        self.assertEqual(
+            GenerationRule.objects.get(user=self.other, game='Mega-sena', rule_name='limit_sequence_count').numeric_value, 4,
+        )
+
+    def test_sequence_protection_modal_only_for_sequence_games(self):
+        self.assertContains(self.client.get(self.url), 'id="modal-sem-sequencia"')
+        lotomania = reverse('generation_rules', kwargs={'jogo': 'lotomania'})
+        self.assertNotContains(self.client.get(lotomania), 'id="modal-sem-sequencia"')
+
+    def test_row_column_fields_absent_for_unconfirmed_grid(self):
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'quina'}))
+        self.assertNotContains(response, 'limit_row_count')
+        self.assertNotContains(response, 'limit_column_count')
+
+    def test_home_links_to_rules_of_each_game(self):
+        response = self.client.get(reverse('home'))
+        for game in GAMES_CONFIG:
+            self.assertContains(response, reverse('generation_rules', kwargs={'jogo': game.lower()}))

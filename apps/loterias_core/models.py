@@ -26,6 +26,49 @@ GAMES_CONFIG = {
 GAMES_WITH_SEQUENCE_RULE = {'Mega-sena', 'Milionaria', 'Quina', 'Dupla-Sena'}
 MIN_SEQUENCE_INTERVAL = 5
 
+# Regras de Geracao personalizaveis (Story 4.3, AD-11). RULE_NAMES_BY_GAME e a fonte unica de
+# quais rule_name existem por Jogo -- nenhum outro lugar hardcoda esses nomes. 'kind' diz se a
+# regra usa numeric_value ('int') ou choice_value ('choice').
+DISTRIBUTION_CHOICES = [
+    ('homogenea', 'Homogênea'),
+    ('totalmente_aleatoria', 'Totalmente Aleatória'),
+]
+RULE_DEFINITIONS = {
+    'limit_sequence_count': {'label': 'Limita quantidade de números em sequência', 'kind': 'int'},
+    'limit_sequence_pairs': {'label': 'Limita quantidade de sequências num jogo', 'kind': 'int'},
+    'limit_row_count': {'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int'},
+    'limit_column_count': {'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int'},
+    'distribution_type': {'label': 'Tipo de distribuição', 'kind': 'choice'},
+    'limit_min_gap_between_sequences': {
+        'label': 'Distância mínima entre sequências', 'kind': 'int',
+    },
+    'limit_min_sequences': {'label': 'Quantidade mínima de sequências', 'kind': 'int'},
+}
+RULE_NAMES_BY_GAME = {
+    'Mega-sena': [
+        'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
+        'limit_column_count', 'distribution_type',
+    ],
+    # Linha/coluna indisponiveis pra +Milionaria/Quina/Dupla-Sena ate o grid oficial ser
+    # confirmado (PRD 8.5).
+    'Milionaria': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
+    'Quina': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
+    'Dupla-Sena': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
+    'Lotofacil': [
+        'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
+        'limit_column_count', 'distribution_type', 'limit_min_gap_between_sequences',
+        'limit_min_sequences',
+    ],
+    'Lotomania': ['limit_sequence_count', 'limit_min_gap_between_sequences', 'limit_min_sequences'],
+}
+# Regras que controlam sequencia (usadas pelo aviso "sem protecao de sequencia" da tela de edicao).
+SEQUENCE_RULE_NAMES = ('limit_sequence_count', 'limit_sequence_pairs')
+RULE_NAME_CHOICES = [
+    (name, RULE_DEFINITIONS[name]['label'])
+    for name in RULE_DEFINITIONS
+    if any(name in names for names in RULE_NAMES_BY_GAME.values())
+]
+
 
 class GeneratedBet(models.Model):
     """Modelo para armazenar jogos gerados por usuario."""
@@ -228,3 +271,42 @@ class CaptureFailureAlert(models.Model):
 
     def __str__(self):
         return f'Alerta - {self.game}/{self.contest}'
+
+
+class GenerationRule(models.Model):
+    """Regra de geracao personalizada por usuario+Jogo (Story 4.3, AD-11/AD-13). Ausencia de
+    linhas pra um (user, game) e o estado 'default do sistema'; desligar uma regra nunca deleta
+    a linha (so 'Restaurar padrao' deleta)."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='generation_rules',
+        verbose_name='Usuario'
+    )
+    game = models.CharField(max_length=20, choices=GeneratedBet.GAME_CHOICES, verbose_name='Jogo')
+    rule_name = models.CharField(max_length=40, choices=RULE_NAME_CHOICES, verbose_name='Regra')
+    enabled = models.BooleanField(default=False, verbose_name='Ligada')
+    numeric_value = models.IntegerField(null=True, blank=True, verbose_name='Valor numerico')
+    choice_value = models.CharField(max_length=30, null=True, blank=True, verbose_name='Valor de escolha')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
+
+    class Meta:
+        verbose_name = 'Regra de Geracao'
+        verbose_name_plural = 'Regras de Geracao'
+        unique_together = ('user', 'game', 'rule_name')
+        constraints = [
+            models.CheckConstraint(
+                check=~models.Q(numeric_value__isnull=False, choice_value__isnull=False),
+                name='generationrule_not_both_numeric_and_choice_value',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.game} - {self.rule_name} ({"ligada" if self.enabled else "desligada"})'
+
+    def clean(self):
+        super().clean()
+        if self.rule_name not in RULE_NAMES_BY_GAME.get(self.game, []):
+            raise ValidationError(f'A regra {self.rule_name} nao existe para o jogo {self.game}.')
+        if self.numeric_value is not None and self.choice_value is not None:
+            raise ValidationError('Uma regra nao pode ter valor numerico e valor de escolha ao mesmo tempo.')

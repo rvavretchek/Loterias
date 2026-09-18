@@ -21,6 +21,8 @@
     label.game-selector { display: block; position: relative; height: 100%; margin: 0; }
     .game-selector .game-icon { font-size: 1.75rem; color: var(--accent-primary); margin-bottom: 0.5rem; }
     .game-selector .h5 { font-weight: 600; }
+    .game-edit-link { position: absolute; bottom: 0.25rem; right: 0.25rem; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); text-decoration: none; border-radius: 50%; }
+    .game-edit-link:hover { color: var(--accent-primary); background-color: rgba(13, 110, 253, 0.1); }
     .game-selector-check { display: none; position: absolute; top: 0.5rem; right: 0.6rem; color: var(--accent-primary); font-size: 1.1rem; }
     .btn-check:checked + .game-selector { border-color: var(--accent-primary); border-width: 3px; padding: calc(1rem - 1px); background-color: rgba(13, 110, 253, 0.1); }
     .btn-check:checked + .game-selector .game-selector-check { display: block; }
@@ -100,7 +102,7 @@
 
         <div id="seletor-de-jogos" class="row g-3 mb-4">
             {% for key, config in jogos_disponiveis.items %}
-            <div class="col-6 col-md-4 col-xxl-2">
+            <div class="col-6 col-md-4 col-xxl-2 position-relative">
                 <input type="radio" class="btn-check" name="jogo" id="jogo-{{ key }}" value="{{ key }}"
                        autocomplete="off" required data-name="{{ config.name }}"
                        data-resumo="{{ config.bets_count }} numeros de {{ config.numbers_count }} possiveis{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}">
@@ -117,6 +119,10 @@
                         </small>
                     </span>
                 </label>
+                <a href="{% url 'generation_rules' key|lower %}" class="game-edit-link"
+                   aria-label="Editar regras de geração de {{ config.name }}" title="Editar regras de geração">
+                    <i class="bi bi-sliders" aria-hidden="true"></i><span class="visually-hidden">editar</span>
+                </a>
             </div>
             {% endfor %}
         </div>
