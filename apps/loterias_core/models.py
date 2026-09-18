@@ -49,17 +49,34 @@ RULE_NAMES_BY_GAME = {
         'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
         'limit_column_count', 'distribution_type',
     ],
-    # Linha/coluna indisponiveis pra +Milionaria/Quina/Dupla-Sena ate o grid oficial ser
-    # confirmado (PRD 8.5).
-    'Milionaria': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
-    'Quina': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
-    'Dupla-Sena': ['limit_sequence_count', 'limit_sequence_pairs', 'distribution_type'],
+    'Milionaria': [
+        'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
+        'limit_column_count', 'distribution_type',
+    ],
+    'Quina': [
+        'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
+        'limit_column_count', 'distribution_type',
+    ],
+    'Dupla-Sena': [
+        'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
+        'limit_column_count', 'distribution_type',
+    ],
     'Lotofacil': [
         'limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count',
         'limit_column_count', 'distribution_type', 'limit_min_gap_between_sequences',
         'limit_min_sequences',
     ],
     'Lotomania': ['limit_sequence_count', 'limit_min_gap_between_sequences', 'limit_min_sequences'],
+}
+# Grid do volante oficial (linhas, colunas) -- base das regras de linha/coluna. Mega-Sena (6x10) e
+# Lotofacil (5x5) confirmados com fonte (PRD 8.5); +Milionaria/Quina/Dupla-Sena (5x10, 8x10, 5x10)
+# seguem o padrao de 10 colunas dos volantes da Caixa e ainda precisam de confirmacao do Boss.
+GAME_GRID = {
+    'Mega-sena': (6, 10),
+    'Milionaria': (5, 10),
+    'Quina': (8, 10),
+    'Dupla-Sena': (5, 10),
+    'Lotofacil': (5, 5),
 }
 # Regras que controlam sequencia (usadas pelo aviso "sem protecao de sequencia" da tela de edicao).
 SEQUENCE_RULE_NAMES = ('limit_sequence_count', 'limit_sequence_pairs')

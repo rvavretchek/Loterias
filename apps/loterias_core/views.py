@@ -13,7 +13,7 @@ from .forms import NotificationPreferenceForm
 from .models import (
     GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GenerationRule,
     GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, RULE_DEFINITIONS, RULE_NAMES_BY_GAME,
-    SEQUENCE_RULE_NAMES, DISTRIBUTION_CHOICES,
+    SEQUENCE_RULE_NAMES, DISTRIBUTION_CHOICES, GAME_GRID,
 )
 from .utils import (
     generate_bet, check_duplicate_bet, count_sequential_pairs,
@@ -508,8 +508,8 @@ def notification_preferences_view(request):
 
 # Jogos com grid do volante confirmado (PRD 8.5) -- so pra montar o texto de ajuda de linha/coluna.
 _GRID_HELP = {
-    'limit_row_count': 'Considera as linhas do volante oficial da {game} na Caixa.',
-    'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa.',
+    'limit_row_count': 'Considera as linhas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
+    'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
 }
 
 
@@ -537,7 +537,7 @@ def _build_rule_rows(game, saved_by_name, posted=None):
             'rule_name': rule_name,
             'label': definition['label'],
             'kind': kind,
-            'help': _GRID_HELP[rule_name].format(game=config['name']) if rule_name in _GRID_HELP else '',
+            'help': _GRID_HELP[rule_name].format(game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1]) if rule_name in _GRID_HELP else '',
             'enabled': bool(saved and saved.enabled),
             'value': stored_value,
             'error': '',

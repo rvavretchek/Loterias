@@ -18,7 +18,7 @@ from apps.accounts.models import User
 from apps.loterias_core.models import (
     GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference,
     PrizeTier, CaptureFailureAlert, CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS, GAMES_CONFIG,
-    GenerationRule, RULE_NAMES_BY_GAME, RULE_DEFINITIONS,
+    GenerationRule, RULE_NAMES_BY_GAME, RULE_DEFINITIONS, GAME_GRID,
 )
 from apps.loterias_core.emails import send_hit_notification_email
 from apps.loterias_core.jobs import (
@@ -3305,13 +3305,19 @@ class RuleNamesByGameTests(TestCase):
             for name in names:
                 self.assertIn(name, RULE_DEFINITIONS)
 
-    def test_row_and_column_rules_only_for_confirmed_grids(self):
-        for game in ('Milionaria', 'Quina', 'Dupla-Sena', 'Lotomania'):
-            self.assertNotIn('limit_row_count', RULE_NAMES_BY_GAME[game])
-            self.assertNotIn('limit_column_count', RULE_NAMES_BY_GAME[game])
-        for game in ('Mega-sena', 'Lotofacil'):
+    def test_row_and_column_rules_for_every_game_with_a_grid_except_lotomania(self):
+        for game in ('Mega-sena', 'Milionaria', 'Quina', 'Dupla-Sena', 'Lotofacil'):
             self.assertIn('limit_row_count', RULE_NAMES_BY_GAME[game])
             self.assertIn('limit_column_count', RULE_NAMES_BY_GAME[game])
+            self.assertIn(game, GAME_GRID)
+        self.assertNotIn('limit_row_count', RULE_NAMES_BY_GAME['Lotomania'])
+        self.assertNotIn('limit_column_count', RULE_NAMES_BY_GAME['Lotomania'])
+
+    def test_rule_counts_match_the_boss_lists(self):
+        counts = {game: len(names) for game, names in RULE_NAMES_BY_GAME.items()}
+        self.assertEqual(counts, {
+            'Mega-sena': 5, 'Milionaria': 5, 'Quina': 5, 'Dupla-Sena': 5, 'Lotofacil': 7, 'Lotomania': 3,
+        })
 
 
 class GenerationRuleModelTests(TestCase):
@@ -3336,7 +3342,7 @@ class GenerationRuleModelTests(TestCase):
         self.assertIsNone(rule.numeric_value)
 
     def test_clean_rejects_rule_name_from_another_game(self):
-        rule = GenerationRule(user=self.user, game='Quina', rule_name='limit_row_count')
+        rule = GenerationRule(user=self.user, game='Lotomania', rule_name='limit_row_count')
         with self.assertRaises(ValidationError):
             rule.clean()
 
@@ -3465,10 +3471,13 @@ class GenerationRulesViewTests(TestCase):
         lotomania = reverse('generation_rules', kwargs={'jogo': 'lotomania'})
         self.assertNotContains(self.client.get(lotomania), 'id="modal-sem-sequencia"')
 
-    def test_row_column_fields_absent_for_unconfirmed_grid(self):
-        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'quina'}))
-        self.assertNotContains(response, 'limit_row_count')
-        self.assertNotContains(response, 'limit_column_count')
+    def test_row_column_fields_shown_for_quina_and_hidden_for_lotomania(self):
+        quina = self.client.get(reverse('generation_rules', kwargs={'jogo': 'quina'}))
+        self.assertContains(quina, 'name="value_limit_row_count"')
+        self.assertContains(quina, 'name="value_limit_column_count"')
+        self.assertContains(quina, '8 linhas x 10 colunas')
+        lotomania = self.client.get(reverse('generation_rules', kwargs={'jogo': 'lotomania'}))
+        self.assertNotContains(lotomania, 'limit_row_count')
 
     def test_home_links_to_rules_of_each_game(self):
         response = self.client.get(reverse('home'))
