@@ -737,20 +737,28 @@ class CreateBetViewTests(TestCase):
         self.assertEqual(GeneratedBet.objects.count(), 0)
         self.assertRedirects(response, reverse('home'))
 
-    def test_leading_zero_spelling_counts_as_duplicate_bet(self):
-        """Story 2.12: '02500' normaliza pra '2500' antes da checagem de duplicata do usuario."""
+    def test_leading_zero_spelling_is_normalized_and_allows_multiple_bets_per_contest(self):
+        """Story 2.12 + 2.20: '02500' normaliza pra '2500'; o usuario pode gerar varios jogos pro mesmo Jogo+Concurso."""
         GeneratedBet.objects.create(
             user=self.user, game='Mega-sena', contest='2500',
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
-        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
-        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
-        self.assertIn(('Voce ja tem um jogo de Mega-sena para o concurso 2500. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
+        self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
+        bets = GeneratedBet.objects.filter(user=self.user, game='Mega-sena')
+        self.assertEqual(bets.count(), 2)
+        self.assertEqual(set(bets.values_list('contest', flat=True)), {'2500'})
 
-    def test_blocks_even_when_user_also_has_duplicate_bet(self):
-        """As duas checagens coexistem: mesmo com um GeneratedBet duplicado do proprio usuario,
-        o bloqueio de concurso ja sorteado vence e nenhum segundo registro e criado."""
+    def test_user_can_generate_many_bets_for_the_same_game_and_contest(self):
+        """Story 2.20: sem limite de jogos por Jogo+Concurso (ate o concurso ser sorteado)."""
+        for _ in range(3):
+            response = self.client.post(reverse('create_bet'), {'jogo': 'Quina', 'concurso': '6000'}, follow=True)
+            mensagens = [m.level_tag for m in response.context['messages']]
+            self.assertNotIn('error', mensagens)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Quina', contest='6000').count(), 3)
+
+    def test_blocks_already_drawn_contest_even_when_user_has_a_bet_for_it(self):
+        """O bloqueio de concurso ja sorteado vale mesmo com um GeneratedBet do proprio usuario
+        pro mesmo Jogo+Concurso: nenhum registro novo e criado."""
         LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
         GeneratedBet.objects.create(
             user=self.user, game='Mega-sena', contest='2500',
@@ -921,8 +929,8 @@ class SaveManualBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
         self.assertFalse(bet.result_checked)
 
-    def test_blocks_duplicate_contest_for_same_user(self):
-        """Story 2.14: aviso de duplicata agora bloqueia de verdade -- nao cria o segundo registro."""
+    def test_allows_multiple_manual_bets_for_same_contest_and_user(self):
+        """Story 2.20: guardar varios jogos manuais pro mesmo Jogo+Concurso e permitido."""
         GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000',
             numbers=self.numbers, clovers=[], sequential_pairs=0, manual=True,
@@ -932,10 +940,9 @@ class SaveManualBetViewTests(TestCase):
             'concurso': '3000',
             'numeros': self.numeros_str,
         }, follow=True)
-        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
-        self.assertRedirects(response, reverse('home'))
-        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
-        self.assertIn(('Voce ja tem um jogo de Lotofacil para o concurso 3000. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Lotofacil', contest='3000').count(), 2)
+        mensagens = [m.level_tag for m in response.context['messages']]
+        self.assertNotIn('error', mensagens)
 
     def test_blocks_contest_that_already_has_lottery_result(self):
         LotteryResult.objects.create(game='Lotofacil', contest='3000', numbers=self.numbers, clovers=[], prizes={})
@@ -1061,7 +1068,7 @@ class RegenerateBetViewTests(TestCase):
 
     def test_regenerating_bet_replaces_original_in_place(self):
         """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
-        GeneratedBet pro mesmo Jogo+Concurso, consistente com o bloqueio de duplicata da Story 2.14."""
+        GeneratedBet pro mesmo Jogo+Concurso ("Refazer" troca os numeros do jogo)."""
         original_numbers = list(self.bet.numbers)
         response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
         self.assertEqual(

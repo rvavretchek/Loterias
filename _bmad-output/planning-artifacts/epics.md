@@ -163,7 +163,23 @@ Alinha todo o código já existente (models, funções, views) à convenção de
 O jogador sabe se ganhou sem precisar lembrar de checar manualmente — o sistema vigia os resultados oficiais da Caixa sozinho e avisa ao logar, diferenciando acerto premiado de não premiado.
 **FRs cobertos:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-15
 
-### Epic 3: Novo Fluxo de Cadastro
+#### Story 2.20: Permitir vários jogos por Jogo+Concurso
+
+Como jogador,
+Eu quero gerar e guardar quantos jogos eu quiser pro mesmo Jogo+Concurso,
+Para montar vários palpites pro mesmo sorteio.
+
+**Critérios de Aceite:**
+
+**Dado** o usuário já tem um ou mais `GeneratedBet` pro mesmo Jogo+Concurso ainda sem resultado
+**Quando** ele gera (`create_bet_view`) ou guarda um jogo manual (`save_manual_bet_view`) pra esse mesmo par
+**Então** um novo `GeneratedBet` é criado normalmente, sem bloqueio nem erro
+**E** o bloqueio de concurso já sorteado (Story 2.2) continua valendo, inclusive com jogos já existentes do usuário pro par
+**E** "Refazer" (Story 2.17) segue substituindo o jogo in-place — trocar os números de um jogo não é criar outro
+
+*Sem FR numerada nova — reverte a decisão (a) da Story 2.14 (2026-09-14), por decisão do Boss em 2026-09-18 ("isso é bug": a intenção sempre foi gerar quantos jogos quiser por concurso, como no PRD UJ-1).*
+
+## Epic 3: Novo Fluxo de Cadastro
 Uma pessoa se cadastra só com e-mail, confirma, cria senha, e só depois informa nome/sobrenome — cadastro deliberado em vez do genérico do allauth.
 **FRs cobertos:** FR-10, FR-11, FR-12, FR-13, FR-14
 
@@ -475,6 +491,8 @@ Para que o aviso não seja apenas cosmético.
 `apps/loterias_core/views.py`, ver `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`.
 
 *Sem FR numerada nova — correção de bug pré-existente, achado em revisão.*
+
+**Revertida em 2026-09-18 (Story 2.20):** o Boss esclareceu que a intenção do produto é gerar e guardar quantos jogos quiser por Jogo+Concurso (até o concurso ser sorteado) — a opção (a) acima contradizia isso. `_block_if_duplicate_bet` foi removido; o bloqueio de concurso já sorteado (Story 2.2) continua.
 
 ### Story 2.15: Runbook de Backfill Inicial de Notificações
 

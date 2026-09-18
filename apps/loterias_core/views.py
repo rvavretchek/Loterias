@@ -27,16 +27,6 @@ def _block_if_contest_already_drawn(request, game, contest, redirect_to='home', 
     return None
 
 
-def _block_if_duplicate_bet(request, user, game, contest, redirect_to='home', **redirect_kwargs):
-    """Bloqueia com mensagem clara se o usuario ja tem um GeneratedBet pro mesmo Jogo+Concurso
-    (Story 2.14 -- decisao do Boss: bloquear totalmente, nao so avisar) -- devolve um redirect
-    pronto se bloqueado, ou None se pode seguir."""
-    if GeneratedBet.objects.filter(user=user, game=game, contest=contest).exists():
-        messages.error(request, f'Voce ja tem um jogo de {game} para o concurso {contest}. Nao e possivel gerar outro para o mesmo Jogo+Concurso.')
-        return redirect(redirect_to, **redirect_kwargs)
-    return None
-
-
 def home(request):
     """Pagina inicial com dashboard."""
     if request.user.is_authenticated:
@@ -89,10 +79,6 @@ def create_bet_view(request):
         return redirect('home')
 
     blocked = _block_if_contest_already_drawn(request, selected_game, contest)
-    if blocked:
-        return blocked
-
-    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
     if blocked:
         return blocked
 
@@ -241,10 +227,6 @@ def save_manual_bet_view(request):
     if blocked:
         return blocked
 
-    blocked = _block_if_duplicate_bet(request, request.user, selected_game, contest)
-    if blocked:
-        return blocked
-
     sequential_pairs_count = count_sequential_pairs(numbers)
     bet = GeneratedBet.objects.create(
         user=request.user,
@@ -349,7 +331,8 @@ def regenerate_bet_view(request, pk):
     sequential_pairs_count = count_sequential_pairs(new_bet)
 
     # Story 2.17: substitui o jogo original in-place, em vez de criar um segundo registro pro
-    # mesmo Jogo+Concurso -- consistente com o bloqueio real de duplicata da Story 2.14.
+    # mesmo Jogo+Concurso -- "Refazer" troca os numeros do jogo (o usuario pode gerar quantos jogos quiser pelo mesmo
+    # concurso pelo botao Gerar; ver Story 2.20).
     # manual=False porque o jogo agora e algoritmico, nao mais o que o usuario digitou; os campos
     # de verificacao sao resetados porque o numero mudou -- qualquer hits/prize antigo pertence ao
     # jogo anterior, nunca ao novo (alcancavel mesmo com _block_if_contest_already_drawn: a purga
