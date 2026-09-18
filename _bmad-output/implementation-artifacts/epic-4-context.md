@@ -61,7 +61,7 @@ Gerar um jogo deixa de exigir scroll na home (resumo vira sidebar, jogo selecion
 ## UX & Interaction Patterns
 
 - Home: sidebar de resumo (3 stat-cards empilhados, só leitura) + área principal com "jogo selecionado" no topo e seletor logo abaixo. Sem jogo escolhido, mostra prompt leve.
-- Seletor: `selectGame()` estendida atualiza a área de jogo selecionado sem reload. Ícones: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-100`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack`.
+- Seletor: `selectGame()` estendida atualiza a área de jogo selecionado sem reload. Ícones: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-123`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack`.
 - Ícone de editar no card leva a `/regras/<jogo>/`:
   - Usa o padrão `.btn-check` (radio escondido + `<label>` só ao redor do conteúdo, nunca cobrindo o ícone de editar).
   - Alvo mínimo de 44×44px.

@@ -15,6 +15,18 @@
         .home-sidebar { width: 300px; flex-shrink: 0; position: sticky; top: 5.5rem; /* abaixo da navbar sticky-top */ }
     }
     .home-sidebar .stat-card { margin-bottom: 0.75rem; }
+
+    /* Story 4.2 (FR-17): seletor no padrao .btn-check (radio escondido + label como card). */
+    [hidden] { display: none !important; }
+    label.game-selector { display: block; position: relative; height: 100%; margin: 0; }
+    .game-selector .game-icon { font-size: 1.75rem; color: var(--accent-primary); margin-bottom: 0.5rem; }
+    .game-selector .h5 { font-weight: 600; }
+    .game-selector-check { display: none; position: absolute; top: 0.5rem; right: 0.6rem; color: var(--accent-primary); font-size: 1.1rem; }
+    .btn-check:checked + .game-selector { border-color: var(--accent-primary); border-width: 3px; padding: calc(1rem - 1px); background-color: rgba(13, 110, 253, 0.1); }
+    .btn-check:checked + .game-selector .game-selector-check { display: block; }
+    .btn-check:focus-visible + .game-selector { outline: 3px solid var(--accent-primary); outline-offset: 2px; }
+    .selected-game-head { display: flex; align-items: center; gap: 0.9rem; }
+    .selected-game-icon { width: 52px; height: 52px; border-radius: 50%; background: rgba(13, 110, 253, 0.1); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; }
 </style>
 {% endblock %}
 
@@ -57,9 +69,17 @@
                 <span>Gerar Novo Jogo</span>
             </div>
             <div class="card-body">
-                <p id="jogo-selecionado-prompt" class="text-secondary mb-3">
-                    <i class="bi bi-arrow-down-circle me-1"></i>Selecione um jogo abaixo para comecar.
-                </p>
+                <!-- Regiao aria-live: o conteudo sempre existe (nunca alterna display), so o texto/icone mudam,
+                     pra leitores de tela anunciarem a troca de jogo de forma confiavel. -->
+                <div id="jogo-selecionado-info" class="mb-3" aria-live="polite" aria-atomic="true">
+                    <div id="jogo-selecionado-atual" class="selected-game-head">
+                        <span class="selected-game-icon"><i id="jogo-selecionado-icone" class="bi bi-arrow-down-circle" aria-hidden="true"></i></span>
+                        <div>
+                            <p id="jogo-selecionado-nome" class="text-secondary mb-0">Selecione um jogo abaixo para comecar.</p>
+                            <p id="jogo-selecionado-resumo" class="text-secondary small mb-0"></p>
+                        </div>
+                    </div>
+                </div>
                 <div class="row g-3 align-items-end">
                     <div class="col-md-6 col-lg-4">
                         <label for="concurso" class="form-label fw-semibold">
@@ -81,19 +101,22 @@
         <div id="seletor-de-jogos" class="row g-3 mb-4">
             {% for key, config in jogos_disponiveis.items %}
             <div class="col-6 col-md-4 col-xxl-2">
-                <div class="game-selector" onclick="selectGame(this, '{{ key }}')">
-                    <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
-                    <div class="text-center">
-                        <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
-                        <h5 class="mb-1">{{ config.name }}</h5>
+                <input type="radio" class="btn-check" name="jogo" id="jogo-{{ key }}" value="{{ key }}"
+                       autocomplete="off" required data-name="{{ config.name }}"
+                       data-resumo="{{ config.bets_count }} numeros de {{ config.numbers_count }} possiveis{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}">
+                <label class="game-selector" for="jogo-{{ key }}">
+                    <i class="bi bi-check-circle-fill game-selector-check" aria-hidden="true"></i>
+                    <span class="d-block text-center">
+                        <span class="d-block"><i class="bi {% if key == 'Mega-sena' %}bi-trophy{% elif key == 'Milionaria' %}bi-flower1{% elif key == 'Lotomania' %}bi-123{% elif key == 'Lotofacil' %}bi-lightning{% elif key == 'Quina' %}bi-star{% elif key == 'Dupla-Sena' %}bi-stack{% else %}bi-dice-5{% endif %} game-icon" aria-hidden="true"></i></span>
+                        <span class="d-block h5 mb-1">{{ config.name }}</span>
                         <small class="text-secondary">
                             {{ config.bets_count }} de {{ config.numbers_count }}
                             {% if config.clovers > 0 %}
                             <br>+ {{ config.clovers }} trevos
                             {% endif %}
                         </small>
-                    </div>
-                </div>
+                    </span>
+                </label>
             </div>
             {% endfor %}
         </div>
@@ -250,25 +273,33 @@
 
 {% if concursos_sugeridos %}{{ concursos_sugeridos|json_script:"concursos-sugeridos-data" }}{% endif %}
 <script>
-function selectGame(element, gameName) {
-    // Remove active de todos
-    document.querySelectorAll('.game-selector').forEach(el => {
-        el.classList.remove('active');
-        el.querySelector('input[type="radio"]').checked = false;
-    });
+// Story 4.2: o seletor usa radios .btn-check (foco/teclado nativos); o estado visual
+// vem do CSS (:checked). Aqui so atualizamos a area "jogo selecionado" (regiao aria-live)
+// e a sugestao de concurso quando a escolha muda.
+function selectGame(radio) {
+    var label = document.querySelector('label[for="' + radio.id + '"]');
+    var iconEl = label ? label.querySelector('.game-icon') : null;
+    var iconClass = iconEl ? (Array.from(iconEl.classList).find(function (c) {
+        return c.indexOf('bi-') === 0;
+    }) || '') : '';
 
-    // Adiciona active ao clicado
-    element.classList.add('active');
-    element.querySelector('input[type="radio"]').checked = true;
+    // So troca texto/classe (nunca display): mantem a regiao aria-live anunciavel.
+    document.getElementById('jogo-selecionado-icone').className = 'bi ' + iconClass;
+    var nome = document.getElementById('jogo-selecionado-nome');
+    nome.textContent = radio.dataset.name;
+    nome.className = 'fw-bold fs-5 mb-0';
+    document.getElementById('jogo-selecionado-resumo').textContent = radio.dataset.resumo;
 
-    // Story 4.1: o prompt de "selecione um jogo" some assim que ha um jogo escolhido.
-    var prompt = document.getElementById('jogo-selecionado-prompt');
-    if (prompt) {
-        prompt.hidden = true;
-    }
-
-    preencherConcursoSugerido(gameName);
+    preencherConcursoSugerido(radio.value);
 }
+
+document.querySelectorAll('input[name="jogo"].btn-check').forEach(function (radio) {
+    radio.addEventListener('change', function () { selectGame(radio); });
+    // Restaura o estado ao voltar pra pagina (bfcache/back) com um jogo ja marcado.
+    if (radio.checked) {
+        selectGame(radio);
+    }
+});
 
 function getConcursosSugeridos() {
     var el = document.getElementById('concursos-sugeridos-data');

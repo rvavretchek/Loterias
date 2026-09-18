@@ -176,3 +176,9 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-1-reorganizacao-da-area-util-da-home.md`
   summary: "Os cards do `game-selector` são `div onclick` com radio `d-none required` — inacessíveis por teclado e, sem jogo selecionado, o submit falha com 'invalid form control is not focusable' sem nenhum aviso visível (agora mais exposto, já que o botão Gerar Jogo fica acima do seletor)."
   evidence: Achado pelo Blind Hunter na revisão da Story 4.1. Pré-existente (a mecânica de seleção não mudou); a Story 4.2 (UX-DR7) e o padrão `.btn-check` da EXPERIENCE.md já preveem reescrever o seletor de forma acessível — resolver lá.
+
+## Deferred from: build da Story 4.2 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-icone-por-jogo-no-seletor.md`
+  summary: "O comportamento JS do seletor (`selectGame`: atualizar ícone/nome/resumo da área 'jogo selecionado', sugestão de concurso, restauração via bfcache/back) não tem teste automatizado — os testes só cobrem o HTML/CSS renderizado; o projeto não tem infra de teste de frontend (Selenium/Playwright/Jest)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.2. Validado só manualmente no navegador pelo Boss. Revisitar se mais lógica de JS entrar nas Stories 4.3+ (toggle das Regras de Geração, confirmação FR-23) — aí vale montar um harness mínimo de teste de JS/E2E.

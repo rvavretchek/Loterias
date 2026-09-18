@@ -1176,6 +1176,45 @@ class HomeViewTests(TestCase):
         self.assertEqual(form_html.count('name="jogo"'), len(GAMES_CONFIG))
         self.assertLess(form_html.index('id="jogo-selecionado"'), form_html.index('id="seletor-de-jogos"'))
 
+    def test_game_selector_uses_distinct_decorative_icon_per_game(self):
+        """Story 4.2 (FR-17/UX-DR1): 1 icone distinto por Jogo, aria-hidden, sem o bi-dice-5 generico."""
+        user = User.objects.create_user(email='icones@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        expected = {
+            'Mega-sena': 'bi-trophy', 'Milionaria': 'bi-flower1', 'Lotomania': 'bi-123',
+            'Lotofacil': 'bi-lightning', 'Quina': 'bi-star', 'Dupla-Sena': 'bi-stack',
+        }
+        self.assertEqual(set(expected), set(GAMES_CONFIG))
+        selector = html[html.index('id="seletor-de-jogos"'):html.index('</form>', html.index('id="seletor-de-jogos"'))]
+        for game, icon in expected.items():
+            card = selector[selector.index('for="jogo-%s"' % game):]
+            card = card[:card.index('</label>')]
+            self.assertRegex(card, r'<i class="bi %s game-icon" aria-hidden="true"></i>' % icon)
+        self.assertNotIn('bi-dice-5', selector)
+        self.assertEqual(len(set(expected.values())), len(expected))
+
+    def test_game_selector_is_keyboard_accessible_radio_pattern_with_non_color_check(self):
+        """Story 4.2 (UX-DR7): radios .btn-check + label (sem div onclick), check no card selecionado."""
+        user = User.objects.create_user(email='btncheck@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertNotIn('onclick="selectGame', html)
+        for game in GAMES_CONFIG:
+            self.assertRegex(html, r'<input type="radio" class="btn-check" name="jogo" id="jogo-%s"' % game)
+            self.assertIn('for="jogo-%s"' % game, html)
+        self.assertEqual(html.count('game-selector-check" aria-hidden="true"'), len(GAMES_CONFIG))
+        self.assertRegex(html, r'\.btn-check:checked \+ \.game-selector \.game-selector-check\s*\{\s*display:\s*block')
+
+    def test_selected_game_area_is_polite_atomic_live_region(self):
+        """Story 4.2 (UX-DR4): area 'jogo selecionado' anunciavel por leitor de tela."""
+        user = User.objects.create_user(email='live@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertRegex(html, r'id="jogo-selecionado-info"[^>]*aria-live="polite"[^>]*aria-atomic="true"')
+        self.assertIn('id="jogo-selecionado-atual"', html)
+        self.assertIn('data-name="Mega-sena"', html)
+
     def test_authenticated_home_skips_visitor_hero(self):
         user = User.objects.create_user(email='hero@example.com', password='SenhaForte123')
         self.client.force_login(user)

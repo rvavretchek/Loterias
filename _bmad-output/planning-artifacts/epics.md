@@ -107,7 +107,7 @@ NFR-6 *(adendo 2026-09-17)*: A geração de um jogo com Regras de Geração pers
 
 *Adendo 2026-09-17 — extraídas de `ux-Loterias-2026-09-17/DESIGN.md` + `EXPERIENCE.md` (primeiro par de spine de UX formal do projeto):*
 
-UX-DR1: Cada um dos 6 Jogos no `game-selector` ganha um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-100`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack` — todos `aria-hidden="true"` (decorativos, o nome do Jogo já é texto visível).
+UX-DR1: Cada um dos 6 Jogos no `game-selector` ganha um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-123`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack` — todos `aria-hidden="true"` (decorativos, o nome do Jogo já é texto visível).
 
 UX-DR2: O resumo (`sidebar-summary`) migra dos 3 `stat-card` horizontais no topo pra uma coluna lateral fixa em viewports ≥1280px; abaixo disso empilha abaixo da área principal (scroll aceitável, não é meta).
 
@@ -686,7 +686,7 @@ Para identificar visualmente qual jogo é qual, sem depender só do nome.
 
 **Dado** o seletor de jogos na home
 **Quando** a página renderiza
-**Então** cada um dos 6 Jogos exibe um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-100`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack`
+**Então** cada um dos 6 Jogos exibe um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-123`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack`
 **E** nenhum ícone é compartilhado entre dois Jogos (hoje todos usam `bi-dice-5`)
 **E** cada ícone tem `aria-hidden="true"` (decorativo — o nome do Jogo já é texto visível ao lado)
 **Dado** um jogo é selecionado no seletor
