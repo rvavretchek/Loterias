@@ -170,3 +170,9 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `epic-2-retro-2026-09-16.md` (achado F7, Story 2.5/2.6)
   summary: "`NotificationPreference.site_enabled=False` só zera o badge (`context_processors.py`, Story 2.6) -- a lista completa de notificações não lidas continua renderizando normalmente se o usuário acessar `/notificacoes/` direto pela URL."
   evidence: Achado pela lente edge-case-hunter na retrospectiva do Epic 2. Inconsistência de UX entre o indicador (respeita a preferência) e a tela de destino (não respeita) -- baixo risco prático, ninguém reportou confusão até agora.
+
+## Deferred from: build da Story 4.1 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-reorganizacao-da-area-util-da-home.md`
+  summary: "Os cards do `game-selector` são `div onclick` com radio `d-none required` — inacessíveis por teclado e, sem jogo selecionado, o submit falha com 'invalid form control is not focusable' sem nenhum aviso visível (agora mais exposto, já que o botão Gerar Jogo fica acima do seletor)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.1. Pré-existente (a mecânica de seleção não mudou); a Story 4.2 (UX-DR7) e o padrão `.btn-check` da EXPERIENCE.md já preveem reescrever o seletor de forma acessível — resolver lá.

@@ -3,9 +3,25 @@
 
 {% block title %}Inicio - Gerador de Loterias{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Story 4.1 (FR-16): area util da home -- coluna principal + sidebar de resumo.
+       Abaixo de 1280px a sidebar empilha abaixo da coluna principal. */
+    .home-layout { display: flex; flex-direction: column; gap: 1.5rem; }
+    .home-main { min-width: 0; }
+    @media (min-width: 1280px) {
+        .home-layout { flex-direction: row; align-items: flex-start; }
+        .home-main { flex: 1; }
+        .home-sidebar { width: 300px; flex-shrink: 0; position: sticky; top: 5.5rem; /* abaixo da navbar sticky-top */ }
+    }
+    .home-sidebar .stat-card { margin-bottom: 0.75rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-5">
-    <!-- Hero Section -->
+<div class="container {% if user.is_authenticated %}py-4{% else %}py-5{% endif %}">
+    {% if not user.is_authenticated %}
+    <!-- Hero Section (so visitante; usuario autenticado abre direto na area de gerar jogo) -->
     <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center">
             <h1 class="display-4 fw-bold mb-3">
@@ -13,10 +29,9 @@
                 Gerador de Loterias
             </h1>
             <p class="lead text-secondary mb-4">
-                Gere apostas inteligentes para as principais loterias brasileiras. 
+                Gere apostas inteligentes para as principais loterias brasileiras.
                 Mantenha seu historico, acompanhe estatisticas e aumente suas chances.
             </p>
-            {% if not user.is_authenticated %}
             <div class="d-flex justify-content-center gap-3">
                 <a href="{% url 'account_signup' %}" class="btn btn-primary btn-lg">
                     <i class="bi bi-person-plus me-2"></i>Criar Conta Gratis
@@ -25,91 +40,66 @@
                     <i class="bi bi-box-arrow-in-right me-2"></i>Ja Tenho Conta
                 </a>
             </div>
-            {% endif %}
         </div>
     </div>
+    {% endif %}
 
     {% if user.is_authenticated %}
-    <!-- Dashboard Stats -->
-    <div class="row mb-5">
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-ticket-perforated text-primary"></i>
-                <div class="stat-value">{{ total_jogos }}</div>
-                <div class="stat-label">Jogos Gerados</div>
+    <div class="home-layout">
+    <div class="home-main">
+    <!-- Gerar Novo Jogo: area "jogo selecionado" (topo) + seletor de jogos (abaixo) -->
+    <form method="post" action="{% url 'create_bet' %}">
+        {% csrf_token %}
+
+        <div class="card mb-4" id="jogo-selecionado">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-plus-circle me-2 text-primary"></i>
+                <span>Gerar Novo Jogo</span>
             </div>
-        </div>
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-collection text-success"></i>
-                <div class="stat-value">{{ jogos_por_tipo|length }}</div>
-                <div class="stat-label">Tipos de Jogo</div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-clock-history text-info"></i>
-                <div class="stat-value">{{ ultimos_jogos|length }}</div>
-                <div class="stat-label">Jogos Recentes</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Gerar Novo Jogo -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex align-items-center">
-                    <i class="bi bi-plus-circle me-2 text-primary"></i>
-                    <span>Gerar Novo Jogo</span>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="{% url 'create_bet' %}">
-                        {% csrf_token %}
-
-                        <div class="row g-3 mb-4">
-                            {% for key, config in jogos_disponiveis.items %}
-                            <div class="col-md-4 col-lg-2">
-                                <div class="game-selector" onclick="selectGame(this, '{{ key }}')">
-                                    <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
-                                    <div class="text-center">
-                                        <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
-                                        <h5 class="mb-1">{{ config.name }}</h5>
-                                        <small class="text-secondary">
-                                            {{ config.bets_count }} de {{ config.numbers_count }}
-                                            {% if config.clovers > 0 %}
-                                            <br>+ {{ config.clovers }} trevos
-                                            {% endif %}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 col-lg-4">
-                                <div class="mb-3">
-                                    <label for="concurso" class="form-label fw-semibold">
-                                        <i class="bi bi-hash me-1"></i>Numero do Concurso
-                                    </label>
-                                    <input type="text" class="form-control form-control-lg" id="concurso"
-                                           name="concurso" placeholder="Ex: 2500" required>
-                                    <small class="text-secondary" id="concurso-sugestao-info"></small>
-                                </div>
-                            </div>
-                        </div>
-
+            <div class="card-body">
+                <p id="jogo-selecionado-prompt" class="text-secondary mb-3">
+                    <i class="bi bi-arrow-down-circle me-1"></i>Selecione um jogo abaixo para comecar.
+                </p>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6 col-lg-4">
+                        <label for="concurso" class="form-label fw-semibold">
+                            <i class="bi bi-hash me-1"></i>Numero do Concurso
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="concurso"
+                               name="concurso" placeholder="Ex: 2500" required>
+                        <small class="text-secondary" id="concurso-sugestao-info"></small>
+                    </div>
+                    <div class="col-auto">
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="bi bi-magic me-2"></i>Gerar Jogo
                         </button>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row mb-5">
+        <div id="seletor-de-jogos" class="row g-3 mb-4">
+            {% for key, config in jogos_disponiveis.items %}
+            <div class="col-6 col-md-4 col-xxl-2">
+                <div class="game-selector" onclick="selectGame(this, '{{ key }}')">
+                    <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
+                    <div class="text-center">
+                        <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
+                        <h5 class="mb-1">{{ config.name }}</h5>
+                        <small class="text-secondary">
+                            {{ config.bets_count }} de {{ config.numbers_count }}
+                            {% if config.clovers > 0 %}
+                            <br>+ {{ config.clovers }} trevos
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex align-items-center">
@@ -207,6 +197,27 @@
         </div>
     </div>
     {% endif %}
+    </div>
+
+    <!-- Resumo de atividade: sidebar (>=1280px) / abaixo da coluna principal (<1280px) -->
+    <aside class="home-sidebar" id="resumo-lateral" aria-label="Resumo de atividade">
+        <div class="card stat-card">
+            <i class="bi bi-ticket-perforated text-primary"></i>
+            <div class="stat-value">{{ total_jogos }}</div>
+            <div class="stat-label">Jogos Gerados</div>
+        </div>
+        <div class="card stat-card">
+            <i class="bi bi-collection text-success"></i>
+            <div class="stat-value">{{ jogos_por_tipo|length }}</div>
+            <div class="stat-label">Tipos de Jogo</div>
+        </div>
+        <div class="card stat-card">
+            <i class="bi bi-clock-history text-info"></i>
+            <div class="stat-value">{{ ultimos_jogos|length }}</div>
+            <div class="stat-label">Jogos Recentes</div>
+        </div>
+    </aside>
+    </div>
 
     {% else %}
     <!-- Jogos Disponiveis -->
@@ -249,6 +260,12 @@ function selectGame(element, gameName) {
     // Adiciona active ao clicado
     element.classList.add('active');
     element.querySelector('input[type="radio"]').checked = true;
+
+    // Story 4.1: o prompt de "selecione um jogo" some assim que ha um jogo escolhido.
+    var prompt = document.getElementById('jogo-selecionado-prompt');
+    if (prompt) {
+        prompt.hidden = true;
+    }
 
     preencherConcursoSugerido(gameName);
 }

@@ -1150,6 +1150,60 @@ class HomeViewTests(TestCase):
         self.assertContains(response, 'id="concursos-sugeridos-data"')
         self.assertContains(response, '"Mega-sena": "2501"')
 
+    def test_authenticated_home_puts_selected_game_area_before_selector_and_summary_aside(self):
+        """Story 4.1 (FR-16): area 'jogo selecionado' no topo, seletor abaixo, resumo em sidebar."""
+        user = User.objects.create_user(email='layout@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        selected_area = html.index('id="jogo-selecionado"')
+        selector = html.index('id="seletor-de-jogos"')
+        summary_aside = html.index('id="resumo-lateral"')
+        self.assertLess(selected_area, selector)
+        self.assertLess(selector, summary_aside)
+        self.assertRegex(html, r'<aside[^>]*id="resumo-lateral"')
+        self.assertRegex(html, r'min-width:\s*1280px')
+
+    def test_authenticated_home_generate_form_wraps_contest_radios_and_submit(self):
+        """Story 4.1: a area 'jogo selecionado' e o seletor continuam num unico <form> de geracao."""
+        user = User.objects.create_user(email='form@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        form_start = html.index('action="%s"' % reverse('create_bet'))
+        form_end = html.index('</form>', form_start)
+        form_html = html[form_start:form_end]
+        self.assertIn('id="concurso"', form_html)
+        self.assertIn('type="submit"', form_html)
+        self.assertEqual(form_html.count('name="jogo"'), len(GAMES_CONFIG))
+        self.assertLess(form_html.index('id="jogo-selecionado"'), form_html.index('id="seletor-de-jogos"'))
+
+    def test_authenticated_home_skips_visitor_hero(self):
+        user = User.objects.create_user(email='hero@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'Gere apostas inteligentes')
+        self.assertNotContains(response, 'Criar Conta Gratis')
+
+    def test_authenticated_home_keeps_contest_field_and_summary_content(self):
+        user = User.objects.create_user(email='conteudo@example.com', password='SenhaForte123')
+        GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'id="concurso"')
+        self.assertContains(response, 'name="concurso"')
+        self.assertContains(response, 'Selecione um jogo abaixo')
+        for label in ('Jogos Gerados', 'Tipos de Jogo', 'Jogos Recentes'):
+            self.assertContains(response, label)
+        self.assertEqual(response.context['total_jogos'], 1)
+
+    def test_visitor_home_has_no_summary_sidebar_or_selected_game_area(self):
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'id="resumo-lateral"')
+        self.assertNotContains(response, 'id="jogo-selecionado"')
+        self.assertContains(response, 'Criar Conta Gratis')
+
 
 class BetDetailViewTests(TestCase):
     def test_bet_detail_shows_official_result(self):
