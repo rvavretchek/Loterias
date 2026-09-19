@@ -3539,6 +3539,36 @@ class BetSatisfiesRulesTests(TestCase):
             bet_satisfies_rules([1, 2, 25, 35, 45, 55], [], 'Mega-sena', rules)[1], ['distribution_type'],
         )
 
+    def test_homogeneous_lotofacil_needs_three_per_row(self):
+        rules = [_rule('distribution_type', choice='homogenea')]
+        ok = [1, 2, 3, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23]
+        self.assertTrue(bet_satisfies_rules(ok, [], 'Lotofacil', rules)[0])
+        self.assertFalse(bet_satisfies_rules(list(range(11, 26)), [], 'Lotofacil', rules)[0])
+
+    def test_min_sequences(self):
+        rules = [_rule('limit_min_sequences', 2)]
+        self.assertFalse(bet_satisfies_rules([1, 2, 10, 20, 30], [], 'Lotofacil', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 5, 9, 13], [], 'Lotofacil', rules)[1], ['limit_min_sequences'],
+        )
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 11, 20], [], 'Lotofacil', rules)[0])
+
+    def test_min_gap_between_sequences(self):
+        rules = [_rule('limit_min_gap_between_sequences', 2)]
+        # sequencias 1-2 e 4-5: 1 numero entre elas (3) -> viola
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 4, 5, 20], [], 'Lotofacil', rules)[1],
+            ['limit_min_gap_between_sequences'],
+        )
+        self.assertTrue(bet_satisfies_rules([1, 2, 5, 6, 20], [], 'Lotofacil', rules)[0])
+        # 0 ou 1 sequencia: satisfeita
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 20], [], 'Lotofacil', rules)[0])
+        self.assertTrue(bet_satisfies_rules([1, 5, 9], [], 'Lotofacil', rules)[0])
+
+    def test_min_rules_ignored_without_value_or_disabled(self):
+        rules = [_rule('limit_min_sequences', None), _rule('limit_min_gap_between_sequences', 5, enabled=False)]
+        self.assertTrue(bet_satisfies_rules([1, 5, 9], [], 'Lotofacil', rules)[0])
+
     def test_random_distribution_never_violates(self):
         rules = [_rule('distribution_type', choice='totalmente_aleatoria')]
         self.assertTrue(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules)[0])
@@ -3549,12 +3579,12 @@ class BetSatisfiesRulesTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(sorted(violated), ['limit_row_count', 'limit_sequence_count'])
 
-    def test_ignores_disabled_valueless_and_unsupported_rules(self):
+    def test_ignores_disabled_valueless_and_unknown_rules(self):
         rules = [
             _rule('limit_sequence_count', 1, enabled=False),
             _rule('limit_sequence_pairs', None),
-            _rule('limit_min_gap_between_sequences', 5),
-            _rule('limit_min_sequences', 3),
+            _rule('unknown_rule', 5),
+            _rule('limit_min_sequences', None),
         ]
         self.assertEqual(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules), (True, []))
 
@@ -3620,13 +3650,22 @@ class GenerateBetWithRulesTests(TestCase):
                 self.assertEqual(len(set(nums)), len(nums))
                 self.assertTrue(bet_satisfies_rules(nums, [], game_name, rules)[0])
 
-    def test_homogeneous_is_a_noop_when_bands_would_be_single_numbers(self):
-        """Lotofacil (15 de 25): faixas de 1 numero nao espalham nada -- Homogenea nao se aplica (4.6)."""
+    def test_homogeneous_lotofacil_generates_three_per_row(self):
         self._save('distribution_type', choice='homogenea', game='Lotofacil')
+        for _ in range(20):
+            nums, _ = generate_bet('Lotofacil', self.user)
+            self.assertEqual(len(set(nums)), 15)
+            for row in range(5):
+                self.assertEqual(sum(1 for n in nums if row * 5 < n <= row * 5 + 5), 3)
+
+    def test_lotofacil_min_sequences_and_gap_generation(self):
+        self._save('limit_min_sequences', 3, game='Lotofacil')
+        self._save('limit_min_gap_between_sequences', 1, game='Lotofacil')
         rules = list(GenerationRule.objects.filter(user=self.user, game='Lotofacil'))
-        self.assertTrue(bet_satisfies_rules(list(range(11, 26)), [], 'Lotofacil', rules)[0])
-        nums, _ = generate_bet('Lotofacil', self.user)
-        self.assertEqual(len(set(nums)), 15)
+        for _ in range(10):
+            nums, _, relaxed = generate_bet_with_relaxation('Lotofacil', self.user)
+            self.assertIsNone(relaxed)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Lotofacil', rules)[0])
 
     def test_milionaria_still_returns_clovers(self):
         self._save('limit_sequence_count', 2, game='Milionaria')

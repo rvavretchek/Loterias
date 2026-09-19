@@ -73,27 +73,47 @@ def _sequence_run_lengths(numbers):
     return runs
 
 
-def _distribution_bands(config):
-    """Faixas de largura igual (bets_count faixas sobre 1..numbers_count); a ultima absorve o resto.
-    Retorna lista de (inicio, fim) inclusivos."""
+def _distribution_bands(config, game=None):
+    """Faixas da Distribuicao Homogenea: lista de (inicio, fim, quota) inclusivos.
+    Padrao: bets_count faixas de largura igual (a ultima absorve o resto), 1 numero cada. Quando isso
+    daria faixas de 1 numero (Lotofacil, 15 de 25), usa uma faixa por linha do volante com
+    bets_count // linhas numeros em cada (3 por linha). Sem esquema aplicavel, retorna []."""
     count = config['bets_count']
-    width = config['numbers_count'] // count if count else 0
-    if width < 2:
-        # Faixa de 1 numero nao espalha nada (ex. Lotofacil, 15 de 25): Homogenea nao se aplica
-        # (semantica fica pra Story 4.6) -- sem faixas, a regra e um no-op.
+    total = config['numbers_count']
+    width = total // count if count else 0
+    if width >= 2:
+        return [
+            (index * width + 1, (index + 1) * width if index < count - 1 else total, 1)
+            for index in range(count)
+        ]
+    grid = GAME_GRID.get(game or config['name'])
+    if not grid or not grid[0] or count % grid[0]:
         return []
-    bands = []
-    for index in range(count):
-        start = index * width + 1
-        end = (index + 1) * width if index < count - 1 else config['numbers_count']
-        bands.append((start, end))
-    return bands
+    rows, cols = grid
+    return [(row * cols + 1, (row + 1) * cols, count // rows) for row in range(rows)]
+
+
+def _sequence_spans(numbers):
+    """Blocos (inicio, fim) de 2+ numeros consecutivos, na lista ordenada."""
+    spans = []
+    ordered = sorted(numbers)
+    start = None
+    for previous, following in zip(ordered, ordered[1:]):
+        if following == previous + 1:
+            if start is None:
+                start = previous
+        elif start is not None:
+            spans.append((start, previous))
+            start = None
+    if start is not None:
+        spans.append((start, ordered[-1]))
+    return spans
 
 
 def bet_satisfies_rules(numbers, clovers, game, rules):
     """Checa um candidato contra as Regras de Geracao (AD-12). Funcao pura, sem I/O. Retorna
     (ok, violated_rule_names) com a lista COMPLETA de regras violadas. Ignora regra desligada, sem
-    valor ou ainda nao suportada (min_gap / min_sequences -- Stories 4.6/4.7)."""
+    valor ou desconhecida."""
     violated = []
     config = GAMES_CONFIG.get(game)
     grid = GAME_GRID.get(game)
@@ -130,16 +150,30 @@ def bet_satisfies_rules(numbers, clovers, game, rules):
         elif name == 'distribution_type':
             if rule.choice_value != 'homogenea' or config is None:
                 continue
-            for start, end in _distribution_bands(config):  # sem faixas = regra nao se aplica
-                if sum(1 for n in ordered if start <= n <= end) != 1:
+            for start, end, quota in _distribution_bands(config, game):  # sem faixas = nao se aplica
+                if sum(1 for n in ordered if start <= n <= end) != quota:
                     violated.append(name)
                     break
+        elif name == 'limit_min_sequences':
+            if value is None:
+                continue
+            if len(_sequence_spans(ordered)) < value:
+                violated.append(name)
+        elif name == 'limit_min_gap_between_sequences':
+            if value is None:
+                continue
+            spans = _sequence_spans(ordered)
+            if any(nxt[0] - prev[1] - 1 < value for prev, nxt in zip(spans, spans[1:])):
+                violated.append(name)
     return (not violated), violated
 
 
-def _random_numbers(config, homogeneous=False):
+def _random_numbers(config, homogeneous=False, game=None):
     if homogeneous:
-        return sorted(random.randint(start, end) for start, end in _distribution_bands(config))
+        numbers = []
+        for start, end, quota in _distribution_bands(config, game):
+            numbers.extend(random.sample(range(start, end + 1), quota))
+        return sorted(numbers)
     numbers = []
     while len(numbers) < config['bets_count']:
         number = random.randint(1, config['numbers_count'])
@@ -168,13 +202,13 @@ def generate_bet(game_name, user=None):
 def _draw_with_rules(config, game_name, active_rules, attempts=10000):
     """Sorteia ate `attempts` candidatos contra `active_rules`. Retorna (numeros|None, violadas do
     ultimo candidato)."""
-    homogeneous = bool(_distribution_bands(config)) and any(
+    homogeneous = bool(_distribution_bands(config, game_name)) and any(
         rule.rule_name == 'distribution_type' and rule.choice_value == 'homogenea'
         for rule in active_rules
     )
     violated = []
     for _ in range(attempts):
-        candidate = _random_numbers(config, homogeneous)
+        candidate = _random_numbers(config, homogeneous, game_name)
         ok, violated = bet_satisfies_rules(candidate, [], game_name, active_rules)
         if ok:
             return candidate, []
