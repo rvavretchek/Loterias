@@ -1,5 +1,7 @@
 import logging
 import re
+import datetime
+from urllib.parse import urlencode
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -8,6 +10,7 @@ from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import Count
 from .forms import NotificationPreferenceForm
 from .models import (
@@ -174,30 +177,75 @@ def bet_detail_view(request, pk):
     return render(request, 'loterias_core/bet_detail.html', context)
 
 
+def _parse_date(value):
+    try:
+        return datetime.date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
 @login_required
 def history_view(request):
-    """Pagina de historico de jogos."""
+    """Historico de jogos com filtros cumulativos (AND) via querystring (Story 4.8, FR-24)."""
     bets_list = GeneratedBet.objects.filter(user=request.user)
+    params = {}
+    active_filters = []
 
     game_filter = request.GET.get('jogo')
-    if game_filter and game_filter in GAMES_CONFIG:
+    if game_filter in GAMES_CONFIG:
         bets_list = bets_list.filter(game=game_filter)
+        params['jogo'] = game_filter
+        active_filters.append(('jogo', f'Jogo: {game_filter}'))
+    else:
+        game_filter = None
+
+    tz = timezone.get_current_timezone()
+    date_from = _parse_date(request.GET.get('de'))
+    date_to = _parse_date(request.GET.get('ate'))
+    if date_from:
+        start = datetime.datetime.combine(date_from, datetime.time.min, tzinfo=tz)
+        bets_list = bets_list.filter(created_at__gte=start)
+        params['de'] = date_from.isoformat()
+        active_filters.append(('de', f'De: {date_from.strftime("%d/%m/%Y")}'))
+    if date_to:
+        end = datetime.datetime.combine(date_to, datetime.time.max, tzinfo=tz)
+        bets_list = bets_list.filter(created_at__lte=end)
+        params['ate'] = date_to.isoformat()
+        active_filters.append(('ate', f'Até: {date_to.strftime("%d/%m/%Y")}'))
+
+    only_winners = request.GET.get('premiado') == '1'
+    if only_winners:
+        bets_list = bets_list.filter(prize__gt=0)
+        params['premiado'] = '1'
+        active_filters.append(('premiado', 'Só premiados'))
 
     valid_orderings = {'-created_at', 'created_at', 'game', 'contest'}
     ordering = request.GET.get('ordenacao', '-created_at')
     if ordering not in valid_orderings:
         ordering = '-created_at'
     bets_list = bets_list.order_by(ordering)
+    if ordering != '-created_at':
+        params['ordenacao'] = ordering
+
+    def _querystring(exclude=None):
+        return urlencode({k: v for k, v in params.items() if k != exclude})
 
     paginator = Paginator(bets_list, 20)
-    page_number = request.GET.get('page')
-    bets = paginator.get_page(page_number)
+    bets = paginator.get_page(request.GET.get('page'))
 
     context = {
         'jogos': bets,
         'jogos_disponiveis': GAMES_CONFIG,
         'jogo_filtro': game_filter,
+        'data_de': params.get('de', ''),
+        'data_ate': params.get('ate', ''),
+        'somente_premiados': only_winners,
         'ordenacao': ordering,
+        'filtros_ativos': [
+            {'label': label, 'remove_qs': _querystring(exclude=key)} for key, label in active_filters
+        ],
+        'tem_filtros': bool(active_filters),
+        'querystring': _querystring(),
     }
 
     return render(request, 'loterias_core/history.html', context)

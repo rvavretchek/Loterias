@@ -867,6 +867,82 @@ class HistoryViewTests(TestCase):
         self.assertEqual(bets[0].user, self.user)
 
 
+class HistoryFiltersTests(TestCase):
+    """Story 4.8 (FR-24): filtros cumulativos por querystring."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='filtros@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        self.mega = self._bet('Mega-sena', '1', prize=0, when=datetime(2026, 9, 10, 12, 0, tzinfo=dt_timezone.utc))
+        self.loto_win = self._bet('Lotomania', '2', prize=Decimal('50'), when=datetime(2026, 9, 15, 12, 0, tzinfo=dt_timezone.utc))
+        self.mega_win = self._bet('Mega-sena', '3', prize=Decimal('10'), when=datetime(2026, 9, 20, 12, 0, tzinfo=dt_timezone.utc))
+
+    def _bet(self, game, contest, prize, when):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game=game, contest=contest, numbers=[1, 2, 3, 4, 5, 6], clovers=[], prize=prize,
+        )
+        GeneratedBet.objects.filter(pk=bet.pk).update(created_at=when)
+        return bet
+
+    def _contests(self, **params):
+        response = self.client.get(reverse('history'), params)
+        self.assertEqual(response.status_code, 200)
+        return sorted(b.contest for b in response.context['jogos']), response
+
+    def test_no_filters_lists_everything(self):
+        self.assertEqual(self._contests()[0], ['1', '2', '3'])
+
+    def test_filters_by_game_winners_and_period(self):
+        self.assertEqual(self._contests(jogo='Mega-sena')[0], ['1', '3'])
+        self.assertEqual(self._contests(premiado='1')[0], ['2', '3'])
+        self.assertEqual(self._contests(de='2026-09-15', ate='2026-09-15')[0], ['2'])
+
+    def test_filters_are_cumulative(self):
+        self.assertEqual(self._contests(jogo='Mega-sena', premiado='1')[0], ['3'])
+        self.assertEqual(self._contests(jogo='Mega-sena', premiado='1', de='2026-09-01', ate='2026-09-12')[0], [])
+
+    def test_period_uses_project_timezone_day_boundaries(self):
+        late = self._bet('Quina', '9', prize=0, when=datetime(2026, 9, 25, 2, 30, tzinfo=dt_timezone.utc))  # 24/09 23:30 em Sao Paulo
+        self.assertIn('9', self._contests(de='2026-09-24', ate='2026-09-24')[0])
+        self.assertNotIn('9', self._contests(de='2026-09-25', ate='2026-09-25')[0])
+        self.assertTrue(late.pk)
+
+    def test_invalid_values_are_ignored(self):
+        contests, response = self._contests(jogo='Xpto', de='ontem', ate='31/12/2026')
+        self.assertEqual(contests, ['1', '2', '3'])
+        self.assertFalse(response.context['tem_filtros'])
+
+    def test_badges_remove_one_filter_and_keep_the_rest(self):
+        _, response = self._contests(jogo='Mega-sena', premiado='1')
+        html = response.content.decode()
+        self.assertIn('aria-label="Remover filtro Jogo: Mega-sena"', html)
+        self.assertIn('aria-label="Remover filtro Só premiados"', html)
+        removals = {f['label']: f['remove_qs'] for f in response.context['filtros_ativos']}
+        self.assertEqual(removals['Jogo: Mega-sena'], 'premiado=1')
+        self.assertEqual(removals['Só premiados'], 'jogo=Mega-sena')
+
+    def test_empty_result_names_filters_and_offers_clear(self):
+        _, response = self._contests(jogo='Quina', premiado='1')
+        self.assertContains(response, 'Jogo: Quina')
+        self.assertContains(response, 'Limpar filtros')
+
+    def test_filter_bar_always_visible_and_pagination_keeps_filters(self):
+        for i in range(25):
+            self._bet('Quina', str(100 + i), prize=Decimal('1'), when=datetime(2026, 9, 21, 12, 0, tzinfo=dt_timezone.utc))
+        response = self.client.get(reverse('history'), {'jogo': 'Quina', 'premiado': '1'})
+        self.assertContains(response, 'id="filtros-heading"')
+        self.assertContains(response, 'page=2&jogo=Quina&amp;premiado=1')
+
+    def test_dupla_sena_renders_two_labeled_groups_and_many_numbers_wrap(self):
+        GeneratedBet.objects.create(user=self.user, game='Dupla-Sena', contest='7', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        GeneratedBet.objects.create(user=self.user, game='Lotomania', contest='8', numbers=list(range(1, 51)), clovers=[])
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, '1º sorteio:')
+        self.assertContains(response, 'aria-label="2º sorteio"')
+        self.assertContains(response, 'role="list"')
+        self.assertContains(response, 'flex-wrap')
+
+
 class DeleteBetViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='del@example.com', password='SenhaForte123')
