@@ -160,13 +160,38 @@ def _random_clovers(config):
 
 
 def generate_bet(game_name, user=None):
-    """Gera uma aposta valida. Sem personalizacao salva (ou user None): Regra de Sequencia
-    adaptativa. Com linhas GenerationRule do user+game (mesmo todas desligadas): so as regras
-    ligadas valem e a adaptativa nao e consultada; se nada valido sai em 10000 tentativas,
-    devolve (None, None) (Story 4.4; relaxamento fica pra 4.5)."""
+    """Compat: gera uma aposta e devolve (numeros, trevos). Ver generate_bet_with_relaxation."""
+    numbers, clovers, _relaxed = generate_bet_with_relaxation(game_name, user)
+    return numbers, clovers
+
+
+def _draw_with_rules(config, game_name, active_rules, attempts=10000):
+    """Sorteia ate `attempts` candidatos contra `active_rules`. Retorna (numeros|None, violadas do
+    ultimo candidato)."""
+    homogeneous = bool(_distribution_bands(config)) and any(
+        rule.rule_name == 'distribution_type' and rule.choice_value == 'homogenea'
+        for rule in active_rules
+    )
+    violated = []
+    for _ in range(attempts):
+        candidate = _random_numbers(config, homogeneous)
+        ok, violated = bet_satisfies_rules(candidate, [], game_name, active_rules)
+        if ok:
+            return candidate, []
+    return None, violated
+
+
+def generate_bet_with_relaxation(game_name, user=None):
+    """Gera uma aposta valida e devolve (numeros, trevos, regra_relaxada).
+
+    Sem personalizacao salva (ou user None): Regra de Sequencia adaptativa (regra_relaxada=None).
+    Com linhas GenerationRule do user+game (mesmo todas desligadas): so as regras ligadas valem e a
+    adaptativa nao e consultada (Story 4.4). Se nada valido sai em 10000 tentativas, relaxa UMA regra
+    (Story 4.5, FR-22/AD-12): a de maior updated_at entre as que o ULTIMO candidato violou, so em
+    memoria, e tenta mais 10000 vezes; se ainda falhar devolve (None, None, None)."""
     config = GAMES_CONFIG.get(game_name)
     if not config:
-        return None, None
+        return None, None, None
 
     if user is not None and getattr(user, 'is_authenticated', True):
         user_rules = GenerationRule.objects.filter(user=user, game=game_name)
@@ -176,16 +201,17 @@ def generate_bet(game_name, user=None):
 
     if has_customization:
         active_rules = list(user_rules.filter(enabled=True))
-        homogeneous = bool(_distribution_bands(config)) and any(
-            rule.rule_name == 'distribution_type' and rule.choice_value == 'homogenea'
-            for rule in active_rules
-        )
-        for _ in range(10000):
-            candidate = _random_numbers(config, homogeneous)
-            ok, _violated = bet_satisfies_rules(candidate, [], game_name, active_rules)
-            if ok:
-                return candidate, _random_clovers(config)
-        return None, None
+        candidate, violated = _draw_with_rules(config, game_name, active_rules)
+        relaxed = None
+        if candidate is None and violated:
+            blocking = [rule for rule in active_rules if rule.rule_name in violated]
+            relaxed_rule = max(blocking, key=lambda rule: (rule.updated_at, rule.pk))
+            relaxed = relaxed_rule.rule_name
+            reduced = [rule for rule in active_rules if rule is not relaxed_rule]
+            candidate, _violated = _draw_with_rules(config, game_name, reduced)
+        if candidate is None:
+            return None, None, None
+        return candidate, _random_clovers(config), relaxed
 
     applies_sequence_rule = game_name in GAMES_WITH_SEQUENCE_RULE
 
@@ -227,7 +253,7 @@ def generate_bet(game_name, user=None):
                 bet_clovers.append(clover)
         bet_clovers.sort()
 
-    return bet_numbers, bet_clovers
+    return bet_numbers, bet_clovers, None
 
 
 def check_duplicate_bet(user, game_name, numbers, clovers):

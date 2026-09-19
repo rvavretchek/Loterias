@@ -16,7 +16,7 @@ from .models import (
     SEQUENCE_RULE_NAMES, DISTRIBUTION_CHOICES, GAME_GRID,
 )
 from .utils import (
-    generate_bet, check_duplicate_bet, count_sequential_pairs,
+    generate_bet_with_relaxation, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
     fetch_cef_result, suggest_next_contest, apply_prize_to_bet, normalize_contest
 )
@@ -94,8 +94,9 @@ def create_bet_view(request):
     new_clovers = None
 
     rules_unsatisfiable = False
+    relaxed_rule = None
     while attempts < max_attempts:
-        nums, clovers = generate_bet(selected_game, request.user)
+        nums, clovers, relaxed_rule = generate_bet_with_relaxation(selected_game, request.user)
         if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
             rules_unsatisfiable = True
             break
@@ -129,6 +130,8 @@ def create_bet_view(request):
     )
 
     messages.success(request, f'Jogo de {selected_game} gerado com sucesso para o concurso {contest}!')
+    if relaxed_rule:
+        messages.warning(request, _relaxed_rule_message(selected_game, relaxed_rule))
 
     return redirect('bet_detail', pk=bet.pk)
 
@@ -327,8 +330,9 @@ def regenerate_bet_view(request, pk):
     new_clovers = None
 
     rules_unsatisfiable = False
+    relaxed_rule = None
     while attempts < max_attempts:
-        nums, clovers = generate_bet(original_bet.game, request.user)
+        nums, clovers, relaxed_rule = generate_bet_with_relaxation(original_bet.game, request.user)
         if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
             rules_unsatisfiable = True
             break
@@ -370,6 +374,8 @@ def regenerate_bet_view(request, pk):
     original_bet.save()
 
     messages.success(request, f'Novo jogo de {original_bet.game} gerado com sucesso!')
+    if relaxed_rule:
+        messages.warning(request, _relaxed_rule_message(original_bet.game, relaxed_rule))
     return redirect('bet_detail', pk=original_bet.pk)
 
 
@@ -431,7 +437,7 @@ def api_create_bet_view(request):
     except ValueError:
         return JsonResponse({'error': f'Numero de concurso invalido: {contest}'}, status=400)
 
-    nums, clovers = generate_bet(selected_game, request.user)
+    nums, clovers, relaxed_rule = generate_bet_with_relaxation(selected_game, request.user)
     if nums is None:
         return JsonResponse(
             {'error': 'Nao foi possivel gerar um jogo com as regras de geracao atuais'}, status=422,
@@ -446,6 +452,7 @@ def api_create_bet_view(request):
         'trevos': clovers,
         'pares_sequenciais': sequential_pairs_count,
         'repetido': is_duplicate,
+        'regra_relaxada': RULE_DEFINITIONS[relaxed_rule]['label'] if relaxed_rule else None,
     })
 
 
@@ -529,6 +536,15 @@ _GRID_HELP = {
     'limit_row_count': 'Considera as linhas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
     'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
 }
+
+
+def _relaxed_rule_message(game, rule_name):
+    """Aviso da regra relaxada (Story 4.5, FR-22) -- nomeia a regra e o Jogo, nunca generico."""
+    label = RULE_DEFINITIONS[rule_name]['label']
+    return (
+        f"O jogo de {GAMES_CONFIG[game]['name']} foi gerado relaxando a regra '{label}' -- "
+        f"nao foi possivel respeitar todas as regras configuradas."
+    )
 
 
 def _game_from_slug(slug):

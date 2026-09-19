@@ -31,6 +31,7 @@ from apps.loterias_core.utils import (
     fetch_cef_result,
     count_sequential_pairs,
     generate_bet,
+    generate_bet_with_relaxation,
     normalize_numbers,
     check_duplicate_bet,
     suggest_next_contest,
@@ -1081,7 +1082,7 @@ class RegenerateBetViewTests(TestCase):
         self.assertNotEqual(self.bet.numbers, original_numbers)
         self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
 
-    @patch('apps.loterias_core.views.generate_bet')
+    @patch('apps.loterias_core.views.generate_bet_with_relaxation')
     def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
         """Story 2.17: jogo com trevos (Milionaria) tem os trevos tambem substituidos, nao so os
         numeros -- cobre o campo que a Mega-sena (sem trevo) nao consegue exercitar. Mocka
@@ -1091,7 +1092,7 @@ class RegenerateBetViewTests(TestCase):
             user=self.user, game='Milionaria', contest='6000',
             numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
         )
-        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4])
+        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4], None)
         self.client.get(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.clovers, [3, 4])
@@ -3633,8 +3634,97 @@ class GenerateBetWithRulesTests(TestCase):
         self.assertEqual(len(clovers), 2)
 
     def test_impossible_rules_return_none(self):
+        """Duas regras inatingiveis: relaxar UMA nao basta -- nunca relaxa uma segunda (Story 4.5)."""
         self._save('limit_column_count', 0)
+        self._save('limit_row_count', 0)
         self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
+        self.assertEqual(generate_bet_with_relaxation('Mega-sena', self.user), (None, None, None))
+
+    def test_relaxes_the_only_impossible_rule_in_memory(self):
+        """Story 4.5 (FR-22): uma regra inatingivel e relaxada, o jogo sai e o banco nao muda."""
+        self._save('limit_sequence_count', 3)
+        self._save('limit_row_count', 0)
+        nums, clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertEqual(len(nums), 6)
+        self.assertEqual(relaxed, 'limit_row_count')
+        self.assertTrue(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').enabled)
+        self.assertEqual(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').numeric_value, 0)
+
+    def test_relaxation_picks_newest_updated_at_among_violated_rules_only(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+        from django.utils import timezone
+        self._save('limit_sequence_count', 1)
+        self._save('limit_sequence_pairs', 1)
+        self._save('limit_row_count', 5)  # a mais recente de todas, mas NAO violada
+        base = timezone.now()
+        for offset, name in enumerate(('limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count')):
+            GenerationRule.objects.filter(user=self.user, rule_name=name).update(updated_at=base + timedelta(minutes=offset))
+        calls = []
+
+        def fake_draw(config, game, rules, attempts=10000):
+            calls.append([rule.rule_name for rule in rules])
+            if len(calls) == 1:
+                return None, ['limit_sequence_count', 'limit_sequence_pairs']
+            return [1, 12, 23, 34, 45, 56], []
+
+        with patch('apps.loterias_core.utils._draw_with_rules', side_effect=fake_draw):
+            nums, _clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertEqual(relaxed, 'limit_sequence_pairs')
+        self.assertEqual(sorted(calls[1]), ['limit_row_count', 'limit_sequence_count'])
+        self.assertEqual(nums, [1, 12, 23, 34, 45, 56])
+
+    def test_default_mode_never_relaxes_and_wrapper_keeps_two_values(self):
+        nums, clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertIsNone(relaxed)
+        self.assertEqual(len(generate_bet('Mega-sena', self.user)), 2)
+
+
+class RelaxationViewsTests(TestCase):
+    """Story 4.5: regra relaxada -> jogo gerado como sucesso + aviso nomeando regra e Jogo."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='relax@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
+        )
+        self.expected = (
+            "O jogo de Mega-sena foi gerado relaxando a regra "
+            "'Limita quantidade de números na mesma linha do volante'"
+        )
+
+    def test_create_view_saves_bet_and_names_relaxed_rule(self):
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+        msgs = [(m.level_tag, m.message) for m in response.context['messages']]
+        self.assertTrue(any(level == 'success' for level, _ in msgs))
+        self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
+
+    def test_regenerate_view_replaces_bet_and_names_relaxed_rule(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+        )
+        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        bet.refresh_from_db()
+        self.assertNotEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        msgs = [(m.level_tag, m.message) for m in response.context['messages']]
+        self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
+
+    def test_api_returns_bet_and_relaxed_rule_label(self):
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(len(body['numeros']), 6)
+        self.assertEqual(body['regra_relaxada'], 'Limita quantidade de números na mesma linha do volante')
+
+    def test_no_relaxation_message_without_conflict(self):
+        GenerationRule.objects.filter(user=self.user).delete()
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertFalse(any(m.level_tag == 'warning' for m in response.context['messages']))
 
 
 class GenerationRulesViewsTests(TestCase):
@@ -3643,6 +3733,9 @@ class GenerationRulesViewsTests(TestCase):
         self.client.force_login(self.user)
         GenerationRule.objects.create(
             user=self.user, game='Mega-sena', rule_name='limit_column_count', numeric_value=0, enabled=True,
+        )
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
         )
 
     def test_create_view_warns_and_saves_nothing_when_impossible(self):
