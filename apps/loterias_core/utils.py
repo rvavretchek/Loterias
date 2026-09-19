@@ -6,7 +6,7 @@ import requests
 from django.utils import timezone
 
 from .models import (
-    GeneratedBet, LotteryResult, PrizeTier,
+    GeneratedBet, LotteryResult, PrizeTier, GenerationRule, GAME_GRID,
     GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL,
 )
 
@@ -56,10 +56,135 @@ def recent_bets_had_sequence(user, game_name, interval=MIN_SEQUENCE_INTERVAL):
     return False
 
 
+def _sequence_run_lengths(numbers):
+    """Tamanhos dos 'runs' (blocos de numeros consecutivos) de 2 ou mais, na lista ordenada."""
+    runs = []
+    current = 1
+    ordered = sorted(numbers)
+    for previous, following in zip(ordered, ordered[1:]):
+        if following == previous + 1:
+            current += 1
+        else:
+            if current >= 2:
+                runs.append(current)
+            current = 1
+    if current >= 2:
+        runs.append(current)
+    return runs
+
+
+def _distribution_bands(config):
+    """Faixas de largura igual (bets_count faixas sobre 1..numbers_count); a ultima absorve o resto.
+    Retorna lista de (inicio, fim) inclusivos."""
+    count = config['bets_count']
+    width = config['numbers_count'] // count if count else 0
+    if width < 2:
+        # Faixa de 1 numero nao espalha nada (ex. Lotofacil, 15 de 25): Homogenea nao se aplica
+        # (semantica fica pra Story 4.6) -- sem faixas, a regra e um no-op.
+        return []
+    bands = []
+    for index in range(count):
+        start = index * width + 1
+        end = (index + 1) * width if index < count - 1 else config['numbers_count']
+        bands.append((start, end))
+    return bands
+
+
+def bet_satisfies_rules(numbers, clovers, game, rules):
+    """Checa um candidato contra as Regras de Geracao (AD-12). Funcao pura, sem I/O. Retorna
+    (ok, violated_rule_names) com a lista COMPLETA de regras violadas. Ignora regra desligada, sem
+    valor ou ainda nao suportada (min_gap / min_sequences -- Stories 4.6/4.7)."""
+    violated = []
+    config = GAMES_CONFIG.get(game)
+    grid = GAME_GRID.get(game)
+    ordered = sorted(numbers)
+
+    for rule in rules:
+        if not rule.enabled:
+            continue
+        name = rule.rule_name
+        value = rule.numeric_value
+
+        if name == 'limit_sequence_count':
+            if value is None:
+                continue
+            runs = _sequence_run_lengths(ordered)
+            longest = max(runs) if runs else 1
+            if longest > value:
+                violated.append(name)
+        elif name == 'limit_sequence_pairs':
+            if value is None:
+                continue
+            if len(_sequence_run_lengths(ordered)) > value:
+                violated.append(name)
+        elif name in ('limit_row_count', 'limit_column_count'):
+            if value is None or grid is None:
+                continue
+            cols = grid[1]
+            counts = {}
+            for n in ordered:
+                key = (n - 1) // cols + 1 if name == 'limit_row_count' else (n - 1) % cols + 1
+                counts[key] = counts.get(key, 0) + 1
+            if counts and max(counts.values()) > value:
+                violated.append(name)
+        elif name == 'distribution_type':
+            if rule.choice_value != 'homogenea' or config is None:
+                continue
+            for start, end in _distribution_bands(config):  # sem faixas = regra nao se aplica
+                if sum(1 for n in ordered if start <= n <= end) != 1:
+                    violated.append(name)
+                    break
+    return (not violated), violated
+
+
+def _random_numbers(config, homogeneous=False):
+    if homogeneous:
+        return sorted(random.randint(start, end) for start, end in _distribution_bands(config))
+    numbers = []
+    while len(numbers) < config['bets_count']:
+        number = random.randint(1, config['numbers_count'])
+        if number not in numbers:
+            numbers.append(number)
+    return sorted(numbers)
+
+
+def _random_clovers(config):
+    clovers = []
+    if config['clovers_count'] > 0:
+        while len(clovers) < config['clovers']:
+            clover = random.randint(1, config['clovers_count'])
+            if clover not in clovers:
+                clovers.append(clover)
+        clovers.sort()
+    return clovers
+
+
 def generate_bet(game_name, user=None):
-    """Gera uma aposta valida respeitando as regras de sequencia."""
+    """Gera uma aposta valida. Sem personalizacao salva (ou user None): Regra de Sequencia
+    adaptativa. Com linhas GenerationRule do user+game (mesmo todas desligadas): so as regras
+    ligadas valem e a adaptativa nao e consultada; se nada valido sai em 10000 tentativas,
+    devolve (None, None) (Story 4.4; relaxamento fica pra 4.5)."""
     config = GAMES_CONFIG.get(game_name)
     if not config:
+        return None, None
+
+    if user is not None and getattr(user, 'is_authenticated', True):
+        user_rules = GenerationRule.objects.filter(user=user, game=game_name)
+        has_customization = user_rules.exists()
+    else:
+        has_customization = False
+
+    if has_customization:
+        active_rules = list(user_rules.filter(enabled=True))
+        homogeneous = bool(_distribution_bands(config)) and any(
+            rule.rule_name == 'distribution_type' and rule.choice_value == 'homogenea'
+            for rule in active_rules
+        )
+        for _ in range(10000):
+            candidate = _random_numbers(config, homogeneous)
+            ok, _violated = bet_satisfies_rules(candidate, [], game_name, active_rules)
+            if ok:
+                return candidate, _random_clovers(config)
         return None, None
 
     applies_sequence_rule = game_name in GAMES_WITH_SEQUENCE_RULE

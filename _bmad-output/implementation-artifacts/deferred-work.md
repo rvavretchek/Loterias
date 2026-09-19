@@ -188,3 +188,9 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-model-generationrule-e-tela-de-edicao.md`
   summary: "O aviso 'sem proteção de sequência' (FR-23) só existe no navegador (modal em JS); um POST direto ou sem JavaScript salva tudo desligado sem confirmação, e nenhum teste exercita o JS da tela (switch/modais)."
   evidence: Achado pelo Blind/Edge Case Hunter na revisão da Story 4.3. Baixo risco (usuário logado editando as próprias regras), mas junto com o item da 4.2 reforça a falta de infra de teste de frontend — revisitar ao montar um harness de JS/E2E.
+
+## Deferred from: build da Story 4.4 (2026-09-19)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-regras-de-geracao-mega-milionaria-quina-dupla.md`
+  summary: "`CLAUDE.md` (seção 'Lógica de domínio das loterias') ainda descreve `generate_bet()` só com a Regra de Sequência adaptativa; deve mencionar `GenerationRule`/`bet_satisfies_rules` (modo personalizado) — atualizar quando o Epic 4 fechar."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.4; adiado porque o conserto edita um arquivo de contexto de agente.

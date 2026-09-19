@@ -93,8 +93,12 @@ def create_bet_view(request):
     new_bet = None
     new_clovers = None
 
+    rules_unsatisfiable = False
     while attempts < max_attempts:
         nums, clovers = generate_bet(selected_game, request.user)
+        if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
+            rules_unsatisfiable = True
+            break
 
         if check_duplicate_bet(request.user, selected_game, nums, clovers):
             attempts += 1
@@ -105,7 +109,10 @@ def create_bet_view(request):
         break
 
     if not new_bet:
-        messages.warning(request, 'Nao foi possivel gerar um jogo unico apos muitas tentativas.')
+        if rules_unsatisfiable:
+            messages.warning(request, f'Nao foi possivel gerar um jogo de {selected_game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
+        else:
+            messages.warning(request, 'Nao foi possivel gerar um jogo unico apos muitas tentativas.')
         return redirect('home')
 
     # Calcular pares sequenciais
@@ -319,8 +326,12 @@ def regenerate_bet_view(request, pk):
     new_bet = None
     new_clovers = None
 
+    rules_unsatisfiable = False
     while attempts < max_attempts:
         nums, clovers = generate_bet(original_bet.game, request.user)
+        if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
+            rules_unsatisfiable = True
+            break
 
         if check_duplicate_bet(request.user, original_bet.game, nums, clovers):
             attempts += 1
@@ -331,7 +342,10 @@ def regenerate_bet_view(request, pk):
         break
 
     if not new_bet:
-        messages.warning(request, 'Nao foi possivel gerar um jogo unico.')
+        if rules_unsatisfiable:
+            messages.warning(request, f'Nao foi possivel refazer o jogo de {original_bet.game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
+        else:
+            messages.warning(request, 'Nao foi possivel gerar um jogo unico.')
         return redirect('bet_detail', pk=pk)
 
     sequential_pairs_count = count_sequential_pairs(new_bet)
@@ -418,6 +432,10 @@ def api_create_bet_view(request):
         return JsonResponse({'error': f'Numero de concurso invalido: {contest}'}, status=400)
 
     nums, clovers = generate_bet(selected_game, request.user)
+    if nums is None:
+        return JsonResponse(
+            {'error': 'Nao foi possivel gerar um jogo com as regras de geracao atuais'}, status=422,
+        )
     sequential_pairs_count = count_sequential_pairs(nums)
 
     # Verificar repeticao
@@ -603,7 +621,7 @@ def regras_geracao_view(request, jogo):
                     )
             messages.success(
                 request,
-                f'Regras de {GAMES_CONFIG[game]["name"]} salvas.',
+                f'Regras de {GAMES_CONFIG[game]["name"]} salvas. Valem a partir do próximo jogo gerado.',
             )
             return redirect('generation_rules', jogo=jogo)
         messages.error(request, 'Corrija os campos destacados para salvar as regras.')

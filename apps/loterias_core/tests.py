@@ -36,6 +36,7 @@ from apps.loterias_core.utils import (
     suggest_next_contest,
     apply_prize_to_bet,
     normalize_contest,
+    bet_satisfies_rules,
 )
 
 
@@ -3483,3 +3484,187 @@ class GenerationRulesViewTests(TestCase):
         response = self.client.get(reverse('home'))
         for game in GAMES_CONFIG:
             self.assertContains(response, reverse('generation_rules', kwargs={'jogo': game.lower()}))
+
+
+def _rule(name, value=None, enabled=True, choice=None):
+    return GenerationRule(rule_name=name, numeric_value=value, choice_value=choice, enabled=enabled)
+
+
+class BetSatisfiesRulesTests(TestCase):
+    def test_no_rules_is_ok(self):
+        self.assertEqual(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', []), (True, []))
+
+    def test_sequence_count_is_max_run_length(self):
+        rules = [_rule('limit_sequence_count', 2)]
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 3, 20, 30, 40], [], 'Mega-sena', rules),
+            (False, ['limit_sequence_count']),
+        )
+
+    def test_sequence_count_one_forbids_any_pair(self):
+        rules = [_rule('limit_sequence_count', 1)]
+        self.assertFalse(bet_satisfies_rules([1, 2, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertTrue(bet_satisfies_rules([1, 3, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+
+    def test_sequence_pairs_counts_runs(self):
+        rules = [_rule('limit_sequence_pairs', 1)]
+        self.assertTrue(bet_satisfies_rules([1, 2, 3, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 20, 21, 40, 50], [], 'Mega-sena', rules)[1],
+            ['limit_sequence_pairs'],
+        )
+
+    def test_row_and_column_limits(self):
+        # Mega-sena 6x10: 1..10 e a linha 1; coluna 1 = 1, 11, 21...
+        self.assertEqual(
+            bet_satisfies_rules([1, 3, 5, 30, 40, 55], [], 'Mega-sena', [_rule('limit_row_count', 2)]),
+            (False, ['limit_row_count']),
+        )
+        self.assertTrue(bet_satisfies_rules([1, 13, 25, 37, 49, 60], [], 'Mega-sena', [_rule('limit_row_count', 1)])[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 11, 21, 34, 45, 58], [], 'Mega-sena', [_rule('limit_column_count', 2)]),
+            (False, ['limit_column_count']),
+        )
+
+    def test_quina_grid_is_8_rows_by_10(self):
+        rules = [_rule('limit_row_count', 1)]
+        self.assertFalse(bet_satisfies_rules([71, 72, 1, 15, 33], [], 'Quina', rules)[0])
+
+    def test_homogeneous_requires_one_per_band(self):
+        rules = [_rule('distribution_type', choice='homogenea')]
+        self.assertTrue(bet_satisfies_rules([5, 15, 25, 35, 45, 55], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 25, 35, 45, 55], [], 'Mega-sena', rules)[1], ['distribution_type'],
+        )
+
+    def test_random_distribution_never_violates(self):
+        rules = [_rule('distribution_type', choice='totalmente_aleatoria')]
+        self.assertTrue(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules)[0])
+
+    def test_returns_complete_list_of_violations(self):
+        rules = [_rule('limit_sequence_count', 1), _rule('limit_row_count', 1)]
+        ok, violated = bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules)
+        self.assertFalse(ok)
+        self.assertEqual(sorted(violated), ['limit_row_count', 'limit_sequence_count'])
+
+    def test_ignores_disabled_valueless_and_unsupported_rules(self):
+        rules = [
+            _rule('limit_sequence_count', 1, enabled=False),
+            _rule('limit_sequence_pairs', None),
+            _rule('limit_min_gap_between_sequences', 5),
+            _rule('limit_min_sequences', 3),
+        ]
+        self.assertEqual(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules), (True, []))
+
+
+class GenerateBetWithRulesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
+
+    def _save(self, name, value=None, enabled=True, choice=None, game='Mega-sena'):
+        GenerationRule.objects.create(
+            user=self.user, game=game, rule_name=name, numeric_value=value,
+            choice_value=choice, enabled=enabled,
+        )
+
+    def test_custom_rules_are_always_satisfied(self):
+        self._save('limit_sequence_count', 1)
+        self._save('limit_row_count', 2)
+        rules = list(GenerationRule.objects.filter(user=self.user))
+        for _ in range(30):
+            nums, _clovers = generate_bet('Mega-sena', self.user)
+            self.assertEqual(len(nums), 6)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Mega-sena', rules)[0])
+
+    def test_customized_ignores_adaptive_sequence_rule(self):
+        self._save('limit_sequence_pairs', 6, enabled=False)
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence') as recent:
+            for _ in range(5):
+                generate_bet('Mega-sena', self.user)
+            recent.assert_not_called()
+
+    def test_all_disabled_means_free_draw(self):
+        for name in RULE_NAMES_BY_GAME['Quina']:
+            self._save(name, None, enabled=False, game='Quina')
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence') as recent:
+            nums, _ = generate_bet('Quina', self.user)
+            recent.assert_not_called()
+        self.assertEqual(len(nums), 5)
+
+    def test_no_rows_keeps_adaptive_behavior(self):
+        GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='1',
+            numbers=[1, 2, 10, 20, 30, 40], clovers=[], sequential_pairs=1,
+        )
+        for _ in range(20):
+            nums, _ = generate_bet('Mega-sena', self.user)
+            self.assertEqual(count_sequential_pairs(nums), 0)
+
+    def test_rules_of_other_game_do_not_apply(self):
+        self._save('limit_sequence_count', 1, game='Quina')
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence', return_value=False) as recent:
+            generate_bet('Mega-sena', self.user)
+            recent.assert_called()
+
+    def test_homogeneous_generation_one_per_band(self):
+        self._save('distribution_type', choice='homogenea')
+        for extra in ('Quina', 'Milionaria', 'Dupla-Sena'):
+            self._save('distribution_type', choice='homogenea', game=extra)
+        for game_name in ('Mega-sena', 'Quina', 'Milionaria', 'Dupla-Sena'):
+            rules = list(GenerationRule.objects.filter(user=self.user, game=game_name))
+            for _ in range(20):
+                nums, _ = generate_bet(game_name, self.user)
+                self.assertEqual(len(nums), GAMES_CONFIG[game_name]['bets_count'])
+                self.assertEqual(len(set(nums)), len(nums))
+                self.assertTrue(bet_satisfies_rules(nums, [], game_name, rules)[0])
+
+    def test_homogeneous_is_a_noop_when_bands_would_be_single_numbers(self):
+        """Lotofacil (15 de 25): faixas de 1 numero nao espalham nada -- Homogenea nao se aplica (4.6)."""
+        self._save('distribution_type', choice='homogenea', game='Lotofacil')
+        rules = list(GenerationRule.objects.filter(user=self.user, game='Lotofacil'))
+        self.assertTrue(bet_satisfies_rules(list(range(11, 26)), [], 'Lotofacil', rules)[0])
+        nums, _ = generate_bet('Lotofacil', self.user)
+        self.assertEqual(len(set(nums)), 15)
+
+    def test_milionaria_still_returns_clovers(self):
+        self._save('limit_sequence_count', 2, game='Milionaria')
+        nums, clovers = generate_bet('Milionaria', self.user)
+        self.assertEqual(len(clovers), 2)
+
+    def test_impossible_rules_return_none(self):
+        self._save('limit_column_count', 0)
+        self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
+
+
+class GenerationRulesViewsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rv@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_column_count', numeric_value=0, enabled=True,
+        )
+
+    def test_create_view_warns_and_saves_nothing_when_impossible(self):
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertContains(response, 'com as suas regras de geracao')
+        self.assertNotContains(response, 'apos muitas tentativas')
+
+    def test_regenerate_view_keeps_bet_when_impossible(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+        )
+        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        bet.refresh_from_db()
+        self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        self.assertContains(response, 'com as suas regras de geracao')
+
+    def test_api_returns_422_when_impossible(self):
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('regras de geracao', response.json()['error'])
