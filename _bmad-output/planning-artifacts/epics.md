@@ -767,7 +767,7 @@ Para que a geração respeite exatamente o padrão que eu quero.
 **Quando** ela carrega
 **Então** vejo os 5 campos: limite de números em sequência, limite de sequências no jogo, limite por linha do volante, limite por coluna do volante (cada um liga/desliga+valor), e Tipo de distribuição (Homogênea/Totalmente Aleatória)
 **E** pra Mega-Sena, os campos de linha/coluna usam o grid confirmado do volante oficial (6 linhas × 10 colunas, PRD §8.5) com texto de ajuda associado via `aria-describedby`
-**E** +Milionária/Quina/Dupla-Sena têm os mesmos 5 campos (inclusive linha/coluna), com grid em `GAME_GRID` (5×10, 8×10, 5×10 — dimensões ainda a confirmar pelo Boss; a tela já os mostra desde a Story 4.3)
+**E** +Milionária/Quina/Dupla-Sena têm os mesmos 5 campos (inclusive linha/coluna), com grid em `GAME_GRID` (5×10, 8×10, 5×10 — confirmadas pelo Boss em 2026-09-19; a tela já os mostra desde a Story 4.3)
 **Dado** eu ativo Regras de Geração pra um desses Jogos e gero uma aposta
 **Quando** `generate_bet()` roda
 **Então** a nova função `bet_satisfies_rules(numbers, clovers, game, rules)` checa cada candidato contra as regras ativas (`enabled=True`), retornando a lista completa de `rule_name` violadas

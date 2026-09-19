@@ -68,9 +68,9 @@ RULE_NAMES_BY_GAME = {
     ],
     'Lotomania': ['limit_sequence_count', 'limit_min_gap_between_sequences', 'limit_min_sequences'],
 }
-# Grid do volante oficial (linhas, colunas) -- base das regras de linha/coluna. Mega-Sena (6x10) e
-# Lotofacil (5x5) confirmados com fonte (PRD 8.5); +Milionaria/Quina/Dupla-Sena (5x10, 8x10, 5x10)
-# seguem o padrao de 10 colunas dos volantes da Caixa e ainda precisam de confirmacao do Boss.
+# Grid do volante oficial (linhas, colunas) -- base das regras de linha/coluna (PRD 8.5). Mega-Sena
+# (6x10) e Lotofacil (5x5) confirmados com fonte; +Milionaria (5x10), Quina (8x10) e Dupla-Sena
+# (5x10) confirmados pelo Boss em 2026-09-19.
 GAME_GRID = {
     'Mega-sena': (6, 10),
     'Milionaria': (5, 10),

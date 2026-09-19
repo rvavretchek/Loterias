@@ -125,7 +125,7 @@ erDiagram
 | FR-16, FR-17 (reorganização da home, ícone por Jogo) | `templates/loterias_core/home.html` | UX (DESIGN.md/EXPERIENCE.md) — sem AD de arquitetura, é só template/CSS, nenhum model/view novo |
 | FR-18 (edição de Regra de Geração) | `views.regras_geracao_view`, `templates/loterias_core/regras_geracao.html` | AD-11, AD-13 |
 | FR-19 — Mega-Sena | `rule_name` ∈ {`limit_sequence_count`, `limit_sequence_pairs`, `limit_row_count`, `limit_column_count`, `distribution_type`} — lista fechada, grid confirmado (PRD §8.5) | AD-11, `RULE_NAMES_BY_GAME` |
-| FR-19 — +Milionária, Quina, Dupla-Sena | `rule_name` ∈ {`limit_sequence_count`, `limit_sequence_pairs`, `limit_row_count`, `limit_column_count`, `distribution_type`} — mesmas 5 regras da Mega-Sena (decisão do Boss em 2026-09-18); grid em `GAME_GRID` (5×10, 8×10, 5×10) **a confirmar** (ver Deferred) | AD-11, `RULE_NAMES_BY_GAME`, `GAME_GRID` |
+| FR-19 — +Milionária, Quina, Dupla-Sena | `rule_name` ∈ {`limit_sequence_count`, `limit_sequence_pairs`, `limit_row_count`, `limit_column_count`, `distribution_type`} — mesmas 5 regras da Mega-Sena (decisão do Boss em 2026-09-18); grid em `GAME_GRID` (5×10, 8×10, 5×10 — confirmados pelo Boss em 2026-09-19) | AD-11, `RULE_NAMES_BY_GAME`, `GAME_GRID` |
 | FR-20 — Lotofácil | `rule_name` ∈ {`limit_sequence_count`, `limit_sequence_pairs`, `limit_min_gap_between_sequences`, `limit_min_sequences`, `limit_row_count`, `limit_column_count`, `distribution_type`} — lista fechada, 7 regras (PRD FR-20 lista `distribution_type` explicitamente — não é herança implícita de FR-19), grid confirmado (PRD §8.5) | AD-11, `RULE_NAMES_BY_GAME` |
 | FR-21 — Lotomania | `rule_name` ∈ {`limit_sequence_count`, `limit_min_gap_between_sequences`, `limit_min_sequences`} — lista fechada, sem linha/coluna/distribuição | AD-11, `RULE_NAMES_BY_GAME` |
 | FR-22 (resolução de conflito) | `utils.generate_bet` (loop de retry) | AD-12 |
@@ -134,7 +134,7 @@ erDiagram
 
 ## Deferred
 
-- PRD §8.5 — grid do volante oficial (linha/coluna): Mega-Sena (6×10) e Lotofácil (5×5) confirmados com fonte; Quina (8×10), +Milionária (5×10) e Dupla-Sena (5×10) estão em `GAME_GRID` seguindo o padrão de 10 colunas dos volantes da Caixa, mas **sem fonte confirmada** — o Boss pediu as 5 regras pros 4 jogos em 2026-09-18 (a tela já as mostra); confirmar as dimensões antes da Story 4.4 avaliar linha/coluna.
+- ~~PRD §8.5 — grid do volante oficial (linha/coluna)~~ **Resolvido em 2026-09-19:** Mega-Sena 6×10 e Lotofácil 5×5 (fonte web), +Milionária 5×10, Quina 8×10 e Dupla-Sena 5×10 (confirmados pelo Boss) — todos em `GAME_GRID`.
 - PRD §8.6 — faixa de valores válida por regra/Jogo (ex. limite de sequência entre 1 e quanto pra cada Jogo) — tuning de produto específico por regra, não invariante de arquitetura; `numeric_value` é um `IntegerField` genérico, a validação de faixa fica em `forms.py`, decisão do Boss por story.
 - Divisão de `views.py` em um pacote (`views/`) — item de ação já registrado na retrospectiva do Epic 2 (`epic-2-retro-2026-09-16.md`); este adendo adiciona ~1 view nova e estende 1 existente, ainda abaixo do limiar que justificaria a divisão agora.
 - Modo WAL do SQLite — débito técnico já conhecido e deferido 3× no Epic 2 (mesma causa raiz); este adendo não piora a situação (nenhuma escrita nova de `jobs.py`), não revisitado aqui.
