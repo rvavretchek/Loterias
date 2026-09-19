@@ -3667,6 +3667,17 @@ class GenerateBetWithRulesTests(TestCase):
             self.assertIsNone(relaxed)
             self.assertTrue(bet_satisfies_rules(nums, [], 'Lotofacil', rules)[0])
 
+    def test_lotomania_generation_respects_its_three_rules(self):
+        self._save('limit_sequence_count', 6, game='Lotomania')
+        self._save('limit_min_sequences', 4, game='Lotomania')
+        self._save('limit_min_gap_between_sequences', 1, game='Lotomania')
+        rules = list(GenerationRule.objects.filter(user=self.user, game='Lotomania'))
+        for _ in range(5):
+            nums, _clovers, relaxed = generate_bet_with_relaxation('Lotomania', self.user)
+            self.assertIsNone(relaxed)
+            self.assertEqual(len(set(nums)), 50)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Lotomania', rules)[0])
+
     def test_milionaria_still_returns_clovers(self):
         self._save('limit_sequence_count', 2, game='Milionaria')
         nums, clovers = generate_bet('Milionaria', self.user)
