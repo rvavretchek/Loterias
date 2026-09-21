@@ -1,0 +1,138 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Lottiq - Gere com regra, guarde tudo, confira sozinho{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lp-hero { background: var(--surface-sunken); border-bottom: 1px solid var(--border-default); padding: 40px 0; }
+    .lp-hero-grid { display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center; }
+    .lp-hero-copy { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+    .lp-pill { align-self: flex-start; padding: 6px 12px; border-radius: 999px; background: var(--status-waiting-bg); color: var(--teal-700); font: 700 12px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+    .lp-hero h1 { font: 800 34px/1.1 var(--font-display); letter-spacing: -.03em; color: var(--lq-navy); margin: 0; text-wrap: pretty; }
+    .lp-hero p.lp-lead { font: 400 18px/1.6 var(--font-body); color: var(--text-muted); margin: 0; max-width: 46ch; text-wrap: pretty; }
+    .lp-cta { display: flex; flex-wrap: wrap; gap: 12px; }
+    .lp-cta .lq-btn { height: 48px; padding: 0 24px; font-size: 16px; }
+    .lp-trust { display: flex; flex-wrap: wrap; gap: 12px 22px; padding-top: 4px; font: 400 14px/1.4 var(--font-body); color: var(--neutral-600); }
+    .lp-trust span { display: inline-flex; align-items: center; gap: 7px; }
+    .lp-trust .ms { font-size: 19px; color: var(--lq-teal); }
+    .lp-sample { border-radius: var(--radius-xl); background: var(--lq-navy); padding: 24px; display: flex; flex-direction: column; gap: 18px; box-shadow: var(--shadow-lg); }
+    .lp-sample-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .lp-sample-label { font: 700 13px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: #7FD3CF; }
+    .lp-sample-status { padding: 5px 10px; border-radius: 999px; background: #123C43; color: #7FD3CF; font: 700 12px/1 var(--font-body); }
+    .lp-sample-balls { display: flex; gap: 8px; justify-content: space-between; }
+    .lp-sample-balls span { flex: 1 1 0; max-width: 60px; aspect-ratio: 1; border-radius: 50%; background: #F7FBFB; color: var(--lq-navy); display: flex; align-items: center; justify-content: center; font: 700 clamp(14px, 4vw, 20px)/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+    .lp-sample-rules { display: flex; flex-wrap: wrap; gap: 8px; }
+    .lp-sample-rules span { padding: 6px 10px; border-radius: 6px; background: #123C43; color: #7FD3CF; font: 500 12px/1 var(--font-body); }
+    .lp-sample-note { padding-top: 16px; border-top: 1px solid #1E4159; font: 400 13px/1.6 var(--font-body); color: #9CADB6; }
+    .lp-section { padding: 48px 0; }
+    .lp-section h2 { font: 700 26px/1.25 var(--font-display); letter-spacing: -.02em; color: var(--lq-navy); margin: 0 0 24px; }
+    .lp-steps { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .lp-step { border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 22px; display: flex; flex-direction: column; gap: 10px; background: #fff; }
+    .lp-step .ms { font-size: 28px; color: var(--lq-teal); }
+    .lp-step h3 { font: 700 17px/1.3 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .lp-step p { font: 400 15px/1.55 var(--font-body); color: var(--text-muted); margin: 0; }
+    .lp-games { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .lp-game { border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 16px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+    .lp-game .ms { font-size: 26px; color: var(--lq-teal); }
+    .lp-game strong { font: 700 15px/1.3 var(--font-display); color: var(--lq-navy); }
+    .lp-game span.lp-game-meta { font: 400 13px/1.4 var(--font-mono); color: var(--text-muted); }
+    .lp-photo-row { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .lp-photo-row img { width: 100%; height: 220px; object-fit: cover; border-radius: var(--radius-lg); }
+    .lp-note { background: var(--surface-sunken); border-radius: var(--radius-lg); padding: 26px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+    .lp-note .lq-eyebrow { color: var(--neutral-600); font-size: 11px; letter-spacing: .09em; }
+    .lp-note p { font: 400 17px/1.6 var(--font-body); color: var(--text-body-color); margin: 0; max-width: 52ch; }
+    @media (min-width: 768px) {
+        .lp-hero { padding: 64px 0; }
+        .lp-hero h1 { font-size: 46px; }
+        .lp-hero-grid { grid-template-columns: 1fr 440px; gap: 48px; }
+        .lp-steps { grid-template-columns: repeat(3, 1fr); }
+        .lp-games { grid-template-columns: repeat(3, 1fr); }
+        .lp-photo-row { grid-template-columns: 300px 1fr; }
+        .lp-photo-row img { height: 100%; min-height: 220px; }
+    }
+    @media (min-width: 992px) { .lp-games { grid-template-columns: repeat(6, 1fr); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="lp-hero">
+    <div class="lq-container lp-hero-grid">
+        <div class="lp-hero-copy">
+            <span class="lp-pill">Grátis para começar</span>
+            <h1>Gere com regra, guarde tudo, confira sozinho</h1>
+            <p class="lp-lead">Você define as regras do seu jogo: quantos números em sequência, quanto espaço entre elas, como distribuir. O Lottiq gera, guarda o histórico e confere com o resultado oficial da Caixa. Você só volta aqui se quiser.</p>
+            <div class="lp-cta">
+                <a href="{% url 'account_signup' %}" class="lq-btn lq-btn-primary"><span class="ms" aria-hidden="true">casino</span>Gerar meu primeiro jogo</a>
+                <a href="#como-funciona" class="lq-btn lq-btn-outline">Ver como funciona</a>
+            </div>
+            <div class="lp-trust">
+                <span><span class="ms" aria-hidden="true">shield_lock</span>Sem dados de pagamento</span>
+                <span><span class="ms" aria-hidden="true">fact_check</span>Resultado lido direto da Caixa</span>
+            </div>
+        </div>
+
+        <div class="lp-sample" aria-label="Exemplo de jogo gerado">
+            <div class="lp-sample-head">
+                <span class="lp-sample-label">Exemplo · Mega-Sena</span>
+                <span class="lp-sample-status">Aguardando sorteio</span>
+            </div>
+            <div class="lp-sample-balls" role="list">
+                <span role="listitem">08</span><span role="listitem">15</span><span role="listitem">27</span><span role="listitem">33</span><span role="listitem">49</span><span role="listitem">58</span>
+            </div>
+            <div class="lp-sample-rules">
+                <span>máx. 2 em sequência</span><span>espaço mín. 3</span><span>distribuição equilibrada</span>
+            </div>
+            <div class="lp-sample-note">Seu jogo entra na fila. A conferência é automática na noite do sorteio.</div>
+        </div>
+    </div>
+</section>
+
+<section class="lp-section" id="como-funciona">
+    <div class="lq-container">
+        <h2>Três passos e pronto</h2>
+        <div class="lp-steps">
+            <div class="lp-step">
+                <span class="ms" aria-hidden="true">tune</span>
+                <h3>Defina a regra</h3>
+                <p>Sequências, espaço entre elas, números por linha e por coluna, tipo de distribuição. Cada loteria tem os seus ajustes.</p>
+            </div>
+            <div class="lp-step">
+                <span class="ms" aria-hidden="true">casino</span>
+                <h3>Gere ou guarde</h3>
+                <p>O Lottiq gera respeitando a regra. Já jogou na lotérica? Guarde o palpite manual e ele entra na mesma fila.</p>
+            </div>
+            <div class="lp-step">
+                <span class="ms" aria-hidden="true">fact_check</span>
+                <h3>Receba a conferência</h3>
+                <p>Saiu o resultado, o Lottiq compara e avisa, com prêmio estimado quando houver acerto e uma linha só quando não houver.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="lp-section" style="padding-top:0;">
+    <div class="lq-container">
+        <h2>Loterias que o Lottiq confere</h2>
+        <div class="lp-games">
+            {% for key, config in jogos_disponiveis.items %}
+            <div class="lp-game">
+                <span class="ms" aria-hidden="true">{% if key == 'Mega-sena' %}emoji_events{% elif key == 'Milionaria' %}local_florist{% elif key == 'Lotomania' %}pin{% elif key == 'Lotofacil' %}bolt{% elif key == 'Quina' %}star{% elif key == 'Dupla-Sena' %}filter_2{% else %}casino{% endif %}</span>
+                <strong>{{ config.name }}</strong>
+                <span class="lp-game-meta">{{ config.bets_count }} de {{ config.numbers_count }}{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="lp-section" style="padding-top:0;">
+    <div class="lq-container lp-photo-row">
+        <img src="{% static 'img/jogadora.jpg' %}" alt="Jogadora conferindo seus jogos no celular e no computador">
+        <div class="lp-note">
+            <span class="lq-eyebrow">Sobre o prêmio estimado</span>
+            <p>O valor que aparece no Lottiq é estimativa calculada pela faixa do concurso. Quem paga é a Caixa, e é lá que o valor final se confirma. A gente diz isso em toda tela onde um valor de prêmio aparece.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

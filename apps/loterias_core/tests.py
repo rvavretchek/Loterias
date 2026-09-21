@@ -1334,7 +1334,21 @@ class HomeViewTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertNotContains(response, 'id="resumo-lateral"')
         self.assertNotContains(response, 'id="jogo-selecionado"')
-        self.assertContains(response, 'Criar Conta Gratis')
+        self.assertTemplateUsed(response, 'loterias_core/landing.html')
+        self.assertContains(response, 'Gere com regra, guarde tudo, confira sozinho')
+        self.assertContains(response, 'Gerar meu primeiro jogo')
+        self.assertContains(response, reverse('account_signup'))
+        self.assertContains(response, 'jogadora.jpg')
+        self.assertNotContains(response, 'Multitenant')
+        self.assertNotContains(response, 'aumente suas chances')
+        for game in ('Mega-sena', 'Lotofacil', 'Dupla-Sena'):
+            self.assertContains(response, game)
+
+    def test_logged_user_home_is_not_the_landing(self):
+        user = User.objects.create_user(email='logado@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertTemplateNotUsed(response, 'loterias_core/landing.html')
 
 
 class BetDetailViewTests(TestCase):

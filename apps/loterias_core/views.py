@@ -58,12 +58,9 @@ def home(request):
             'jogos_disponiveis': GAMES_CONFIG,
             'concursos_sugeridos': suggested_contests,
         }
-    else:
-        context = {
-            'jogos_disponiveis': GAMES_CONFIG,
-        }
+        return render(request, 'loterias_core/home.html', context)
 
-    return render(request, 'loterias_core/home.html', context)
+    return render(request, 'loterias_core/landing.html', {'jogos_disponiveis': GAMES_CONFIG})
 
 
 @login_required

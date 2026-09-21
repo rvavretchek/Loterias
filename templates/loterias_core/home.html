@@ -34,30 +34,6 @@
 
 {% block content %}
 <div class="container {% if user.is_authenticated %}py-4{% else %}py-5{% endif %}">
-    {% if not user.is_authenticated %}
-    <!-- Hero Section (so visitante; usuario autenticado abre direto na area de gerar jogo) -->
-    <div class="row mb-5">
-        <div class="col-lg-8 mx-auto text-center">
-            <h1 class="display-4 fw-bold mb-3">
-                <i class="bi bi-stars text-warning"></i>
-                Lottiq
-            </h1>
-            <p class="lead text-secondary mb-4">
-                Gere apostas inteligentes para as principais loterias brasileiras.
-                Mantenha seu historico, acompanhe estatisticas e aumente suas chances.
-            </p>
-            <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'account_signup' %}" class="btn btn-primary btn-lg">
-                    <i class="bi bi-person-plus me-2"></i>Criar Conta Gratis
-                </a>
-                <a href="{% url 'account_login' %}" class="btn btn-outline-primary btn-lg">
-                    <i class="bi bi-box-arrow-in-right me-2"></i>Ja Tenho Conta
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     {% if user.is_authenticated %}
     <div class="home-layout">
     <div class="home-main">
@@ -248,32 +224,6 @@
     </aside>
     </div>
 
-    {% else %}
-    <!-- Jogos Disponiveis -->
-    <div class="row">
-        <div class="col-12">
-            <h3 class="text-center mb-4">Loterias Suportadas</h3>
-            <div class="row g-3">
-                {% for key, config in jogos_disponiveis.items %}
-                <div class="col-md-4 col-lg-2">
-                    <div class="card text-center p-3 h-100">
-                        <div class="card-body">
-                            <i class="bi bi-dice-5 fs-1 text-primary mb-2"></i>
-                            <h5 class="card-title">{{ config.name }}</h5>
-                            <p class="card-text text-secondary">
-                                <strong>{{ config.bets_count }}</strong> numeros<br>
-                                de <strong>{{ config.numbers_count }}</strong> possiveis
-                                {% if config.clovers > 0 %}
-                                <br>+<strong>{{ config.clovers }}</strong> trevos
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
     {% endif %}
 </div>
 
