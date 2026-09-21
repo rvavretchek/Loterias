@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-21-2026 12:05
+last_updated: 09-21-2026 15:31
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -102,14 +102,14 @@ action_items:
     action: "Deletar HitNotification obsoleta em regenerate_bet_view quando o resultado
       foi purgado (F1)"
     owner: "proxima sessao de dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-2-fix-open-redirect-mark-notification-read"
     epic: 2
     action: "Corrigir guarda de redirect aberto em mark_notification_read_view (bloquear
       next=//...) (F2)"
     owner: "proxima sessao de dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-3-fix-matched-numbers-dupla-sena-segundo-sorteio"
     epic: 2
@@ -159,13 +159,13 @@ action_items:
       obsoleta no regenerate; open redirect em mark_notification_read_view) antes
       de PR para main"
     owner: "proxima sessao de desenvolvimento"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
   - id: "epic-4-retro-item-12-confirmar-com-o-boss-se-jogo-duplicado-e"
     epic: 4
     action: "Confirmar com o Boss se jogo duplicado e global ou por concurso"
     owner: "Boss"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
   - id: "epic-4-retro-item-13-dividir-tests-py-por-area-e-renomear-cla"
     epic: 4
@@ -179,7 +179,7 @@ action_items:
     action: "Reduzir custo do laco de duplicata/relaxamento (regras carregadas uma
       vez ou orcamento de tempo)"
     owner: "proxima revisao de arquitetura"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
   - id: "epic-4-retro-item-15-validar-no-navegador-relaxamento-regras"
     epic: 4

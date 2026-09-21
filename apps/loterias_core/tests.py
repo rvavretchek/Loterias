@@ -2390,6 +2390,14 @@ class MarkNotificationReadViewTests(TestCase):
         )
         self.notification = HitNotification.objects.create(bet=self.bet, won=True)
 
+    def test_next_url_only_redirects_to_same_site(self):
+        url = reverse('mark_notification_read', args=[self.notification.pk])
+        for evil in ('//evil.example/x', 'https://evil.example/x', '/\evil.example'):
+            response = self.client.post(url, {'next': evil})
+            self.assertRedirects(response, reverse('notifications'), fetch_redirect_response=False)
+        response = self.client.post(url, {'next': '/historico/'})
+        self.assertRedirects(response, '/historico/', fetch_redirect_response=False)
+
     def test_marks_only_the_clicked_notification_as_read(self):
         other_bet = GeneratedBet.objects.create(
             user=self.user, game='Quina', contest='21',
@@ -3894,3 +3902,35 @@ class GenerationRulesViewsTests(TestCase):
         )
         self.assertEqual(response.status_code, 422)
         self.assertIn('regras de geracao', response.json()['error'])
+
+
+class RepeatedBetsAllowedTests(TestCase):
+    """Boss (2026-09-21): repetir o mesmo jogo no mesmo Concurso ou em varios Concursos e permitido."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='repete@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_same_numbers_can_be_saved_repeatedly_and_across_contests(self):
+        fixed = ([1, 2, 3, 4, 5, 6], [], None)
+        with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=fixed):
+            for contest in ('3000', '3000', '3001'):
+                self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': contest})
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, numbers=[1, 2, 3, 4, 5, 6]).count(), 3)
+
+    def test_regenerate_can_return_same_numbers_as_another_bet(self):
+        GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='1', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        bet = GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='2', numbers=[7, 8, 9, 10, 11, 12], clovers=[])
+        with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=([1, 2, 3, 4, 5, 6], [], None)):
+            self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        bet.refresh_from_db()
+        self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+
+    def test_regenerate_deletes_stale_hit_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='5', numbers=[1, 2, 3, 4, 5], clovers=[],
+            result_checked=True, hits=5, prize=Decimal('100'),
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())

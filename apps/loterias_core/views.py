@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Count
 from django.db.models.functions import Length
 from .forms import NotificationPreferenceForm
@@ -92,32 +93,11 @@ def create_bet_view(request):
     if blocked:
         return blocked
 
-    attempts = 0
-    max_attempts = 1000
-    new_bet = None
-    new_clovers = None
-
-    rules_unsatisfiable = False
-    relaxed_rule = None
-    while attempts < max_attempts:
-        nums, clovers, relaxed_rule = generate_bet_with_relaxation(selected_game, request.user)
-        if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
-            rules_unsatisfiable = True
-            break
-
-        if check_duplicate_bet(request.user, selected_game, nums, clovers):
-            attempts += 1
-            continue
-
-        new_bet = nums
-        new_clovers = clovers
-        break
+    # Jogos repetidos sao permitidos (mesmo Concurso ou varios Concursos): nao ha checagem de duplicata.
+    new_bet, new_clovers, relaxed_rule = generate_bet_with_relaxation(selected_game, request.user)
 
     if not new_bet:
-        if rules_unsatisfiable:
-            messages.warning(request, f'Nao foi possivel gerar um jogo de {selected_game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
-        else:
-            messages.warning(request, 'Nao foi possivel gerar um jogo unico apos muitas tentativas.')
+        messages.warning(request, f'Nao foi possivel gerar um jogo de {selected_game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
         return redirect('home')
 
     # Calcular pares sequenciais
@@ -376,32 +356,11 @@ def regenerate_bet_view(request, pk):
     if blocked:
         return blocked
 
-    attempts = 0
-    max_attempts = 1000
-    new_bet = None
-    new_clovers = None
-
-    rules_unsatisfiable = False
-    relaxed_rule = None
-    while attempts < max_attempts:
-        nums, clovers, relaxed_rule = generate_bet_with_relaxation(original_bet.game, request.user)
-        if nums is None:  # regras personalizadas inatingiveis (Story 4.4)
-            rules_unsatisfiable = True
-            break
-
-        if check_duplicate_bet(request.user, original_bet.game, nums, clovers):
-            attempts += 1
-            continue
-
-        new_bet = nums
-        new_clovers = clovers
-        break
+    # Jogos repetidos sao permitidos (mesmo Concurso ou varios Concursos): nao ha checagem de duplicata.
+    new_bet, new_clovers, relaxed_rule = generate_bet_with_relaxation(original_bet.game, request.user)
 
     if not new_bet:
-        if rules_unsatisfiable:
-            messages.warning(request, f'Nao foi possivel refazer o jogo de {original_bet.game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
-        else:
-            messages.warning(request, 'Nao foi possivel gerar um jogo unico.')
+        messages.warning(request, f'Nao foi possivel refazer o jogo de {original_bet.game} com as suas regras de geracao. Ajuste as regras deste jogo e tente de novo.')
         return redirect('bet_detail', pk=pk)
 
     sequential_pairs_count = count_sequential_pairs(new_bet)
@@ -423,6 +382,7 @@ def regenerate_bet_view(request, pk):
     original_bet.hits = 0
     original_bet.prize = 0
     original_bet.prize_description = ''
+    HitNotification.objects.filter(bet=original_bet).delete()
     original_bet.save()
 
     messages.success(request, f'Novo jogo de {original_bet.game} gerado com sucesso!')
@@ -559,7 +519,9 @@ def mark_notification_read_view(request, pk):
     # ausencia da mensagem revelaria se aquele pk existe/pertence a outro usuario.
     messages.success(request, 'Notificacao marcada como lida.')
     next_url = request.POST.get('next')
-    if next_url and next_url.startswith('/'):
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
         return redirect(next_url)
     return redirect('notifications')
 
