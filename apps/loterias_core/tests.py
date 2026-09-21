@@ -1275,29 +1275,29 @@ class HomeViewTests(TestCase):
         self.client.force_login(user)
         html = self.client.get(reverse('home')).content.decode()
         expected = {
-            'Mega-sena': 'bi-trophy', 'Milionaria': 'bi-flower1', 'Lotomania': 'bi-123',
-            'Lotofacil': 'bi-lightning', 'Quina': 'bi-star', 'Dupla-Sena': 'bi-stack',
+            'Mega-sena': 'emoji_events', 'Milionaria': 'local_florist', 'Lotomania': 'pin',
+            'Lotofacil': 'bolt', 'Quina': 'star', 'Dupla-Sena': 'filter_2',
         }
         self.assertEqual(set(expected), set(GAMES_CONFIG))
         selector = html[html.index('id="seletor-de-jogos"'):html.index('</form>', html.index('id="seletor-de-jogos"'))]
         for game, icon in expected.items():
             card = selector[selector.index('for="jogo-%s"' % game):]
             card = card[:card.index('</label>')]
-            self.assertRegex(card, r'<i class="bi %s game-icon" aria-hidden="true"></i>' % icon)
-        self.assertNotIn('bi-dice-5', selector)
+            self.assertRegex(card, r'<span class="ms game-icon" aria-hidden="true">%s</span>' % icon)
+        self.assertNotIn('>casino<', selector)
         self.assertEqual(len(set(expected.values())), len(expected))
 
     def test_game_selector_is_keyboard_accessible_radio_pattern_with_non_color_check(self):
-        """Story 4.2 (UX-DR7): radios .btn-check + label (sem div onclick), check no card selecionado."""
+        """Story 4.2 (UX-DR7): radios .lq-tile-input + label (sem div onclick), check no card selecionado."""
         user = User.objects.create_user(email='btncheck@example.com', password='SenhaForte123')
         self.client.force_login(user)
         html = self.client.get(reverse('home')).content.decode()
         self.assertNotIn('onclick="selectGame', html)
         for game in GAMES_CONFIG:
-            self.assertRegex(html, r'<input type="radio" class="btn-check" name="jogo" id="jogo-%s"' % game)
+            self.assertRegex(html, r'<input type="radio" class="lq-tile-input" name="jogo" id="jogo-%s"' % game)
             self.assertIn('for="jogo-%s"' % game, html)
         self.assertEqual(html.count('game-selector-check" aria-hidden="true"'), len(GAMES_CONFIG))
-        self.assertRegex(html, r'\.btn-check:checked \+ \.game-selector \.game-selector-check\s*\{\s*display:\s*block')
+        self.assertRegex(html, r'\.lq-tile-input:checked \+ \.lq-tile \.game-selector-check\s*\{\s*display:\s*block')
 
     def test_selected_game_area_is_polite_atomic_live_region(self):
         """Story 4.2 (UX-DR4): area 'jogo selecionado' anunciavel por leitor de tela."""
@@ -1326,7 +1326,7 @@ class HomeViewTests(TestCase):
         self.assertContains(response, 'id="concurso"')
         self.assertContains(response, 'name="concurso"')
         self.assertContains(response, 'Selecione um jogo abaixo')
-        for label in ('Jogos Gerados', 'Tipos de Jogo', 'Jogos Recentes'):
+        for label in ('Jogos guardados', 'Tipos de jogo', 'Jogos recentes'):
             self.assertContains(response, label)
         self.assertEqual(response.context['total_jogos'], 1)
 
