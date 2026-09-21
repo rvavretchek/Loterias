@@ -877,3 +877,102 @@ Para revisitar jogos antigos sem rolar a lista inteira procurando manualmente.
 **Então** os 2 conjuntos de números aparecem empilhados, rotulados "1º sorteio:"/"2º sorteio:", cada um num container `role="group"` com `aria-label` próprio
 
 *Referências: FR-24, AD-14, UX-DR5, UX-DR6, `mockups/historico.html`.*
+
+
+## Epic 5: Migração para o Lottiq Design System e Renomeação do Produto
+
+Adotar o Lottiq Design System (projeto "Lottiq Design System" no Claude Design; tokens, componentes, 10 telas de referência em `images/Lottiq Telas.dc.html`) em toda a interface e renomear o produto de "Gerador de Loterias" para **Lottiq** (decisão do Boss, 2026-09-21). Bootstrap e Bootstrap Icons saem por completo; ícones passam a Material Symbols Rounded; tema escuro fica para uma rodada futura. Regras de conteúdo do DS valem em toda tela: vocabulário "palpite → jogo → conferir" (nunca "verificar"/"validar"), sem emoji, âmbar só em contexto de prêmio, um botão primário por tela.
+
+**Estratégia de transição:** o CSS do DS é carregado ao lado do Bootstrap enquanto há telas não migradas; o Bootstrap só é removido na última story, quando nenhuma tela depende dele. Cada story deixa o app inteiro funcionando e é validada no navegador pelo Boss antes da próxima.
+
+### Story 5.1: Fundação do Lottiq Design System e renomeação para Lottiq
+
+Como pessoa que usa o produto,
+Eu quero que o app carregue a identidade visual do Lottiq (cores, tipografia, componentes) e se chame Lottiq,
+Para que toda tela migrada depois tenha base consistente.
+
+**Critérios de Aceite:**
+
+**Dado** o app carregando
+**Quando** qualquer página renderiza
+**Então** os tokens do DS (cor, tipografia Sora/Figtree/JetBrains Mono, espaço, raio, sombra) estão disponíveis como variáveis CSS em `static/`, e as fontes e Material Symbols Rounded carregam via Google Fonts
+**E** existe um CSS de componentes do DS (botão, campo, switch, bola de número, cartão, banner/aviso, badge de status, estado vazio) usável por classe nos templates Django
+**Dado** o cabeçalho e o rodapé em `base/base.html`
+**Quando** renderizam
+**Então** usam a marca Lottiq (símbolo + wordmark de `images/`), navegação e estados de foco do DS, e o título das páginas e dos e-mails do app diz "Lottiq"
+**E** as telas ainda não migradas continuam funcionando (Bootstrap segue carregado até a Story 5.7)
+
+*Referências: DS `tokens/*.css`, `components/`, `ui_kits/app/AppShell.jsx`.*
+
+### Story 5.2: Landing page
+
+Como visitante,
+Eu quero uma landing page clara do Lottiq,
+Para entender o produto e criar minha conta.
+
+**Critérios de Aceite:**
+
+**Dado** um visitante não autenticado em `/`
+**Quando** a página carrega
+**Então** vê a landing do Claude Design (tela 01 de `Lottiq Telas.dc.html`), com o texto e o vocabulário do DS, as fotos de `images/` (Jogadora/Ganhador) nos espaços reservados, sem o card Multitenant nem os 3 cards antigos, e CTAs "Criar conta grátis"/"Entrar"
+**E** a página funciona em celular sem rolagem horizontal
+
+### Story 5.3: Entrar, criar conta e telas de conta
+
+Como visitante ou usuário,
+Eu quero as telas de entrar, cadastro, confirmação de e-mail, senha e perfil no visual do Lottiq,
+Para ter uma experiência consistente desde o primeiro acesso.
+
+**Critérios de Aceite:**
+
+**Dado** as telas de `templates/account/` e `templates/accounts/`
+**Quando** renderizam
+**Então** usam os componentes do DS (campos, botões, avisos), sem classes Bootstrap, e mantêm todo o comportamento existente (cooldown de reenvio, mensagens genéricas, validações)
+
+### Story 5.4: Home e geração de jogo
+
+Como usuário logado,
+Eu quero a home (seletor de Jogo, resumo, gerar/guardar) no visual do Lottiq,
+Para gerar jogos com a clareza do design de referência (telas 04/05).
+
+**Critérios de Aceite:**
+
+**Dado** a home autenticada
+**Quando** renderiza em desktop e celular
+**Então** segue as telas 04/05 do DS, mantendo o seletor acessível por teclado, o resumo ao lado, o ícone por Jogo (Material Symbols) e todo o comportamento das Stories 4.1/4.2
+
+### Story 5.5: Regras de Geração
+
+Como usuário logado,
+Eu quero a tela de Regras de Geração no visual do Lottiq,
+Para configurar regras com os controles do DS (tela 06).
+
+**Critérios de Aceite:**
+
+**Dado** `/regras/<jogo>/`
+**Quando** renderiza
+**Então** usa `Switch`, `Stepper`/campos, `Select` e avisos do DS, sem Bootstrap (inclusive os modais de confirmação, hoje Bootstrap JS), mantendo as regras de acessibilidade e o comportamento da Story 4.3
+
+### Story 5.6: Histórico, detalhe, notificações, estatísticas e preferências
+
+Como usuário logado,
+Eu quero histórico, detalhe do jogo, avisos, estatísticas e preferências no visual do Lottiq,
+Para acompanhar meus jogos e acertos (telas 07-10).
+
+**Critérios de Aceite:**
+
+**Dado** as telas restantes de `templates/loterias_core/`
+**Quando** renderizam
+**Então** usam os componentes do DS (`GameCard`, `NumberBall`, `StatusBadge`, `CelebrationCard` no acerto, `EmptyState`), mantêm os filtros, a legibilidade da Lotomania/Lotofácil/Dupla-Sena e a semântica das Stories 4.8/2.x, e trocam "verificar" por "conferir" na interface
+
+### Story 5.7: Remover o Bootstrap e fechar a migração
+
+Como mantenedor,
+Eu quero remover o Bootstrap e o Bootstrap Icons,
+Para não carregar dois sistemas de estilo.
+
+**Critérios de Aceite:**
+
+**Dado** todas as telas migradas
+**Quando** o Bootstrap (CSS/JS) e o Bootstrap Icons são removidos de `base/base.html`
+**Então** nenhum template usa classe Bootstrap ou `bi-*`, todas as telas seguem íntegras, e README/`CLAUDE.md` documentam o Lottiq e o Design System
