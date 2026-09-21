@@ -3,39 +3,33 @@
 {% block title %}Verificacao Enviada - Lottiq{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-5">
-            <div class="card">
-                <div class="card-body p-4 p-md-5 text-center">
-                    <i class="bi bi-envelope display-4 text-primary"></i>
-                    <h3 class="mt-3">Verifique seu E-mail</h3>
-                    <p class="text-secondary">
-                        Enviamos um e-mail de verificacao{% if request.session.pending_signup_email %} para <strong>{{ request.session.pending_signup_email }}</strong>{% endif %}.<br>
-                        Por favor, acesse sua caixa de entrada e clique no link de confirmacao.
-                    </p>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        Nao esqueca de verificar a pasta de spam/lixo eletronico.
-                    </div>
-
-                    <form method="post" action="{% url 'resend_confirmation' %}" class="mt-3" id="resend-confirmation-form">
-                        {% csrf_token %}
-                        <div class="mb-2">
-                            <input type="email" name="email" class="form-control" placeholder="seu@email.com"
-                                   value="{{ request.session.pending_signup_email|default:'' }}" required>
-                        </div>
-                        <button type="submit" class="btn btn-outline-primary w-100" id="resend-confirmation-button">
-                            <i class="bi bi-arrow-repeat me-2"></i>Reenviar e-mail de confirmacao
-                        </button>
-                    </form>
-                    {% include 'account/_resend_cooldown_script.html' %}
-
-                    <a href="{% url 'home' %}" class="btn btn-primary mt-3">
-                        <i class="bi bi-house me-2"></i>Voltar ao Inicio
-                    </a>
-                </div>
+<div class="lq-auth">
+    <div class="lq-container">
+        <div class="lq-auth-card">
+            <div class="lq-auth-head">
+                <span class="ms" aria-hidden="true">mark_email_unread</span>
+                <h1>Verifique seu e-mail</h1>
+                <p>
+                    Enviamos um e-mail de verificação{% if request.session.pending_signup_email %} para <strong>{{ request.session.pending_signup_email }}</strong>{% endif %}.
+                    Acesse sua caixa de entrada e clique no link de confirmação.
+                </p>
             </div>
+            <div class="lq-banner" role="status">
+                <span class="ms" aria-hidden="true">info</span>
+                <span class="lq-banner-text">Não esqueça de verificar a pasta de spam ou lixo eletrônico.</span>
+            </div>
+
+            <form method="post" action="{% url 'resend_confirmation' %}" id="resend-confirmation-form" class="lq-stack">
+                {% csrf_token %}
+                <input type="email" name="email" class="lq-input" placeholder="seu@email.com" aria-label="Seu e-mail"
+                       value="{{ request.session.pending_signup_email|default:'' }}" required>
+                <button type="submit" class="lq-btn lq-btn-secondary lq-btn-block" id="resend-confirmation-button">
+                    <span class="ms" aria-hidden="true">refresh</span>Reenviar e-mail de confirmação
+                </button>
+            </form>
+            {% include 'account/_resend_cooldown_script.html' %}
+
+            <a href="{% url 'home' %}" class="lq-btn lq-btn-outline lq-btn-block">Voltar ao início</a>
         </div>
     </div>
 </div>

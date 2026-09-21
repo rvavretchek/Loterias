@@ -132,3 +132,25 @@ a:hover { color: var(--action-primary-hover); }
 /* Rodape */
 .lq-footer { background: var(--surface-sunken); border-top: 1px solid var(--border-default); padding: 20px 0; margin-top: auto; }
 .lq-footer .lq-container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font: 400 13px/1.5 var(--font-body); color: var(--text-faint); }
+
+/* Telas de conta (entrar, cadastro, senha) */
+.lq-auth { background: var(--surface-sunken); padding: 40px 0; flex: 1; }
+.lq-auth-card { max-width: 440px; margin: 0 auto; background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-2xl); padding: 32px 28px; display: flex; flex-direction: column; gap: 20px; }
+.lq-auth-wide { max-width: 760px; }
+.lq-auth-head { display: flex; flex-direction: column; gap: 6px; }
+.lq-auth-head .ms { font-size: 32px; color: var(--lq-teal); }
+.lq-auth-head h1 { font: 700 26px/1.2 var(--font-display); letter-spacing: -.02em; color: var(--lq-navy); margin: 0; }
+.lq-auth-head p { font: 400 15px/1.55 var(--font-body); color: var(--text-muted); margin: 0; }
+.lq-auth-foot { text-align: center; font: 400 14px/1.5 var(--font-body); color: var(--text-muted); border-top: 1px solid var(--border-default); padding-top: 16px; }
+.lq-auth-foot a { font-weight: 600; }
+.lq-btn-block { width: 100%; }
+.lq-check { display: inline-flex; align-items: center; gap: 10px; font: 400 14px var(--font-body); color: var(--text-body-color); cursor: pointer; }
+.lq-check-input { width: 18px; height: 18px; accent-color: var(--action-primary); }
+.lq-file { font: 400 14px var(--font-body); }
+.lq-stack { display: flex; flex-direction: column; gap: 12px; }
+.lq-row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lq-avatar-lg { width: 96px; height: 96px; border-radius: 50%; background: var(--lq-navy); color: #fff; display: inline-flex; align-items: center; justify-content: center; font: 700 36px var(--font-body); object-fit: cover; }
+.lq-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.lq-stat { border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 16px; text-align: center; }
+.lq-stat-value { font: 700 20px var(--font-mono); color: var(--lq-navy); font-variant-numeric: tabular-nums; }
+.lq-stat-label { font: 400 13px var(--font-body); color: var(--text-muted); }
