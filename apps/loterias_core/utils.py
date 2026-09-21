@@ -445,7 +445,12 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
         )
         if _parse_currency(second_draw_result['value']) > _parse_currency(result['value']):
             result = second_draw_result
+            result['draw'] = 2
 
+    # Trevos da +Milionaria: so pra exibir a comparacao (nao entram no calculo do premio).
+    result['matched_clovers'] = sorted(
+        set(normalize_numbers(user_clovers or [])) & set(normalize_numbers(official_result.get('clovers') or []))
+    )
     result['result'] = official_result
     return result
 
@@ -484,6 +489,8 @@ def _calculate_prize_for_draw(game, user_numbers, draw_numbers, prizes, referenc
         'hits': hits,
         'value': _format_currency(amount),
         'category': prize_key or 'Sem premio',
+        'matched_numbers': sorted(user_numbers_set & result_numbers),
+        'draw': 1,
     }
 
 

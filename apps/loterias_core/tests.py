@@ -3934,3 +3934,43 @@ class RepeatedBetsAllowedTests(TestCase):
         HitNotification.objects.create(bet=bet, won=True)
         self.client.get(reverse('regenerate_bet', args=[bet.pk]))
         self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+
+class NotificationMatchedNumbersTests(TestCase):
+    """Retro Epic 2 (F3): numeros batidos reusam calculate_bet_prize (2o sorteio da Dupla-Sena, trevos)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='batidos@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def _notification(self, game, numbers, clovers, result_kwargs):
+        bet = GeneratedBet.objects.create(user=self.user, game=game, contest='10', numbers=numbers, clovers=clovers)
+        LotteryResult.objects.create(game=game, contest='10', **result_kwargs)
+        HitNotification.objects.create(bet=bet, won=True)
+        return self.client.get(reverse('notifications')).context['notificacoes'][0]
+
+    def test_dupla_sena_shows_matches_of_second_draw_when_it_pays_more(self):
+        n = self._notification('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], {
+            'numbers': [50, 51, 52, 53, 54, 55],
+            'numbers_second_draw': [1, 2, 3, 4, 5, 6],
+            'prizes': {}, 'prizes_second_draw': {'6': {'value': 'R$ 1.000,00'}},
+        })
+        self.assertEqual(n.matched_numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(n.matched_draw, 2)
+        self.assertContains(self.client.get(reverse('notifications')), '2º sorteio')
+
+    def test_dupla_sena_first_draw_keeps_first(self):
+        n = self._notification('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], {
+            'numbers': [1, 2, 3, 4, 5, 6], 'numbers_second_draw': [50, 51, 52, 53, 54, 55],
+            'prizes': {'6': {'value': 'R$ 1.000,00'}}, 'prizes_second_draw': {},
+        })
+        self.assertEqual(n.matched_numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(n.matched_draw, 1)
+
+    def test_milionaria_shows_matched_clovers(self):
+        n = self._notification('Milionaria', [1, 2, 3, 4, 5, 6], [3, 4], {
+            'numbers': [1, 2, 3, 4, 5, 6], 'clovers': [4, 6],
+            'prizes': {'6': {'value': 'R$ 5.000,00'}},
+        })
+        self.assertEqual(n.matched_clovers, [4])
+        self.assertContains(self.client.get(reverse('notifications')), 'trevo-bola')

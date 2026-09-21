@@ -45,9 +45,15 @@
                                         {{ num|stringformat:"02d" }}
                                     </span>
                                     {% empty %}
-                                    <span class="text-muted">-</span>
+                                    {% if not notificacao.matched_clovers %}<span class="text-muted">-</span>{% endif %}
+                                    {% endfor %}
+                                    {% for trevo in notificacao.matched_clovers %}
+                                    <span class="trevo-bola" style="width:32px;height:32px;font-size:11px;" title="Trevo">
+                                        {{ trevo|stringformat:"02d" }}
+                                    </span>
                                     {% endfor %}
                                 </div>
+                                {% if notificacao.matched_draw == 2 %}<small class="d-block text-secondary">Acertos no 2º sorteio</small>{% endif %}
                                 <small class="text-secondary">
                                     {% if notificacao.won and notificacao.bet.hits == 0 %}
                                     Premio por 0 acertos

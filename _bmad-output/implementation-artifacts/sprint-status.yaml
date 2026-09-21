@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-21-2026 15:31
+last_updated: 09-21-2026 15:47
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -116,7 +116,7 @@ action_items:
     action: "notifications_view: considerar 2o sorteio da Dupla-Sena e trevos no calculo
       de matched_numbers (F3)"
     owner: "proxima sessao de dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-4-reforcar-testes-guardas-combinadas"
     epic: 2

@@ -492,15 +492,29 @@ def notifications_view(request):
     for notification in page:
         result = results_by_pair.get((notification.bet.game, notification.bet.contest))
         if result:
-            user_numbers = set(normalize_numbers(notification.bet.numbers))
-            result_numbers = set(normalize_numbers(result.numbers))
-            notification.matched_numbers = sorted(user_numbers & result_numbers)
+            # Reusa calculate_bet_prize (inclui o 2o sorteio da Dupla-Sena e os trevos), sem recalcular aqui.
+            comparison = calculate_bet_prize(
+                notification.bet.game, notification.bet.numbers, notification.bet.clovers,
+                {
+                    'numbers': result.numbers,
+                    'clovers': result.clovers,
+                    'prizes': result.prizes,
+                    'numbers_second_draw': result.numbers_second_draw,
+                    'prizes_second_draw': result.prizes_second_draw,
+                    'captured_at': result.captured_at,
+                },
+            )
+            notification.matched_numbers = comparison['matched_numbers']
+            notification.matched_clovers = comparison['matched_clovers']
+            notification.matched_draw = comparison['draw']
         else:
             logger.warning(
                 'notifications_view: LotteryResult nao encontrado para %s/%s (notificacao %s)',
                 notification.bet.game, notification.bet.contest, notification.pk,
             )
             notification.matched_numbers = []
+            notification.matched_clovers = []
+            notification.matched_draw = 1
 
     context = {
         'notificacoes': page,
