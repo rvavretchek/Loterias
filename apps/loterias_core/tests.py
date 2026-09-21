@@ -2167,7 +2167,7 @@ class NotificationBadgeTemplateTests(TestCase):
 
     def test_badge_not_shown_without_unread_notification(self):
         response = self.client.get(reverse('home'))
-        self.assertNotContains(response, 'bi-bell-fill')
+        self.assertNotContains(response, 'lq-bell')
 
     def test_badge_shown_with_unread_notification(self):
         bet = GeneratedBet.objects.create(
@@ -2176,10 +2176,10 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'bi-bell-fill')
+        self.assertContains(response, 'lq-bell')
         self.assertContains(response, reverse('notifications'))
         self.assertEqual(response.context['unread_notifications_count'], 1)
-        self.assertContains(response, 'bg-secondary')
+        self.assertContains(response, 'lq-bell-count')
 
     def test_badge_uses_success_color_when_won_notification_pending(self):
         bet = GeneratedBet.objects.create(
@@ -2188,7 +2188,7 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=True)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'bg-success')
+        self.assertContains(response, 'lq-bell-count is-win')
 
     def test_badge_appears_on_other_pages_too(self):
         bet = GeneratedBet.objects.create(
@@ -2197,7 +2197,7 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('history'))
-        self.assertContains(response, 'bi-bell-fill')
+        self.assertContains(response, 'lq-bell')
 
 
 class NotificationsViewTests(TestCase):
@@ -3974,3 +3974,28 @@ class NotificationMatchedNumbersTests(TestCase):
         })
         self.assertEqual(n.matched_clovers, [4])
         self.assertContains(self.client.get(reverse('notifications')), 'trevo-bola')
+
+
+class LottiqBaseTemplateTests(TestCase):
+    """Story 5.1: base com a marca e o CSS do Lottiq Design System."""
+
+    def test_anonymous_header_shows_brand_and_cta(self):
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, '<title>Entrar - Lottiq</title>', html=False)
+        self.assertContains(response, 'lottiq-mark.svg')
+        self.assertContains(response, 'css/lottiq.css')
+        self.assertContains(response, 'Criar conta grátis')
+        self.assertNotContains(response, 'Gerador de Loterias')
+
+    def test_logged_user_sees_nav_with_active_item_and_no_old_navbar(self):
+        user = User.objects.create_user(email='nav@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, 'Meus jogos')
+        self.assertContains(response, 'aria-current="page"')
+        self.assertNotContains(response, 'navbar-brand')
+
+    def test_static_files_exist(self):
+        from django.contrib.staticfiles import finders
+        for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'css/legacy.css', 'img/lottiq-mark.svg'):
+            self.assertIsNotNone(finders.find(path), path)

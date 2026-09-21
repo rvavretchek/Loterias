@@ -13,17 +13,17 @@ def send_welcome_email(user):
     casos a conta nasce com senha inutilizavel, entao o post_save de criacao nao dispara sozinho."""
     if not user.email:
         return
-    subject = 'Bem-vindo ao Gerador de Loterias!'
+    subject = 'Bem-vindo ao Lottiq!'
     message = (
         f"Olá {user.first_name or 'Usuário'},\n\n"
-        f"Seja bem-vindo ao Gerador de Loterias! Sua conta foi criada com sucesso.\n\n"
+        f"Seja bem-vindo ao Lottiq! Sua conta foi criada com sucesso.\n\n"
         f"Agora você pode:\n"
         f"- Gerar apostas para diversas loterias brasileiras\n"
         f"- Manter um histórico completo dos seus jogos\n"
         f"- Acompanhar estatísticas e padrões\n\n"
         f"Acesse agora: http://localhost:8000\n\n"
         f"Atenciosamente,\n"
-        f"Equipe Gerador de Loterias"
+        f"Equipe Lottiq"
     )
     try:
         send_mail(

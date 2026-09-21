@@ -15,7 +15,7 @@ class CustomAccountAdapter(DefaultAccountAdapter):
 
     def send_mail(self, template_prefix, email, context):
         """Envia email customizado."""
-        context['site_name'] = 'Gerador de Loterias'
+        context['site_name'] = 'Lottiq'
         context['support_email'] = settings.DEFAULT_FROM_EMAIL
         super().send_mail(template_prefix, email, context)
 

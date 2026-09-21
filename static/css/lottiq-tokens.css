@@ -1,0 +1,34 @@
+/* Lottiq Design System -- tokens (fonte: projeto "Lottiq Design System" no Claude Design). */
+:root {
+  /* Marca */
+  --lq-navy: #0A2A42; --lq-teal: #0F7A7C; --lq-teal-deep: #10585F; --lq-amber: #F0A028;
+  --teal-50: #E4EFEF; --teal-100: #C3DEDE; --teal-200: #8CC4C4; --teal-400: #4FA3A4; --teal-600: #0F7A7C; --teal-700: #0C6668; --teal-800: #10585F;
+  --neutral-0: #FFFFFF; --neutral-50: #F7F9FA; --neutral-100: #EEF2F4; --neutral-200: #DDE4E8; --neutral-300: #CBD5DA; --neutral-400: #9CADB6; --neutral-600: #5A6E79; --neutral-700: #24404E; --neutral-800: #24404E; --neutral-900: #0A2A42;
+  --amber-50: #FDF1DE; --amber-200: #F5D3A0; --amber-700: #8A5209; --amber-800: #B9721A; --amber-900: #3A2405;
+  --red-50: #FBE9E5; --red-200: #F0C4BA; --red-500: #C8442F; --red-700: #A93520;
+
+  /* Semanticos */
+  --text-heading: var(--lq-navy); --text-body-color: #24404E; --text-muted: var(--neutral-600); --text-faint: var(--neutral-400); --text-inverse: #fff;
+  --surface-page: #F2F5F7; --surface-card: var(--neutral-0); --surface-sunken: var(--neutral-50);
+  --border-default: var(--neutral-200); --border-strong: var(--neutral-300);
+  --action-primary: var(--lq-teal); --action-primary-hover: var(--teal-700); --action-primary-ink: #fff;
+  --status-waiting-bg: var(--teal-50); --status-waiting-fg: var(--teal-700);
+  --status-win-bg: var(--lq-amber); --status-win-fg: var(--amber-900);
+  --status-empty-bg: var(--neutral-100); --status-empty-fg: var(--neutral-600);
+  --status-error-bg: var(--red-50); --status-error-fg: var(--red-700);
+
+  /* Tipografia */
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Espaco */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --content-width: 1120px; --header-height: 64px; --page-padding-desktop: 28px; --page-padding-mobile: 16px;
+
+  /* Raio, sombra, movimento */
+  --radius-xs: 6px; --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 16px; --radius-2xl: 20px; --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(10,42,66,.10); --shadow-md: 0 4px 12px rgba(10,42,66,.10); --shadow-lg: 0 12px 32px rgba(10,42,66,.16); --shadow-button: 0 1px 2px rgba(10,42,66,.14);
+  --ring-focus: 0 0 0 4px rgba(15,122,124,.18); --ring-win: 0 0 0 4px var(--amber-50);
+  --ease-standard: cubic-bezier(.2,.7,.2,1); --duration-fast: 150ms; --duration-base: 200ms; --duration-celebration: 500ms;
+}
