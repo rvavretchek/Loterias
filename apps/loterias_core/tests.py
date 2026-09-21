@@ -907,6 +907,13 @@ class HistoryFiltersTests(TestCase):
         self.assertNotIn('9', self._contests(de='2026-09-25', ate='2026-09-25')[0])
         self.assertTrue(late.pk)
 
+    def test_contest_ordering_is_numeric_like_and_stable(self):
+        self._bet('Quina', '300', prize=0, when=datetime(2026, 9, 1, 12, 0, tzinfo=dt_timezone.utc))
+        self._bet('Quina', '2500', prize=0, when=datetime(2026, 9, 1, 12, 0, tzinfo=dt_timezone.utc))
+        response = self.client.get(reverse('history'), {'ordenacao': 'contest'})
+        contests = [b.contest for b in response.context['jogos']]
+        self.assertEqual(contests, ['1', '2', '3', '300', '2500'])
+
     def test_invalid_values_are_ignored(self):
         contests, response = self._contests(jogo='Xpto', de='ontem', ate='31/12/2026')
         self.assertEqual(contests, ['1', '2', '3'])

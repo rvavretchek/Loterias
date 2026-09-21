@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-16-2026 20:30
+last_updated: 09-21-2026 12:05
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -73,6 +73,16 @@ development_status:
   3-4-vínculo-expirado: done
   3-5-nome-e-sobrenome-obrigatórios-no-primeiro-login: done
   epic-3-retrospective: done
+  epic-4: done
+  4-1-reorganização-da-área-útil-da-home: done
+  4-2-ícone-por-jogo-no-seletor: done
+  4-3-model-generationrule-e-tela-de-edição: done
+  4-4-regras-de-geração-mega-milionária-quina-dupla: done
+  4-5-resolução-de-conflito-entre-regras-de-geração: done
+  4-6-regras-de-geração-lotofácil: done
+  4-7-regras-de-geração-lotomania: done
+  4-8-filtros-cumulativos-no-histórico: done
+  epic-4-retrospective: done
 action_items:
   - id: "epic-1-retro-item-1-adicionar-comentario-em-games_config-mod"
     epic: 1
@@ -143,3 +153,38 @@ action_items:
     owner: "proxima retro/PRD"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+  - id: "epic-4-retro-item-11-corrigir-os-itens-fix-now-ainda-abertos"
+    epic: 4
+    action: "Corrigir os itens FIX NOW ainda abertos da retro do Epic 2 (HitNotification
+      obsoleta no regenerate; open redirect em mark_notification_read_view) antes
+      de PR para main"
+    owner: "proxima sessao de desenvolvimento"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+  - id: "epic-4-retro-item-12-confirmar-com-o-boss-se-jogo-duplicado-e"
+    epic: 4
+    action: "Confirmar com o Boss se jogo duplicado e global ou por concurso"
+    owner: "Boss"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+  - id: "epic-4-retro-item-13-dividir-tests-py-por-area-e-renomear-cla"
+    epic: 4
+    action: "Dividir tests.py por area e renomear classe homonima GenerationRulesViewTests/ViewsTests
+      antes da migracao pro design system"
+    owner: "proxima sessao que tocar tests.py"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+  - id: "epic-4-retro-item-14-reduzir-custo-do-laco-de-duplicata-relax"
+    epic: 4
+    action: "Reduzir custo do laco de duplicata/relaxamento (regras carregadas uma
+      vez ou orcamento de tempo)"
+    owner: "proxima revisao de arquitetura"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+  - id: "epic-4-retro-item-15-validar-no-navegador-relaxamento-regras"
+    epic: 4
+    action: "Validar no navegador relaxamento, regras Lotofacil/Lotomania e historico
+      filtrado"
+    owner: "Boss"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"

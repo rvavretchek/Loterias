@@ -12,6 +12,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Count
+from django.db.models.functions import Length
 from .forms import NotificationPreferenceForm
 from .models import (
     GeneratedBet, HitNotification, NotificationPreference, LotteryResult, GenerationRule,
@@ -223,7 +224,10 @@ def history_view(request):
     ordering = request.GET.get('ordenacao', '-created_at')
     if ordering not in valid_orderings:
         ordering = '-created_at'
-    bets_list = bets_list.order_by(ordering)
+    if ordering == 'contest':  # contest e texto: ordena por tamanho e depois lexicograficamente
+        bets_list = bets_list.order_by(Length('contest'), 'contest', 'pk')
+    else:
+        bets_list = bets_list.order_by(ordering, '-pk')
     if ordering != '-created_at':
         params['ordenacao'] = ordering
 
