@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-21-2026 15:47
+last_updated: 09-22-2026 19:44
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -83,6 +83,15 @@ development_status:
   4-7-regras-de-geração-lotomania: done
   4-8-filtros-cumulativos-no-histórico: done
   epic-4-retrospective: done
+  epic-5: done
+  5-1-fundação-do-lottiq-design-system-e-renomeação: done
+  5-2-landing-page: done
+  5-3-entrar-criar-conta-e-telas-de-conta: done
+  5-4-home-e-geração-de-jogo: done
+  5-5-regras-de-geração: done
+  5-6-histórico-detalhe-notificações-estatísticas-preferências: done
+  5-7-remover-o-bootstrap-e-fechar-a-migração: done
+  epic-5-retrospective: done
 action_items:
   - id: "epic-1-retro-item-1-adicionar-comentario-em-games_config-mod"
     epic: 1
@@ -188,3 +197,24 @@ action_items:
     owner: "Boss"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+  - id: "epic-5-retro-item-16-consolidar-rotulos-de-secao-duplicados-b"
+    epic: 5
+    action: "Consolidar rotulos de secao duplicados (bet_detail/home/statistics) num
+      unico componente .lq-eyebrow reusado"
+    owner: "proxima sessao que tocar essas telas"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"
+  - id: "epic-5-retro-item-17-renomear-generationrulesviewtests-genera"
+    epic: 5
+    action: "Renomear GenerationRulesViewTests/GenerationRulesViewsTests para nomes
+      distintos"
+    owner: "proxima sessao que tocar tests.py"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"
+  - id: "epic-5-retro-item-18-avaliar-marcar-numero-a-numero-acerto-er"
+    epic: 5
+    action: "Avaliar marcar numero a numero (acerto/erro) no detalhe do jogo, reusando
+      lq-ball-hit/lq-ball-not-hit"
+    owner: "Boss (ideia de produto)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"

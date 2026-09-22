@@ -82,7 +82,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-input.is-mono { font: 700 15px var(--font-mono); }
 .lq-input.is-error { border: 1.5px solid var(--red-500); }
 .lq-input:disabled, .lq-select:disabled { background: var(--neutral-50); color: var(--text-faint); cursor: not-allowed; }
-.lq-helper { font: 400 12px var(--font-body); color: var(--text-faint); }
+.lq-helper { font: 400 12px var(--font-body); color: var(--text-muted); }
 .lq-error { font: 600 12px var(--font-body); color: var(--red-700); }
 
 /* Switch: <label class="lq-switch"><input type="checkbox"><span class="lq-switch-track"></span> texto</label> */
@@ -132,7 +132,7 @@ a:hover { color: var(--action-primary-hover); }
 
 /* Rodape */
 .lq-footer { background: var(--surface-sunken); border-top: 1px solid var(--border-default); padding: 20px 0; margin-top: auto; }
-.lq-footer .lq-container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font: 400 13px/1.5 var(--font-body); color: var(--text-faint); }
+.lq-footer .lq-container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font: 400 13px/1.5 var(--font-body); color: var(--text-muted); }
 
 /* Telas de conta (entrar, cadastro, senha) */
 .lq-auth { background: var(--surface-sunken); padding: 40px 0; flex: 1; }
@@ -183,3 +183,7 @@ a:hover { color: var(--action-primary-hover); }
 /* Layout base do body: rodape sempre no fim, mesmo com pouco conteudo (Story 5.7). */
 .lq-body { display: flex; flex-direction: column; min-height: 100vh; }
 .lq-main { flex: 1; }
+
+/* Transicao de entrada (linhas de lista/cartao aparecendo) */
+@keyframes lq-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: lq-fade-in .5s ease; }

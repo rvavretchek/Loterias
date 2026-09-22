@@ -4028,5 +4028,5 @@ class LottiqBaseTemplateTests(TestCase):
 
     def test_static_files_exist(self):
         from django.contrib.staticfiles import finders
-        for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'css/legacy.css', 'img/lottiq-mark.svg'):
+        for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
             self.assertIsNotNone(finders.find(path), path)
