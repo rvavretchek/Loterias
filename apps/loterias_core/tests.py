@@ -1386,6 +1386,51 @@ class BetDetailViewTests(TestCase):
         self.assertIsNotNone(response.context['premio_info'])
         self.assertEqual(response.context['resultado_oficial'], official_result)
 
+    def test_bet_detail_marks_hit_and_miss_numbers_when_result_known(self):
+        """Retro do Epic 5, item 18: numero a numero (acerto/erro), reusando lq-ball-hit/-not-hit."""
+        user = User.objects.create_user(email='acertoerro@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='6001',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Quina', contest='6001', numbers=[1, 2, 60, 61, 62], clovers=[], prizes={},
+        )
+        response = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        html = response.content.decode()
+        self.assertContains(response, 'lq-ball-hit', count=2)
+        self.assertContains(response, 'lq-ball-not-hit', count=3)
+        hit_numbers = re.findall(r'lq-ball-hit"[^>]*>\s*(\d{2})\s*<', html)
+        self.assertEqual(sorted(hit_numbers), ['01', '02'])
+
+    def test_bet_detail_shows_plain_balls_without_official_result(self):
+        user = User.objects.create_user(email='semresultado@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Quina', contest='6002',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        response = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertNotContains(response, 'lq-ball-hit')
+        self.assertNotContains(response, 'lq-ball-not-hit')
+
+    def test_bet_detail_notes_second_draw_when_it_is_the_one_that_paid(self):
+        user = User.objects.create_user(email='segundosorteio@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Dupla-Sena', contest='6003',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Dupla-Sena', contest='6003',
+            numbers=[50, 51, 52, 53, 54, 55], numbers_second_draw=[1, 2, 3, 4, 5, 6],
+            prizes={}, prizes_second_draw={'6': {'value': 'R$ 1.000,00'}},
+        )
+        response = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertContains(response, 'Considerando o 2º sorteio')
+        self.assertContains(response, 'lq-ball-hit', count=6)
+
 
 class CheckUserResultsTests(TestCase):
     def setUp(self):
@@ -3471,7 +3516,7 @@ class GenerationRuleModelTests(TestCase):
             rule.clean()
 
 
-class GenerationRulesViewTests(TestCase):
+class GenerationRulesEditScreenTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
         self.other = User.objects.create_user(email='rules-other@example.com', password='SenhaForte123')
@@ -3899,7 +3944,7 @@ class RelaxationViewsTests(TestCase):
         self.assertFalse(any(m.level_tag == 'warning' for m in response.context['messages']))
 
 
-class GenerationRulesViewsTests(TestCase):
+class ImpossibleRulesAcrossViewsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='rv@example.com', password='SenhaForte123')
         self.client.force_login(self.user)

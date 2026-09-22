@@ -39,9 +39,12 @@
 
         <div style="margin-top:20px;">
             <div class="lq-eyebrow" style="margin-bottom:12px;">Números sorteados</div>
-            <div class="lq-balls" role="list" aria-label="Números do jogo">
-                {% for num in jogo.numbers %}<span class="lq-ball" role="listitem">{{ num|stringformat:"02d" }}</span>{% endfor %}
+            <div class="lq-balls" role="list" aria-label="Números do jogo{% if premio_info %}, acertos em destaque{% endif %}">
+                {% for num in jogo.numbers %}
+                <span class="lq-ball{% if premio_info %}{% if num in premio_info.matched_numbers %} lq-ball-hit{% else %} lq-ball-not-hit{% endif %}{% endif %}" role="listitem">{{ num|stringformat:"02d" }}</span>
+                {% endfor %}
             </div>
+            {% if premio_info and premio_info.draw == 2 %}<p class="lq-small" style="margin-top:8px;">Considerando o 2º sorteio.</p>{% endif %}
         </div>
 
         {% if jogo.clovers %}
