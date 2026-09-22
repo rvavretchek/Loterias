@@ -163,3 +163,19 @@ a:hover { color: var(--action-primary-hover); }
 .lq-dialog-head h2 { font: 700 18px var(--font-display); color: var(--lq-navy); margin: 0; }
 .lq-dialog-body { padding: 20px 24px; font: 400 15px/1.55 var(--font-body); color: var(--text-body-color); }
 .lq-dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border-default); flex-wrap: wrap; }
+
+/* Chip removivel (filtro ativo) */
+.lq-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--status-waiting-bg); color: var(--teal-700); border: none; border-radius: 999px; padding: 6px 10px 6px 14px; font: 600 13px var(--font-body); text-decoration: none; }
+.lq-chip:hover { background: var(--teal-100); color: var(--teal-700); }
+.lq-chip .ms { font-size: 16px; }
+
+/* Paginacao */
+.lq-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 0; list-style: none; margin: 24px 0 0; }
+.lq-pagination a, .lq-pagination span { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: #fff; color: var(--text-body-color); font: 600 13px var(--font-mono); text-decoration: none; }
+.lq-pagination a:hover { background: var(--neutral-50); }
+.lq-pagination .is-active span { background: var(--lq-navy); border-color: var(--lq-navy); color: #fff; }
+.lq-pagination .ms { font-size: 18px; }
+
+/* Barra de progresso */
+.lq-progress { height: 8px; border-radius: 999px; background: var(--neutral-100); overflow: hidden; }
+.lq-progress-bar { height: 100%; background: var(--action-primary); border-radius: 999px; }

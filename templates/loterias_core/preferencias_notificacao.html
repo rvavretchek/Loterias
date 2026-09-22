@@ -1,34 +1,21 @@
 {% extends 'base/base.html' %}
-{% load crispy_forms_tags %}
+{% load lottiq_ui %}
 
-{% block title %}Preferencias de Notificacao - Lottiq{% endblock %}
+{% block title %}Preferências de aviso - Lottiq{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-6">
-            <div class="row mb-4">
-                <div class="col">
-                    <h2><i class="bi bi-sliders me-2 text-primary"></i>Preferencias de Notificacao</h2>
-                    <p class="text-secondary">Escolha como quer ser avisado quando um jogo seu bater com o resultado oficial</p>
-                </div>
-            </div>
+<div class="lq-container" style="padding:28px 0 60px; max-width:520px;">
+    <div style="margin-bottom:20px;">
+        <h1 style="font:700 26px/1.25 var(--font-display); color:var(--lq-navy); margin:0;">Preferências de aviso</h1>
+        <p class="lq-small" style="margin-top:4px;">Escolha como quer ser avisado quando um jogo seu bater com o resultado oficial</p>
+    </div>
 
-            <div class="card">
-                <div class="card-body p-4">
-                    <form method="post">
-                        {% csrf_token %}
-                        {{ form|crispy }}
-
-                        <div class="d-grid gap-2 mt-4">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-2"></i>Salvar Preferencia
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+    <div class="lq-card">
+        <form method="post">
+            {% csrf_token %}
+            {% lq_form form %}
+            <button type="submit" class="lq-btn lq-btn-primary lq-btn-block" style="margin-top:4px;"><span class="ms" aria-hidden="true">check</span>Salvar preferência</button>
+        </form>
     </div>
 </div>
 {% endblock %}

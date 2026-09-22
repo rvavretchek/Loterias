@@ -947,7 +947,7 @@ class HistoryFiltersTests(TestCase):
         self.assertContains(response, '1º sorteio:')
         self.assertContains(response, 'aria-label="2º sorteio"')
         self.assertContains(response, 'role="list"')
-        self.assertContains(response, 'flex-wrap')
+        self.assertContains(response, 'lq-balls')
 
 
 class DeleteBetViewTests(TestCase):
@@ -2286,10 +2286,10 @@ class NotificationsViewTests(TestCase):
         self.assertEqual(list(response.context['notificacoes']), [newer, older])
         self.assertContains(response, 'Mega-sena')
         self.assertContains(response, 'Lotofacil')
-        self.assertContains(response, '>100<')
-        self.assertContains(response, '>200<')
-        self.assertContains(response, 'bi-trophy-fill')
-        self.assertContains(response, 'Sem premio')
+        self.assertContains(response, 'Concurso 100')
+        self.assertContains(response, 'Concurso 200')
+        self.assertContains(response, 'lq-status-win')
+        self.assertContains(response, 'Sem prêmio')
 
     def test_empty_state_message_shown_when_no_pending_notifications(self):
         response = self.client.get(reverse('notifications'))
@@ -2316,9 +2316,9 @@ class NotificationsViewTests(TestCase):
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('notifications'))
         self.assertEqual(response.context['notificacoes'][0].matched_numbers, [1, 2])
-        self.assertContains(response, 'class="numero-bola"', count=2)
+        self.assertContains(response, 'lq-ball-hit', count=2)
         rendered_numbers = re.findall(
-            r'class="numero-bola"[^>]*>\s*(\d{2})\s*<', response.content.decode()
+            r'lq-ball-hit"[^>]*>\s*(\d{2})\s*<', response.content.decode()
         )
         self.assertEqual(rendered_numbers, ['01', '02'])
 
@@ -2388,7 +2388,7 @@ class NotificationsViewTests(TestCase):
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('notifications'))
         self.assertEqual(response.context['notificacoes'][0].matched_numbers, [])
-        self.assertNotContains(response, 'class="numero-bola"')
+        self.assertNotContains(response, 'lq-ball-hit')
 
     def test_prize_value_shown_when_won(self):
         bet = GeneratedBet.objects.create(
@@ -2408,7 +2408,7 @@ class NotificationsViewTests(TestCase):
         notification = HitNotification.objects.create(bet=bet, won=True)
         response = self.client.get(reverse('notifications'))
         self.assertContains(response, reverse('mark_notification_read', args=[notification.pk]))
-        self.assertContains(response, 'bi-check2')
+        self.assertContains(response, 'Marcar como lida')
 
 
 class MarkNotificationReadViewTests(TestCase):
@@ -4004,7 +4004,7 @@ class NotificationMatchedNumbersTests(TestCase):
             'prizes': {'6': {'value': 'R$ 5.000,00'}},
         })
         self.assertEqual(n.matched_clovers, [4])
-        self.assertContains(self.client.get(reverse('notifications')), 'trevo-bola')
+        self.assertContains(self.client.get(reverse('notifications')), 'lq-ball-clover')
 
 
 class LottiqBaseTemplateTests(TestCase):
