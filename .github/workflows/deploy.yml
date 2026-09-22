@@ -9,16 +9,17 @@ jobs:
   deploy:
     runs-on: [self-hosted]
     steps:
+      # 'compose_dir' aponta pro subdiretorio onde o docker-compose.yml do Loterias
+      # realmente mora (deploy/lab/, nao a raiz do checkout) -- sem isso o onlyif do
+      # state generico 'subir_{{project}}' e sempre falso e o docker compose nunca
+      # roda (ver deploy/lab/README.md e memoria cron-env-propagation-bug/incidente
+      # 2026-09-11). Corrigido no state Salt (/srv/salt/deploy/init.sls no master) em
+      # 2026-09-16 para aceitar esse pillar; o --build ja foi adicionado no state
+      # generico tambem, entao o rebuild real acontece aqui, sem contorno ad hoc.
       - name: Aplicar state Salt em todos os hosts
         run: |
-          sudo salt '*' state.apply deploy pillar="{\"project_name\": \"${{ github.event.repository.name }}\", \"git_url\": \"${{ github.server_url }}/${{ github.repository }}.git\", \"git_branch\": \"${{ github.ref_name }}\"}"
+          sudo salt '*' state.apply deploy pillar="{\"project_name\": \"${{ github.event.repository.name }}\", \"git_url\": \"${{ github.server_url }}/${{ github.repository }}.git\", \"git_branch\": \"${{ github.ref_name }}\", \"compose_dir\": \"/opt/integrit/apps/${{ github.event.repository.name }}/deploy/lab\"}"
 
-      # O state Salt 'subir_Loterias' (cmd.run) tem 2 bugs conhecidos (ver deploy/lab/README.md,
-      # incidente 2026-09-11): 1) onlyif sempre falso, entao "docker compose up" nunca roda via
-      # state.apply; 2) mesmo rodando, nao tem --build/registry, entao so recria com a imagem ja
-      # em cache. Ate alguem com acesso ao Salt master corrigir o .sls, este step contorna os dois
-      # rodando o rebuild+up de verdade via 'salt cmd.run' (execucao ad hoc, nao passa pelo state
-      # quebrado) direto no host da aplicacao.
-      - name: Rebuild e subir os containers da Loterias (contorna bug do state Salt)
+      - name: Recarregar nginx-proxy (pega o IP novo do container recriado)
         run: |
-          sudo salt 'ubt-host01' cmd.run 'cd /opt/integrit/apps/Loterias/deploy/lab && docker compose build --no-cache && docker compose up -d --remove-orphans && docker exec nginx-proxy nginx -s reload'
+          sudo salt 'ubt-host01' cmd.run 'docker exec nginx-proxy nginx -s reload'

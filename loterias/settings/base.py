@@ -31,8 +31,6 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'crispy_forms',
-    'crispy_bootstrap5',
     'django_extensions',
     'django_crontab',
 
@@ -151,10 +149,6 @@ PASSWORD_HASHERS = [
     'apps.accounts.hashers.PepperedArgon2PasswordHasher',
 ]
 PASSWORD_PEPPER = os.getenv('PASSWORD_PEPPER', 'loterias-default-pepper')
-
-# Crispy Forms
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
-CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # Django AllAuth
 AUTHENTICATION_BACKENDS = [

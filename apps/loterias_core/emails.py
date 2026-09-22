@@ -30,7 +30,7 @@ def send_hit_notification_email(notification):
             f"Valor do prêmio: R$ {prize_value}\n\n"
             f"Acesse o site para ver os detalhes completos.\n\n"
             f"Atenciosamente,\n"
-            f"Equipe Gerador de Loterias"
+            f"Equipe Lottiq"
         )
 
         send_mail(

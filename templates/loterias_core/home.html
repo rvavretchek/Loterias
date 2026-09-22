@@ -1,288 +1,236 @@
 {% extends 'base/base.html' %}
 {% load static %}
 
-{% block title %}Inicio - Gerador de Loterias{% endblock %}
+{% block title %}Gerar jogo - Lottiq{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Area util da home: coluna principal + sidebar de resumo (Story 4.1). Abaixo de 1280px a
+       sidebar empilha abaixo da coluna principal. */
+    .home-page { padding-top: 28px; padding-bottom: 40px; }
+    .home-layout { display: flex; flex-direction: column; gap: 24px; }
+    .home-main { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    .home-sidebar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (min-width: 1280px) {
+        .home-layout { flex-direction: row; align-items: flex-start; }
+        .home-main { flex: 1; }
+        .home-sidebar { width: 240px; flex-shrink: 0; grid-template-columns: 1fr; position: sticky; top: 88px; }
+    }
+    .home-head p { margin: 6px 0 0; }
+    .home-stat { background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 16px; }
+    .home-stat-label { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+    .home-stat-value { font: 700 22px var(--font-mono); color: var(--lq-navy); margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .home-eyebrow { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+    [hidden] { display: none !important; }
+
+    /* Jogo selecionado (regiao aria-live) */
+    .selected-game-head { display: flex; align-items: center; gap: 14px; }
+    .selected-game-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--status-waiting-bg); color: var(--teal-700); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .selected-game-icon .ms { font-size: 28px; }
+    .selected-game-name { font: 700 20px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .selected-game-hint { font: 400 15px/1.5 var(--font-body); color: var(--text-muted); margin: 0; }
+    .selected-game-summary { font: 400 14px/1.5 var(--font-body); color: var(--text-muted); margin: 0; }
+    .generate-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
+    .generate-row .lq-field { width: 190px; max-width: 100%; }
+
+    /* Seletor de jogos: radios escondidos + label como tile */
+    .game-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (min-width: 768px) { .game-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 1100px) { .game-grid { grid-template-columns: repeat(6, 1fr); } }
+    .game-tile { position: relative; }
+    .lq-tile-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .lq-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; height: 100%; margin: 0; padding: 16px 10px 20px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: #fff; cursor: pointer; transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard); }
+    .lq-tile:hover { border-color: var(--border-strong); background: var(--surface-sunken); }
+    .lq-tile .game-icon { font-size: 28px; color: var(--lq-teal); }
+    .lq-tile .tile-name { font: 700 15px/1.3 var(--font-display); color: var(--lq-navy); }
+    .lq-tile .tile-meta { font: 400 13px/1.4 var(--font-mono); color: var(--text-muted); }
+    .game-selector-check { display: none; position: absolute; top: 8px; right: 8px; color: var(--lq-navy); font-size: 20px; }
+    .lq-tile-input:checked + .lq-tile { border: 2px solid var(--lq-navy); padding: 15px 9px 19px; background: var(--surface-sunken); }
+    .lq-tile-input:checked + .lq-tile .game-selector-check { display: block; }
+    .lq-tile-input:focus-visible + .lq-tile { box-shadow: var(--ring-focus); border-color: var(--action-primary); }
+    .game-edit-link { align-self: flex-start; margin-top: 4px; }
+
+    /* Formulario manual */
+    .manual-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 768px) { .manual-grid { grid-template-columns: 1fr 160px 2fr; } }
+
+    /* Ultimos jogos */
+    .recent-list { display: flex; flex-direction: column; }
+    .recent-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 0; border-top: 1px solid var(--border-default); }
+    .recent-item:first-child { border-top: 0; }
+    .recent-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .recent-contest { font: 700 14px var(--font-mono); color: var(--lq-navy); }
+    .recent-date { font: 400 13px var(--font-mono); color: var(--text-muted); }
+    .recent-balls { flex: 1 1 260px; min-width: 0; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <!-- Hero Section -->
-    <div class="row mb-5">
-        <div class="col-lg-8 mx-auto text-center">
-            <h1 class="display-4 fw-bold mb-3">
-                <i class="bi bi-stars text-warning"></i>
-                Gerador de Loterias
-            </h1>
-            <p class="lead text-secondary mb-4">
-                Gere apostas inteligentes para as principais loterias brasileiras. 
-                Mantenha seu historico, acompanhe estatisticas e aumente suas chances.
-            </p>
-            {% if not user.is_authenticated %}
-            <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'account_signup' %}" class="btn btn-primary btn-lg">
-                    <i class="bi bi-person-plus me-2"></i>Criar Conta Gratis
-                </a>
-                <a href="{% url 'account_login' %}" class="btn btn-outline-primary btn-lg">
-                    <i class="bi bi-box-arrow-in-right me-2"></i>Ja Tenho Conta
-                </a>
-            </div>
-            {% endif %}
-        </div>
+<div class="lq-container home-page">
+    <div class="home-layout">
+    <div class="home-main">
+    <div class="home-head">
+        <h1 class="lq-screen-title">Gerar jogo</h1>
+        <p class="lq-small">Escolha a loteria e o concurso. As regras já vêm das suas configurações.</p>
     </div>
 
-    {% if user.is_authenticated %}
-    <!-- Dashboard Stats -->
-    <div class="row mb-5">
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-ticket-perforated text-primary"></i>
-                <div class="stat-value">{{ total_jogos }}</div>
-                <div class="stat-label">Jogos Gerados</div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-collection text-success"></i>
-                <div class="stat-value">{{ jogos_por_tipo|length }}</div>
-                <div class="stat-label">Tipos de Jogo</div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-3">
-            <div class="card stat-card h-100">
-                <i class="bi bi-clock-history text-info"></i>
-                <div class="stat-value">{{ ultimos_jogos|length }}</div>
-                <div class="stat-label">Jogos Recentes</div>
-            </div>
-        </div>
-    </div>
+    <form method="post" action="{% url 'create_bet' %}" class="home-main">
+        {% csrf_token %}
 
-    <!-- Gerar Novo Jogo -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex align-items-center">
-                    <i class="bi bi-plus-circle me-2 text-primary"></i>
-                    <span>Gerar Novo Jogo</span>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="{% url 'create_bet' %}">
-                        {% csrf_token %}
-
-                        <div class="row g-3 mb-4">
-                            {% for key, config in jogos_disponiveis.items %}
-                            <div class="col-md-4 col-lg-2">
-                                <div class="game-selector" onclick="selectGame(this, '{{ key }}')">
-                                    <input type="radio" name="jogo" value="{{ key }}" class="d-none" required>
-                                    <div class="text-center">
-                                        <i class="bi bi-dice-5 fs-2 text-primary mb-2"></i>
-                                        <h5 class="mb-1">{{ config.name }}</h5>
-                                        <small class="text-secondary">
-                                            {{ config.bets_count }} de {{ config.numbers_count }}
-                                            {% if config.clovers > 0 %}
-                                            <br>+ {{ config.clovers }} trevos
-                                            {% endif %}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 col-lg-4">
-                                <div class="mb-3">
-                                    <label for="concurso" class="form-label fw-semibold">
-                                        <i class="bi bi-hash me-1"></i>Numero do Concurso
-                                    </label>
-                                    <input type="text" class="form-control form-control-lg" id="concurso"
-                                           name="concurso" placeholder="Ex: 2500" required>
-                                    <small class="text-secondary" id="concurso-sugestao-info"></small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="bi bi-magic me-2"></i>Gerar Jogo
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex align-items-center">
-                    <i class="bi bi-pencil-square me-2 text-success"></i>
-                    <span>Guardar Jogo Manual</span>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="{% url 'save_manual_bet' %}">
-                        {% csrf_token %}
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label">Jogo</label>
-                                <select name="jogo" id="jogo-manual" class="form-select" required>
-                                    {% for key, config in jogos_disponiveis.items %}
-                                    <option value="{{ key }}">{{ config.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Concurso</label>
-                                <input type="text" name="concurso" id="concurso-manual" class="form-control" placeholder="Ex: 2500" required>
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label">Números</label>
-                                <input type="text" name="numeros" class="form-control" placeholder="Ex: 01, 12, 23, 34, 45, 56" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-success mt-3">
-                            <i class="bi bi-save me-2"></i>Salvar Jogo Manual
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Ultimos Jogos -->
-    {% if ultimos_jogos %}
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-clock-history me-2 text-primary"></i>Ultimos Jogos</span>
-                    <a href="{% url 'history' %}" class="btn btn-sm btn-outline-primary">
-                        Ver Todos <i class="bi bi-arrow-right ms-1"></i>
-                    </a>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Jogo</th>
-                                    <th>Concurso</th>
-                                    <th>Numeros</th>
-                                    <th>Trevos</th>
-                                    <th>Data</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for jogo in ultimos_jogos %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-primary">{{ jogo.game }}</span>
-                                    </td>
-                                    <td>{{ jogo.contest }}</td>
-                                    <td>
-                                        {% for num in jogo.numbers %}
-                                        <span class="numero-bola">{{ num|stringformat:"02d" }}</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td>
-                                        {% if jogo.clovers %}
-                                            {% for trevo in jogo.clovers %}
-                                            <span class="trevo-bola">{{ trevo|stringformat:"02d" }}</span>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ jogo.created_at|date:"d/m/Y H:i" }}</td>
-                                    <td>
-                                        <a href="{% url 'bet_detail' jogo.pk %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+        <div class="lq-card" id="jogo-selecionado" style="display:flex; flex-direction:column; gap:18px;">
+            <div class="home-eyebrow">Jogo selecionado</div>
+            <!-- Região aria-live: o conteúdo sempre existe (nunca alterna display), só o texto/ícone mudam,
+                 pra leitores de tela anunciarem a troca de jogo de forma confiável. -->
+            <div id="jogo-selecionado-info" aria-live="polite" aria-atomic="true">
+                <div id="jogo-selecionado-atual" class="selected-game-head">
+                    <span class="selected-game-icon"><span id="jogo-selecionado-icone" class="ms" aria-hidden="true">arrow_downward</span></span>
+                    <div>
+                        <p id="jogo-selecionado-nome" class="selected-game-hint">Selecione um jogo abaixo para começar.</p>
+                        <p id="jogo-selecionado-resumo" class="selected-game-summary"></p>
                     </div>
                 </div>
             </div>
+            <div class="generate-row">
+                <div class="lq-field">
+                    <label for="concurso" class="lq-label">Concurso</label>
+                    <input type="text" class="lq-input is-mono" id="concurso" name="concurso" placeholder="Ex: 2500" required aria-describedby="concurso-sugestao-info">
+                    <span class="lq-helper" id="concurso-sugestao-info"></span>
+                </div>
+                <button type="submit" class="lq-btn lq-btn-primary"><span class="ms" aria-hidden="true">casino</span>Gerar jogo</button>
+            </div>
         </div>
-    </div>
-    {% endif %}
 
-    {% else %}
-    <!-- Features para visitantes -->
-    <div class="row g-4 mb-5">
-        <div class="col-md-4">
-            <div class="card h-100 text-center p-4">
-                <div class="card-body">
-                    <i class="bi bi-shuffle display-4 text-primary mb-3"></i>
-                    <h4>Geracao Inteligente</h4>
-                    <p class="text-secondary">Algoritmo que respeita regras de sequencia e evita repeticoes automaticamente.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 text-center p-4">
-                <div class="card-body">
-                    <i class="bi bi-graph-up display-4 text-success mb-3"></i>
-                    <h4>Estatisticas Detalhadas</h4>
-                    <p class="text-secondary">Acompanhe numeros mais frequentes, padroes e historico completo.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 text-center p-4">
-                <div class="card-body">
-                    <i class="bi bi-shield-check display-4 text-info mb-3"></i>
-                    <h4>Multitenant Seguro</h4>
-                    <p class="text-secondary">Seus dados isolados e seguros. Acesse de qualquer dispositivo.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Jogos Disponiveis -->
-    <div class="row">
-        <div class="col-12">
-            <h3 class="text-center mb-4">Loterias Suportadas</h3>
-            <div class="row g-3">
+        <div class="lq-card" style="display:flex; flex-direction:column; gap:16px;">
+            <div class="home-eyebrow">Loteria</div>
+            <div id="seletor-de-jogos" class="game-grid">
                 {% for key, config in jogos_disponiveis.items %}
-                <div class="col-md-4 col-lg-2">
-                    <div class="card text-center p-3 h-100">
-                        <div class="card-body">
-                            <i class="bi bi-dice-5 fs-1 text-primary mb-2"></i>
-                            <h5 class="card-title">{{ config.name }}</h5>
-                            <p class="card-text text-secondary">
-                                <strong>{{ config.bets_count }}</strong> numeros<br>
-                                de <strong>{{ config.numbers_count }}</strong> possiveis
-                                {% if config.clovers > 0 %}
-                                <br>+<strong>{{ config.clovers }}</strong> trevos
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
+                <div class="game-tile">
+                    <input type="radio" class="lq-tile-input" name="jogo" id="jogo-{{ key }}" value="{{ key }}"
+                           autocomplete="off" required data-name="{{ config.name }}"
+                           data-regras-url="{% url 'generation_rules' key|lower %}"
+                           data-resumo="{{ config.bets_count }} números de {{ config.numbers_count }} possíveis{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}">
+                    <label class="lq-tile" for="jogo-{{ key }}">
+                        <span class="ms msf game-selector-check" aria-hidden="true">check_circle</span>
+                        <span class="ms game-icon" aria-hidden="true">{% if key == 'Mega-sena' %}emoji_events{% elif key == 'Milionaria' %}local_florist{% elif key == 'Lotomania' %}pin{% elif key == 'Lotofacil' %}bolt{% elif key == 'Quina' %}star{% elif key == 'Dupla-Sena' %}filter_2{% else %}casino{% endif %}</span>
+                        <span class="tile-name">{{ config.name }}</span>
+                        <span class="tile-meta">{{ config.bets_count }} de {{ config.numbers_count }}{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}</span>
+                    </label>
                 </div>
                 {% endfor %}
             </div>
+            <!-- Um unico link, depois do grupo de radios inteiro (nunca entre eles): um <a> entre
+                 radios do mesmo grupo tira o foco do Tab do grupo assim que o primeiro radio recebe
+                 foco -- e' o proprio grupo de radios que so aceita Tab de entrada/saida nas pontas
+                 (setas navegam entre eles); um link intercalado quebra isso (achado do Boss, 2026-09-22). -->
+            {% for key, config in jogos_disponiveis.items %}{% if forloop.first %}
+            <a href="{% url 'generation_rules' key|lower %}" class="lq-btn lq-btn-outline lq-btn-sm game-edit-link" id="jogo-regras-link">
+                <span class="ms" aria-hidden="true">tune</span><span id="jogo-regras-texto">Editar regras de geração</span>
+            </a>
+            {% endif %}{% endfor %}
+        </div>
+    </form>
+
+    <div class="lq-card">
+        <div class="home-eyebrow" style="margin-bottom:14px;">Guardar palpite manual</div>
+        <form method="post" action="{% url 'save_manual_bet' %}">
+            {% csrf_token %}
+            <div class="manual-grid">
+                <div class="lq-field">
+                    <label class="lq-label" for="jogo-manual">Jogo</label>
+                    <select name="jogo" id="jogo-manual" class="lq-select" required>
+                        {% for key, config in jogos_disponiveis.items %}
+                        <option value="{{ key }}">{{ config.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="lq-field">
+                    <label class="lq-label" for="concurso-manual">Concurso</label>
+                    <input type="text" name="concurso" id="concurso-manual" class="lq-input is-mono" placeholder="Ex: 2500" required>
+                </div>
+                <div class="lq-field">
+                    <label class="lq-label" for="numeros-manual">Números</label>
+                    <input type="text" name="numeros" id="numeros-manual" class="lq-input is-mono" placeholder="Ex: 01, 12, 23, 34, 45, 56" required>
+                </div>
+            </div>
+            <button type="submit" class="lq-btn lq-btn-secondary" style="margin-top:16px;"><span class="ms" aria-hidden="true">bookmark_add</span>Guardar jogo manual</button>
+        </form>
+    </div>
+
+    {% if ultimos_jogos %}
+    <div class="lq-card">
+        <div class="lq-row-between" style="margin-bottom:6px;">
+            <div class="home-eyebrow">Últimos jogos</div>
+            <a href="{% url 'history' %}" class="lq-btn lq-btn-outline lq-btn-sm">Ver todos</a>
+        </div>
+        <div class="recent-list">
+            {% for jogo in ultimos_jogos %}
+            <div class="recent-item">
+                <div class="recent-meta">
+                    <span class="lq-status lq-status-waiting">{{ jogo.game }}</span>
+                    <span class="recent-contest">{{ jogo.contest }}</span>
+                    <span class="recent-date">{{ jogo.created_at|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="recent-balls lq-balls" role="list" aria-label="Números do jogo">
+                    {% for num in jogo.numbers %}<span class="lq-ball lq-ball-xs" role="listitem">{{ num|stringformat:"02d" }}</span>{% endfor %}
+                    {% for trevo in jogo.clovers %}<span class="lq-ball lq-ball-xs lq-ball-clover" role="listitem" title="Trevo">{{ trevo|stringformat:"02d" }}</span>{% endfor %}
+                </div>
+                <a href="{% url 'bet_detail' jogo.pk %}" class="lq-icon-btn" aria-label="Ver jogo de {{ jogo.game }}, concurso {{ jogo.contest }}" title="Ver jogo"><span class="ms" aria-hidden="true">visibility</span></a>
+            </div>
+            {% endfor %}
         </div>
     </div>
     {% endif %}
+    </div>
+
+    <!-- Resumo de atividade: sidebar (>=1280px) / abaixo da coluna principal (<1280px) -->
+    <aside class="home-sidebar" id="resumo-lateral" aria-label="Resumo de atividade">
+        <div class="home-stat">
+            <div class="home-stat-label">Jogos guardados</div>
+            <div class="home-stat-value">{{ total_jogos }}</div>
+        </div>
+        <div class="home-stat">
+            <div class="home-stat-label">Tipos de jogo</div>
+            <div class="home-stat-value">{{ jogos_por_tipo|length }}</div>
+        </div>
+        <div class="home-stat">
+            <div class="home-stat-label">Jogos recentes</div>
+            <div class="home-stat-value">{{ ultimos_jogos|length }}</div>
+        </div>
+    </aside>
+    </div>
 </div>
 
 {% if concursos_sugeridos %}{{ concursos_sugeridos|json_script:"concursos-sugeridos-data" }}{% endif %}
 <script>
-function selectGame(element, gameName) {
-    // Remove active de todos
-    document.querySelectorAll('.game-selector').forEach(el => {
-        el.classList.remove('active');
-        el.querySelector('input[type="radio"]').checked = false;
-    });
+// O seletor usa radios (foco/teclado nativos); o estado visual vem do CSS (:checked). Aqui só
+// atualizamos a área "jogo selecionado" (região aria-live) e a sugestão de concurso quando a escolha muda.
+function selectGame(radio) {
+    var label = document.querySelector('label[for="' + radio.id + '"]');
+    var iconEl = label ? label.querySelector('.game-icon') : null;
 
-    // Adiciona active ao clicado
-    element.classList.add('active');
-    element.querySelector('input[type="radio"]').checked = true;
+    // Só troca texto/classe (nunca display): mantém a região aria-live anunciável.
+    document.getElementById('jogo-selecionado-icone').textContent = iconEl ? iconEl.textContent : 'casino';
+    var nome = document.getElementById('jogo-selecionado-nome');
+    nome.textContent = radio.dataset.name;
+    nome.className = 'selected-game-name';
+    document.getElementById('jogo-selecionado-resumo').textContent = radio.dataset.resumo;
 
-    preencherConcursoSugerido(gameName);
+    var regrasLink = document.getElementById('jogo-regras-link');
+    if (regrasLink && radio.dataset.regrasUrl) {
+        regrasLink.href = radio.dataset.regrasUrl;
+        document.getElementById('jogo-regras-texto').textContent = 'Editar regras de ' + radio.dataset.name;
+    }
+
+    preencherConcursoSugerido(radio.value);
 }
+
+document.querySelectorAll('input[name="jogo"].lq-tile-input').forEach(function (radio) {
+    radio.addEventListener('change', function () { selectGame(radio); });
+    // Restaura o estado ao voltar pra página (bfcache/back) com um jogo já marcado.
+    if (radio.checked) {
+        selectGame(radio);
+    }
+});
 
 function getConcursosSugeridos() {
     var el = document.getElementById('concursos-sugeridos-data');
@@ -296,8 +244,8 @@ function preencherCampoComSugestao(campo, sugestao) {
     if (!campo) {
         return;
     }
-    // So sobrescreve se o valor atual esta vazio ou foi ele mesmo quem preencheu antes
-    // (troca de jogo) -- nunca sobrescreve o que o usuario digitou manualmente.
+    // Só sobrescreve se o valor atual está vazio ou foi ele mesmo quem preencheu antes
+    // (troca de jogo) -- nunca sobrescreve o que o usuário digitou manualmente.
     if (!campo.value || campo.dataset.autofilled === 'true') {
         if (sugestao) {
             campo.value = sugestao;
@@ -316,7 +264,7 @@ function preencherConcursoSugerido(gameName) {
     var infoConcurso = document.getElementById('concurso-sugestao-info');
     preencherCampoComSugestao(campoConcurso, sugestao);
     if (infoConcurso) {
-        infoConcurso.textContent = sugestao ? ('Sugestao: concurso ' + sugestao) : '';
+        infoConcurso.textContent = sugestao ? ('Sugestão: concurso ' + sugestao) : '';
     }
 }
 
@@ -332,8 +280,8 @@ if (jogoManualSelect) {
     jogoManualSelect.addEventListener('change', function () {
         preencherConcursoManualSugerido(this.value);
     });
-    // Preenche a sugestao da opcao ja selecionada por padrao ao carregar a pagina,
-    // sem esperar o usuario trocar o select.
+    // Preenche a sugestão da opção já selecionada por padrão ao carregar a página,
+    // sem esperar o usuário trocar o select.
     if (jogoManualSelect.value) {
         preencherConcursoManualSugerido(jogoManualSelect.value);
     }

@@ -116,8 +116,9 @@
   evidence: Achado convergente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.14. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6 (mesmo padrão check-then-create, mesmo racional de baixo volume de uso concorrente esperado). Corrigir de verdade exigiria uma `UniqueConstraint`+migration e tratamento de `IntegrityError` nos 2 pontos de entrada -- mudança de schema, fora do escopo de patch trivial desta revisão.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`
-  summary: "`regenerate_bet_view` continua criando sem checagem um segundo `GeneratedBet` pro mesmo usuário+Jogo+Concurso do jogo original (pinado pelo teste existente `test_regenerating_bet_creates_new_record_and_redirects`, que espera `count() == 2`) -- inconsistente com a garantia nova de `create_bet_view`/`save_manual_bet_view` ('não é possível gerar outro pro mesmo Jogo+Concurso')."
+  summary: "**RESOLVIDO pela Story 2.17 (2026-09-14).** `regenerate_bet_view` continua criando sem checagem um segundo `GeneratedBet` pro mesmo usuário+Jogo+Concurso do jogo original (pinado pelo teste existente `test_regenerating_bet_creates_new_record_and_redirects`, que espera `count() == 2`) -- inconsistente com a garantia nova de `create_bet_view`/`save_manual_bet_view` ('não é possível gerar outro pro mesmo Jogo+Concurso')."
   evidence: Achado pelo Verification Gap Reviewer na revisão da Story 2.14. Fora do escopo desta story por decisão explícita do próprio AC em `epics.md` ("aplicado... em `create_bet_view` e `save_manual_bet_view`", sem mencionar `regenerate_bet_view`) -- mas o resultado de produto é inconsistente entre as duas telas. Decisão do Boss pendente sobre se `regenerate_bet_view` deveria seguir a mesma regra (ou se "refazer" é intencionalmente uma exceção, já que troca só os números sorteados mantendo o mesmo Jogo+Concurso do bet original).
+  resolution: A Story 2.17 decidiu isso -- `regenerate_bet_view` (apps/loterias_core/views.py:320-370) agora substitui o `GeneratedBet` original in-place (`original_bet.save()`, nunca `.create()`), nunca cria um segundo registro. O teste foi renomeado/reescrito pra `test_regenerating_bet_replaces_original_in_place` (apps/loterias_core/tests.py:1062-1074), que afirma `count() == 1`. Achado (e corrigida a citação órfã deste item) na retrospectiva do Epic 2, 2026-09-16 -- ver `epic-2-retro-2026-09-16.md` achado F9.
 
 ## Deferred from: code review of spec-2-15-runbook-de-backfill-inicial-de-notificacoes (2026-09-14)
 
@@ -153,3 +154,43 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-18-suporte-2o-sorteio-dupla-sena.md`
   summary: "`update_monthly_prize_values` só promove `latest_result.prizes` (1º sorteio) pra `PrizeTier` -- nunca `prizes_second_draw`. Quando `calculate_bet_prize` cai no fallback de `PrizeTier` pro 2º sorteio (faixa específica ausente em `prizes_second_draw`), usa sem querer o valor do `PrizeTier` do 1º sorteio pra uma faixa do 2º."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.18. Impacto baixo na prática: `prizes_second_draw` é extraído junto com `numbers_second_draw` sempre que a API publica o 2º sorteio, então o fallback pro `PrizeTier` só entraria em jogo se a faixa específica de acertos nunca tivesse aparecido em nenhum `listaRateioPremio` capturado (cenário raro). Corrigir de verdade exigiria uma segunda trilha de `PrizeTier` por sorteio (campo novo ou model separado), fora do escopo desta story.
+
+## Deferred from: retrospectiva do Epic 2 (2026-09-16)
+
+Achados da revisão de fronteira entre stories (não de uma story isolada) -- ver `epic-2-retro-2026-09-16.md` pro relatório completo, incluindo os 3 achados marcados `[FIX NOW]` que viraram action items em `sprint-status.yaml` (F1, F2, F3) e não estão repetidos aqui.
+
+- source_spec: `epic-2-retro-2026-09-16.md` (achado F5, cruzando Stories 2.7/2.9)
+  summary: "`send_hit_notification_email` em `_notify_covered_bets` (jobs.py) tem seu valor de retorno descartado -- ao contrário de `_alert_operator_of_stale_capture_failures` (Story 2.9), que só persiste o dedup depois de confirmar que o e-mail foi de fato enviado, a `HitNotification` de acerto premiado é criada incondicionalmente antes do envio, então uma falha transiente de SMTP nunca é percebida nem reenviada."
+  evidence: Achado pela lente adversarial na retrospectiva do Epic 2. Hoje nenhum usuário no lab tem `NotificationPreference.email_enabled=True` (confirmado na Story 2.15), então o caminho nunca disparou de verdade ainda -- risco real, mas não ativo. Corrigir exigiria um campo tipo `email_sent_at` e mudar o critério da varredura de `notification__isnull=True`, fora do escopo de um patch trivial.
+
+- source_spec: `epic-2-retro-2026-09-16.md` (achado F6, cruzando Stories 2.9/2.10)
+  summary: "`already_alerted` (dedup de alerta de falha de captura, `CaptureFailureAlert`) nunca é limpo quando o `LotteryResult` correspondente é purgado manualmente (Story 2.10) -- se o mesmo par Jogo+Concurso voltar a falhar de captura depois de purgado, o alerta novo é silenciosamente suprimido pelo dedup antigo."
+  evidence: Achado pela lente adversarial na retrospectiva do Epic 2. Cenário raro (exige purge manual + nova falha real no mesmo par), sem evidência de ter ocorrido no lab -- registrado pra não precisar reinvestigar se aparecer.
+
+- source_spec: `epic-2-retro-2026-09-16.md` (achado F7, Story 2.5/2.6)
+  summary: "`NotificationPreference.site_enabled=False` só zera o badge (`context_processors.py`, Story 2.6) -- a lista completa de notificações não lidas continua renderizando normalmente se o usuário acessar `/notificacoes/` direto pela URL."
+  evidence: Achado pela lente edge-case-hunter na retrospectiva do Epic 2. Inconsistência de UX entre o indicador (respeita a preferência) e a tela de destino (não respeita) -- baixo risco prático, ninguém reportou confusão até agora.
+
+## Deferred from: build da Story 4.1 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-reorganizacao-da-area-util-da-home.md`
+  summary: "Os cards do `game-selector` são `div onclick` com radio `d-none required` — inacessíveis por teclado e, sem jogo selecionado, o submit falha com 'invalid form control is not focusable' sem nenhum aviso visível (agora mais exposto, já que o botão Gerar Jogo fica acima do seletor)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.1. Pré-existente (a mecânica de seleção não mudou); a Story 4.2 (UX-DR7) e o padrão `.btn-check` da EXPERIENCE.md já preveem reescrever o seletor de forma acessível — resolver lá.
+
+## Deferred from: build da Story 4.2 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-icone-por-jogo-no-seletor.md`
+  summary: "O comportamento JS do seletor (`selectGame`: atualizar ícone/nome/resumo da área 'jogo selecionado', sugestão de concurso, restauração via bfcache/back) não tem teste automatizado — os testes só cobrem o HTML/CSS renderizado; o projeto não tem infra de teste de frontend (Selenium/Playwright/Jest)."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.2. Validado só manualmente no navegador pelo Boss. Revisitar se mais lógica de JS entrar nas Stories 4.3+ (toggle das Regras de Geração, confirmação FR-23) — aí vale montar um harness mínimo de teste de JS/E2E.
+
+## Deferred from: build da Story 4.3 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-model-generationrule-e-tela-de-edicao.md`
+  summary: "O aviso 'sem proteção de sequência' (FR-23) só existe no navegador (modal em JS); um POST direto ou sem JavaScript salva tudo desligado sem confirmação, e nenhum teste exercita o JS da tela (switch/modais)."
+  evidence: Achado pelo Blind/Edge Case Hunter na revisão da Story 4.3. Baixo risco (usuário logado editando as próprias regras), mas junto com o item da 4.2 reforça a falta de infra de teste de frontend — revisitar ao montar um harness de JS/E2E.
+
+## Deferred from: build da Story 4.4 (2026-09-19)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-regras-de-geracao-mega-milionaria-quina-dupla.md`
+  summary: "`CLAUDE.md` (seção 'Lógica de domínio das loterias') ainda descreve `generate_bet()` só com a Regra de Sequência adaptativa; deve mencionar `GenerationRule`/`bet_satisfies_rules` (modo personalizado) — atualizar quando o Epic 4 fechar."
+  evidence: Achado pelo Blind Hunter na revisão da Story 4.4; adiado porque o conserto edita um arquivo de contexto de agente.

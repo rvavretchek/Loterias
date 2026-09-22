@@ -18,6 +18,7 @@ from apps.accounts.models import User
 from apps.loterias_core.models import (
     GeneratedBet, LotteryResult, GameStatistics, HitNotification, NotificationPreference,
     PrizeTier, CaptureFailureAlert, CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS, GAMES_CONFIG,
+    GenerationRule, RULE_NAMES_BY_GAME, RULE_DEFINITIONS, GAME_GRID,
 )
 from apps.loterias_core.emails import send_hit_notification_email
 from apps.loterias_core.jobs import (
@@ -30,11 +31,13 @@ from apps.loterias_core.utils import (
     fetch_cef_result,
     count_sequential_pairs,
     generate_bet,
+    generate_bet_with_relaxation,
     normalize_numbers,
     check_duplicate_bet,
     suggest_next_contest,
     apply_prize_to_bet,
     normalize_contest,
+    bet_satisfies_rules,
 )
 
 
@@ -737,20 +740,28 @@ class CreateBetViewTests(TestCase):
         self.assertEqual(GeneratedBet.objects.count(), 0)
         self.assertRedirects(response, reverse('home'))
 
-    def test_leading_zero_spelling_counts_as_duplicate_bet(self):
-        """Story 2.12: '02500' normaliza pra '2500' antes da checagem de duplicata do usuario."""
+    def test_leading_zero_spelling_is_normalized_and_allows_multiple_bets_per_contest(self):
+        """Story 2.12 + 2.20: '02500' normaliza pra '2500'; o usuario pode gerar varios jogos pro mesmo Jogo+Concurso."""
         GeneratedBet.objects.create(
             user=self.user, game='Mega-sena', contest='2500',
             numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
         )
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
-        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
-        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
-        self.assertIn(('Voce ja tem um jogo de Mega-sena para o concurso 2500. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
+        self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '02500'}, follow=True)
+        bets = GeneratedBet.objects.filter(user=self.user, game='Mega-sena')
+        self.assertEqual(bets.count(), 2)
+        self.assertEqual(set(bets.values_list('contest', flat=True)), {'2500'})
 
-    def test_blocks_even_when_user_also_has_duplicate_bet(self):
-        """As duas checagens coexistem: mesmo com um GeneratedBet duplicado do proprio usuario,
-        o bloqueio de concurso ja sorteado vence e nenhum segundo registro e criado."""
+    def test_user_can_generate_many_bets_for_the_same_game_and_contest(self):
+        """Story 2.20: sem limite de jogos por Jogo+Concurso (ate o concurso ser sorteado)."""
+        for _ in range(3):
+            response = self.client.post(reverse('create_bet'), {'jogo': 'Quina', 'concurso': '6000'}, follow=True)
+            mensagens = [m.level_tag for m in response.context['messages']]
+            self.assertNotIn('error', mensagens)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Quina', contest='6000').count(), 3)
+
+    def test_blocks_already_drawn_contest_even_when_user_has_a_bet_for_it(self):
+        """O bloqueio de concurso ja sorteado vale mesmo com um GeneratedBet do proprio usuario
+        pro mesmo Jogo+Concurso: nenhum registro novo e criado."""
         LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
         GeneratedBet.objects.create(
             user=self.user, game='Mega-sena', contest='2500',
@@ -856,6 +867,89 @@ class HistoryViewTests(TestCase):
         self.assertEqual(bets[0].user, self.user)
 
 
+class HistoryFiltersTests(TestCase):
+    """Story 4.8 (FR-24): filtros cumulativos por querystring."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='filtros@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        self.mega = self._bet('Mega-sena', '1', prize=0, when=datetime(2026, 9, 10, 12, 0, tzinfo=dt_timezone.utc))
+        self.loto_win = self._bet('Lotomania', '2', prize=Decimal('50'), when=datetime(2026, 9, 15, 12, 0, tzinfo=dt_timezone.utc))
+        self.mega_win = self._bet('Mega-sena', '3', prize=Decimal('10'), when=datetime(2026, 9, 20, 12, 0, tzinfo=dt_timezone.utc))
+
+    def _bet(self, game, contest, prize, when):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game=game, contest=contest, numbers=[1, 2, 3, 4, 5, 6], clovers=[], prize=prize,
+        )
+        GeneratedBet.objects.filter(pk=bet.pk).update(created_at=when)
+        return bet
+
+    def _contests(self, **params):
+        response = self.client.get(reverse('history'), params)
+        self.assertEqual(response.status_code, 200)
+        return sorted(b.contest for b in response.context['jogos']), response
+
+    def test_no_filters_lists_everything(self):
+        self.assertEqual(self._contests()[0], ['1', '2', '3'])
+
+    def test_filters_by_game_winners_and_period(self):
+        self.assertEqual(self._contests(jogo='Mega-sena')[0], ['1', '3'])
+        self.assertEqual(self._contests(premiado='1')[0], ['2', '3'])
+        self.assertEqual(self._contests(de='2026-09-15', ate='2026-09-15')[0], ['2'])
+
+    def test_filters_are_cumulative(self):
+        self.assertEqual(self._contests(jogo='Mega-sena', premiado='1')[0], ['3'])
+        self.assertEqual(self._contests(jogo='Mega-sena', premiado='1', de='2026-09-01', ate='2026-09-12')[0], [])
+
+    def test_period_uses_project_timezone_day_boundaries(self):
+        late = self._bet('Quina', '9', prize=0, when=datetime(2026, 9, 25, 2, 30, tzinfo=dt_timezone.utc))  # 24/09 23:30 em Sao Paulo
+        self.assertIn('9', self._contests(de='2026-09-24', ate='2026-09-24')[0])
+        self.assertNotIn('9', self._contests(de='2026-09-25', ate='2026-09-25')[0])
+        self.assertTrue(late.pk)
+
+    def test_contest_ordering_is_numeric_like_and_stable(self):
+        self._bet('Quina', '300', prize=0, when=datetime(2026, 9, 1, 12, 0, tzinfo=dt_timezone.utc))
+        self._bet('Quina', '2500', prize=0, when=datetime(2026, 9, 1, 12, 0, tzinfo=dt_timezone.utc))
+        response = self.client.get(reverse('history'), {'ordenacao': 'contest'})
+        contests = [b.contest for b in response.context['jogos']]
+        self.assertEqual(contests, ['1', '2', '3', '300', '2500'])
+
+    def test_invalid_values_are_ignored(self):
+        contests, response = self._contests(jogo='Xpto', de='ontem', ate='31/12/2026')
+        self.assertEqual(contests, ['1', '2', '3'])
+        self.assertFalse(response.context['tem_filtros'])
+
+    def test_badges_remove_one_filter_and_keep_the_rest(self):
+        _, response = self._contests(jogo='Mega-sena', premiado='1')
+        html = response.content.decode()
+        self.assertIn('aria-label="Remover filtro Jogo: Mega-sena"', html)
+        self.assertIn('aria-label="Remover filtro Só premiados"', html)
+        removals = {f['label']: f['remove_qs'] for f in response.context['filtros_ativos']}
+        self.assertEqual(removals['Jogo: Mega-sena'], 'premiado=1')
+        self.assertEqual(removals['Só premiados'], 'jogo=Mega-sena')
+
+    def test_empty_result_names_filters_and_offers_clear(self):
+        _, response = self._contests(jogo='Quina', premiado='1')
+        self.assertContains(response, 'Jogo: Quina')
+        self.assertContains(response, 'Limpar filtros')
+
+    def test_filter_bar_always_visible_and_pagination_keeps_filters(self):
+        for i in range(25):
+            self._bet('Quina', str(100 + i), prize=Decimal('1'), when=datetime(2026, 9, 21, 12, 0, tzinfo=dt_timezone.utc))
+        response = self.client.get(reverse('history'), {'jogo': 'Quina', 'premiado': '1'})
+        self.assertContains(response, 'id="filtros-heading"')
+        self.assertContains(response, 'page=2&jogo=Quina&amp;premiado=1')
+
+    def test_dupla_sena_renders_two_labeled_groups_and_many_numbers_wrap(self):
+        GeneratedBet.objects.create(user=self.user, game='Dupla-Sena', contest='7', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        GeneratedBet.objects.create(user=self.user, game='Lotomania', contest='8', numbers=list(range(1, 51)), clovers=[])
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, '1º sorteio:')
+        self.assertContains(response, 'aria-label="2º sorteio"')
+        self.assertContains(response, 'role="list"')
+        self.assertContains(response, 'lq-balls')
+
+
 class DeleteBetViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='del@example.com', password='SenhaForte123')
@@ -921,8 +1015,8 @@ class SaveManualBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
         self.assertFalse(bet.result_checked)
 
-    def test_blocks_duplicate_contest_for_same_user(self):
-        """Story 2.14: aviso de duplicata agora bloqueia de verdade -- nao cria o segundo registro."""
+    def test_allows_multiple_manual_bets_for_same_contest_and_user(self):
+        """Story 2.20: guardar varios jogos manuais pro mesmo Jogo+Concurso e permitido."""
         GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000',
             numbers=self.numbers, clovers=[], sequential_pairs=0, manual=True,
@@ -932,10 +1026,9 @@ class SaveManualBetViewTests(TestCase):
             'concurso': '3000',
             'numeros': self.numeros_str,
         }, follow=True)
-        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
-        self.assertRedirects(response, reverse('home'))
-        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
-        self.assertIn(('Voce ja tem um jogo de Lotofacil para o concurso 3000. Nao e possivel gerar outro para o mesmo Jogo+Concurso.', 'error'), mensagens)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Lotofacil', contest='3000').count(), 2)
+        mensagens = [m.level_tag for m in response.context['messages']]
+        self.assertNotIn('error', mensagens)
 
     def test_blocks_contest_that_already_has_lottery_result(self):
         LotteryResult.objects.create(game='Lotofacil', contest='3000', numbers=self.numbers, clovers=[], prizes={})
@@ -1061,7 +1154,7 @@ class RegenerateBetViewTests(TestCase):
 
     def test_regenerating_bet_replaces_original_in_place(self):
         """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
-        GeneratedBet pro mesmo Jogo+Concurso, consistente com o bloqueio de duplicata da Story 2.14."""
+        GeneratedBet pro mesmo Jogo+Concurso ("Refazer" troca os numeros do jogo)."""
         original_numbers = list(self.bet.numbers)
         response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
         self.assertEqual(
@@ -1072,7 +1165,7 @@ class RegenerateBetViewTests(TestCase):
         self.assertNotEqual(self.bet.numbers, original_numbers)
         self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
 
-    @patch('apps.loterias_core.views.generate_bet')
+    @patch('apps.loterias_core.views.generate_bet_with_relaxation')
     def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
         """Story 2.17: jogo com trevos (Milionaria) tem os trevos tambem substituidos, nao so os
         numeros -- cobre o campo que a Mega-sena (sem trevo) nao consegue exercitar. Mocka
@@ -1082,7 +1175,7 @@ class RegenerateBetViewTests(TestCase):
             user=self.user, game='Milionaria', contest='6000',
             numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
         )
-        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4])
+        mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4], None)
         self.client.get(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.clovers, [3, 4])
@@ -1149,6 +1242,130 @@ class HomeViewTests(TestCase):
         self.assertEqual(response.context['concursos_sugeridos']['Mega-sena'], '2501')
         self.assertContains(response, 'id="concursos-sugeridos-data"')
         self.assertContains(response, '"Mega-sena": "2501"')
+
+    def test_authenticated_home_puts_selected_game_area_before_selector_and_summary_aside(self):
+        """Story 4.1 (FR-16): area 'jogo selecionado' no topo, seletor abaixo, resumo em sidebar."""
+        user = User.objects.create_user(email='layout@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        selected_area = html.index('id="jogo-selecionado"')
+        selector = html.index('id="seletor-de-jogos"')
+        summary_aside = html.index('id="resumo-lateral"')
+        self.assertLess(selected_area, selector)
+        self.assertLess(selector, summary_aside)
+        self.assertRegex(html, r'<aside[^>]*id="resumo-lateral"')
+        self.assertRegex(html, r'min-width:\s*1280px')
+
+    def test_authenticated_home_generate_form_wraps_contest_radios_and_submit(self):
+        """Story 4.1: a area 'jogo selecionado' e o seletor continuam num unico <form> de geracao."""
+        user = User.objects.create_user(email='form@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        form_start = html.index('action="%s"' % reverse('create_bet'))
+        form_end = html.index('</form>', form_start)
+        form_html = html[form_start:form_end]
+        self.assertIn('id="concurso"', form_html)
+        self.assertIn('type="submit"', form_html)
+        self.assertEqual(form_html.count('name="jogo"'), len(GAMES_CONFIG))
+        self.assertLess(form_html.index('id="jogo-selecionado"'), form_html.index('id="seletor-de-jogos"'))
+
+    def test_game_selector_uses_distinct_decorative_icon_per_game(self):
+        """Story 4.2 (FR-17/UX-DR1): 1 icone distinto por Jogo, aria-hidden, sem o bi-dice-5 generico."""
+        user = User.objects.create_user(email='icones@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        expected = {
+            'Mega-sena': 'emoji_events', 'Milionaria': 'local_florist', 'Lotomania': 'pin',
+            'Lotofacil': 'bolt', 'Quina': 'star', 'Dupla-Sena': 'filter_2',
+        }
+        self.assertEqual(set(expected), set(GAMES_CONFIG))
+        selector = html[html.index('id="seletor-de-jogos"'):html.index('</form>', html.index('id="seletor-de-jogos"'))]
+        for game, icon in expected.items():
+            card = selector[selector.index('for="jogo-%s"' % game):]
+            card = card[:card.index('</label>')]
+            self.assertRegex(card, r'<span class="ms game-icon" aria-hidden="true">%s</span>' % icon)
+        self.assertNotIn('>casino<', selector)
+        self.assertEqual(len(set(expected.values())), len(expected))
+
+    def test_game_selector_is_keyboard_accessible_radio_pattern_with_non_color_check(self):
+        """Story 4.2 (UX-DR7): radios .lq-tile-input + label (sem div onclick), check no card selecionado."""
+        user = User.objects.create_user(email='btncheck@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertNotIn('onclick="selectGame', html)
+        for game in GAMES_CONFIG:
+            self.assertRegex(html, r'<input type="radio" class="lq-tile-input" name="jogo" id="jogo-%s"' % game)
+            self.assertIn('for="jogo-%s"' % game, html)
+        self.assertEqual(html.count('game-selector-check" aria-hidden="true"'), len(GAMES_CONFIG))
+        self.assertRegex(html, r'\.lq-tile-input:checked \+ \.lq-tile \.game-selector-check\s*\{\s*display:\s*block')
+
+    def test_only_one_edit_rules_link_and_it_comes_after_the_whole_radio_group(self):
+        """Regressao (Boss, 2026-09-22): um <a> entre radios do mesmo grupo tira o foco do Tab
+        do grupo assim que o 1o radio recebe foco (radios nao-marcados saem da sequencia de Tab
+        inteiramente) -- so ha 1 link de editar regras, depois de todos os radios/labels."""
+        user = User.objects.create_user(email='tabfix@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertEqual(html.count('id="jogo-regras-link"'), 1)
+        selector = html[html.index('id="seletor-de-jogos"'):html.index('</form>', html.index('id="seletor-de-jogos"'))]
+        last_radio = max(selector.index('id="jogo-%s"' % game) for game in GAMES_CONFIG)
+        last_label_close = selector.rindex('</label>')
+        link_pos = selector.index('id="jogo-regras-link"')
+        self.assertGreater(link_pos, last_radio)
+        self.assertGreater(link_pos, last_label_close)
+        for game in GAMES_CONFIG:
+            self.assertIn('data-regras-url="%s"' % reverse('generation_rules', kwargs={'jogo': game.lower()}), selector)
+
+    def test_selected_game_area_is_polite_atomic_live_region(self):
+        """Story 4.2 (UX-DR4): area 'jogo selecionado' anunciavel por leitor de tela."""
+        user = User.objects.create_user(email='live@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertRegex(html, r'id="jogo-selecionado-info"[^>]*aria-live="polite"[^>]*aria-atomic="true"')
+        self.assertIn('id="jogo-selecionado-atual"', html)
+        self.assertIn('data-name="Mega-sena"', html)
+
+    def test_authenticated_home_skips_visitor_hero(self):
+        user = User.objects.create_user(email='hero@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'Gere apostas inteligentes')
+        self.assertNotContains(response, 'Criar Conta Gratis')
+
+    def test_authenticated_home_keeps_contest_field_and_summary_content(self):
+        user = User.objects.create_user(email='conteudo@example.com', password='SenhaForte123')
+        GeneratedBet.objects.create(
+            user=user, game='Quina', contest='1',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'id="concurso"')
+        self.assertContains(response, 'name="concurso"')
+        self.assertContains(response, 'Selecione um jogo abaixo')
+        for label in ('Jogos guardados', 'Tipos de jogo', 'Jogos recentes'):
+            self.assertContains(response, label)
+        self.assertEqual(response.context['total_jogos'], 1)
+
+    def test_visitor_home_has_no_summary_sidebar_or_selected_game_area(self):
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'id="resumo-lateral"')
+        self.assertNotContains(response, 'id="jogo-selecionado"')
+        self.assertTemplateUsed(response, 'loterias_core/landing.html')
+        self.assertContains(response, 'Gere com regra, guarde tudo, confira sozinho')
+        self.assertContains(response, 'Gerar meu primeiro jogo')
+        self.assertContains(response, reverse('account_signup'))
+        self.assertContains(response, 'jogadora.jpg')
+        self.assertNotContains(response, 'Multitenant')
+        self.assertNotContains(response, 'aumente suas chances')
+        for game in ('Mega-sena', 'Lotofacil', 'Dupla-Sena'):
+            self.assertContains(response, game)
+
+    def test_logged_user_home_is_not_the_landing(self):
+        user = User.objects.create_user(email='logado@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertTemplateNotUsed(response, 'loterias_core/landing.html')
 
 
 class BetDetailViewTests(TestCase):
@@ -1981,7 +2198,7 @@ class NotificationBadgeTemplateTests(TestCase):
 
     def test_badge_not_shown_without_unread_notification(self):
         response = self.client.get(reverse('home'))
-        self.assertNotContains(response, 'bi-bell-fill')
+        self.assertNotContains(response, 'lq-bell')
 
     def test_badge_shown_with_unread_notification(self):
         bet = GeneratedBet.objects.create(
@@ -1990,10 +2207,10 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'bi-bell-fill')
+        self.assertContains(response, 'lq-bell')
         self.assertContains(response, reverse('notifications'))
         self.assertEqual(response.context['unread_notifications_count'], 1)
-        self.assertContains(response, 'bg-secondary')
+        self.assertContains(response, 'lq-bell-count')
 
     def test_badge_uses_success_color_when_won_notification_pending(self):
         bet = GeneratedBet.objects.create(
@@ -2002,7 +2219,7 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=True)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'bg-success')
+        self.assertContains(response, 'lq-bell-count is-win')
 
     def test_badge_appears_on_other_pages_too(self):
         bet = GeneratedBet.objects.create(
@@ -2011,7 +2228,7 @@ class NotificationBadgeTemplateTests(TestCase):
         )
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('history'))
-        self.assertContains(response, 'bi-bell-fill')
+        self.assertContains(response, 'lq-bell')
 
 
 class NotificationsViewTests(TestCase):
@@ -2069,10 +2286,10 @@ class NotificationsViewTests(TestCase):
         self.assertEqual(list(response.context['notificacoes']), [newer, older])
         self.assertContains(response, 'Mega-sena')
         self.assertContains(response, 'Lotofacil')
-        self.assertContains(response, '>100<')
-        self.assertContains(response, '>200<')
-        self.assertContains(response, 'bi-trophy-fill')
-        self.assertContains(response, 'Sem premio')
+        self.assertContains(response, 'Concurso 100')
+        self.assertContains(response, 'Concurso 200')
+        self.assertContains(response, 'lq-status-win')
+        self.assertContains(response, 'Sem prêmio')
 
     def test_empty_state_message_shown_when_no_pending_notifications(self):
         response = self.client.get(reverse('notifications'))
@@ -2099,9 +2316,9 @@ class NotificationsViewTests(TestCase):
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('notifications'))
         self.assertEqual(response.context['notificacoes'][0].matched_numbers, [1, 2])
-        self.assertContains(response, 'class="numero-bola"', count=2)
+        self.assertContains(response, 'lq-ball-hit', count=2)
         rendered_numbers = re.findall(
-            r'class="numero-bola"[^>]*>\s*(\d{2})\s*<', response.content.decode()
+            r'lq-ball-hit"[^>]*>\s*(\d{2})\s*<', response.content.decode()
         )
         self.assertEqual(rendered_numbers, ['01', '02'])
 
@@ -2171,7 +2388,7 @@ class NotificationsViewTests(TestCase):
         HitNotification.objects.create(bet=bet, won=False)
         response = self.client.get(reverse('notifications'))
         self.assertEqual(response.context['notificacoes'][0].matched_numbers, [])
-        self.assertNotContains(response, 'class="numero-bola"')
+        self.assertNotContains(response, 'lq-ball-hit')
 
     def test_prize_value_shown_when_won(self):
         bet = GeneratedBet.objects.create(
@@ -2191,7 +2408,7 @@ class NotificationsViewTests(TestCase):
         notification = HitNotification.objects.create(bet=bet, won=True)
         response = self.client.get(reverse('notifications'))
         self.assertContains(response, reverse('mark_notification_read', args=[notification.pk]))
-        self.assertContains(response, 'bi-check2')
+        self.assertContains(response, 'Marcar como lida')
 
 
 class MarkNotificationReadViewTests(TestCase):
@@ -2203,6 +2420,14 @@ class MarkNotificationReadViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
         )
         self.notification = HitNotification.objects.create(bet=self.bet, won=True)
+
+    def test_next_url_only_redirects_to_same_site(self):
+        url = reverse('mark_notification_read', args=[self.notification.pk])
+        for evil in ('//evil.example/x', 'https://evil.example/x', '/\evil.example'):
+            response = self.client.post(url, {'next': evil})
+            self.assertRedirects(response, reverse('notifications'), fetch_redirect_response=False)
+        response = self.client.post(url, {'next': '/historico/'})
+        self.assertRedirects(response, '/historico/', fetch_redirect_response=False)
 
     def test_marks_only_the_clicked_notification_as_read(self):
         other_bet = GeneratedBet.objects.create(
@@ -3194,3 +3419,614 @@ class LotteryResultPurgeAdminTests(TestCase):
         update_monthly_prize_values()
         fetch_daily_results()
         self.assertTrue(LotteryResult.objects.filter(pk=old.pk).exists())
+
+
+class RuleNamesByGameTests(TestCase):
+    def test_keys_match_games_config_and_names_are_defined(self):
+        self.assertEqual(set(RULE_NAMES_BY_GAME), set(GAMES_CONFIG))
+        for names in RULE_NAMES_BY_GAME.values():
+            self.assertEqual(len(names), len(set(names)))
+            for name in names:
+                self.assertIn(name, RULE_DEFINITIONS)
+
+    def test_row_and_column_rules_for_every_game_with_a_grid_except_lotomania(self):
+        for game in ('Mega-sena', 'Milionaria', 'Quina', 'Dupla-Sena', 'Lotofacil'):
+            self.assertIn('limit_row_count', RULE_NAMES_BY_GAME[game])
+            self.assertIn('limit_column_count', RULE_NAMES_BY_GAME[game])
+            self.assertIn(game, GAME_GRID)
+        self.assertNotIn('limit_row_count', RULE_NAMES_BY_GAME['Lotomania'])
+        self.assertNotIn('limit_column_count', RULE_NAMES_BY_GAME['Lotomania'])
+
+    def test_rule_counts_match_the_boss_lists(self):
+        counts = {game: len(names) for game, names in RULE_NAMES_BY_GAME.items()}
+        self.assertEqual(counts, {
+            'Mega-sena': 5, 'Milionaria': 5, 'Quina': 5, 'Dupla-Sena': 5, 'Lotofacil': 7, 'Lotomania': 3,
+        })
+
+
+class GenerationRuleModelTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rule-model@example.com', password='SenhaForte123')
+
+    def test_unique_per_user_game_rule(self):
+        GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count', enabled=True, numeric_value=2)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+
+    def test_check_constraint_rejects_both_values(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(
+                user=self.user, game='Quina', rule_name='distribution_type',
+                numeric_value=1, choice_value='homogenea',
+            )
+
+    def test_disabled_row_without_value_is_allowed(self):
+        rule = GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+        self.assertFalse(rule.enabled)
+        self.assertIsNone(rule.numeric_value)
+
+    def test_clean_rejects_rule_name_from_another_game(self):
+        rule = GenerationRule(user=self.user, game='Lotomania', rule_name='limit_row_count')
+        with self.assertRaises(ValidationError):
+            rule.clean()
+
+
+class GenerationRulesViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
+        self.other = User.objects.create_user(email='rules-other@example.com', password='SenhaForte123')
+        self.url = reverse('generation_rules', kwargs={'jogo': 'mega-sena'})
+        self.client.force_login(self.user)
+
+    def _post(self, data, url=None):
+        return self.client.post(url or self.url, data)
+
+    def test_anonymous_redirects_to_login(self):
+        self.client.logout()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('login', response.url)
+
+    def test_unknown_game_is_404(self):
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'xpto'}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_first_visit_shows_default_with_disabled_value_fields(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usando regras padrão do sistema')
+        self.assertNotContains(response, 'data-open-dialog="modal-restaurar"')
+        for name in RULE_NAMES_BY_GAME['Mega-sena']:
+            self.assertContains(response, f'name="value_{name}"')
+        self.assertContains(response, 'aria-describedby="help-limit_row_count"')
+        self.assertFalse(GenerationRule.objects.exists())
+        html = response.content.decode()
+        for name in RULE_NAMES_BY_GAME['Mega-sena']:
+            field = html[html.index('id="value-%s"' % name):]
+            field = field[:field.index('>')]
+            self.assertIn('disabled', field, name)
+
+    def test_enabled_rule_renders_editable_value_and_restore_modal_when_customized(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        html = self.client.get(self.url).content.decode()
+        enabled_field = html[html.index('id="value-limit_sequence_count"'):]
+        self.assertNotIn('disabled', enabled_field[:enabled_field.index('>')])
+        disabled_field = html[html.index('id="value-limit_sequence_pairs"'):]
+        self.assertIn('disabled', disabled_field[:disabled_field.index('>')])
+        self.assertIn('data-open-dialog="modal-restaurar"', html)
+        self.assertIn('name="restaurar"', html)
+
+    def test_save_writes_one_row_per_rule_and_shows_customized(self):
+        response = self._post({
+            'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2',
+            'enabled_distribution_type': 'on', 'value_distribution_type': 'homogenea',
+        })
+        self.assertRedirects(response, self.url)
+        rows = GenerationRule.objects.filter(user=self.user, game='Mega-sena')
+        self.assertEqual(rows.count(), len(RULE_NAMES_BY_GAME['Mega-sena']))
+        self.assertEqual(rows.get(rule_name='limit_sequence_count').numeric_value, 2)
+        self.assertTrue(rows.get(rule_name='limit_sequence_count').enabled)
+        self.assertEqual(rows.get(rule_name='distribution_type').choice_value, 'homogenea')
+        self.assertFalse(rows.get(rule_name='limit_row_count').enabled)
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Personalizado por você')
+        self.assertContains(response, 'value="2"')
+
+    def test_unchecking_keeps_row_disabled_and_preserves_value(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '3'})
+        # Toggle desligado: o navegador nao envia o campo desabilitado.
+        self._post({})
+        rule = GenerationRule.objects.get(user=self.user, game='Mega-sena', rule_name='limit_sequence_count')
+        self.assertFalse(rule.enabled)
+        self.assertEqual(rule.numeric_value, 3)
+        self.assertEqual(GenerationRule.objects.filter(user=self.user, game='Mega-sena').count(), 5)
+
+    def test_invalid_values_save_nothing_and_show_range_error(self):
+        for bad in ('', '0', '61', '2.5', 'abc', '-1'):
+            response = self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': bad})
+            self.assertEqual(response.status_code, 200, bad)
+            self.assertContains(response, 'entre 1 e 60', msg_prefix=bad)
+            self.assertFalse(GenerationRule.objects.exists(), bad)
+
+    def test_huge_digit_string_is_a_validation_error_not_a_crash(self):
+        response = self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '9' * 5000})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'entre 1 e 60')
+        self.assertFalse(GenerationRule.objects.exists())
+
+    def test_invalid_post_preserves_what_the_user_typed(self):
+        response = self._post({
+            'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2',
+            'enabled_limit_sequence_pairs': 'on', 'value_limit_sequence_pairs': '99',
+        })
+        self.assertContains(response, 'entre 1 e 60')
+        html = response.content.decode()
+        self.assertIn('value="2"', html)
+        self.assertIn('value="99"', html)
+
+    def test_invalid_choice_is_rejected(self):
+        response = self._post({'enabled_distribution_type': 'on', 'value_distribution_type': 'xyz'})
+        self.assertContains(response, 'Escolha um tipo de distribuição.')
+        self.assertFalse(GenerationRule.objects.exists())
+
+    def test_restore_deletes_only_this_user_and_game(self):
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        GenerationRule.objects.create(user=self.user, game='Quina', rule_name='limit_sequence_count')
+        GenerationRule.objects.create(user=self.other, game='Mega-sena', rule_name='limit_sequence_count')
+        response = self._post({'restaurar': '1'})
+        self.assertRedirects(response, self.url)
+        self.assertFalse(GenerationRule.objects.filter(user=self.user, game='Mega-sena').exists())
+        self.assertTrue(GenerationRule.objects.filter(user=self.user, game='Quina').exists())
+        self.assertTrue(GenerationRule.objects.filter(user=self.other, game='Mega-sena').exists())
+
+    def test_users_are_isolated(self):
+        GenerationRule.objects.create(
+            user=self.other, game='Mega-sena', rule_name='limit_sequence_count', enabled=True, numeric_value=4,
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Usando regras padrão do sistema')
+        self._post({'enabled_limit_sequence_count': 'on', 'value_limit_sequence_count': '2'})
+        self.assertEqual(
+            GenerationRule.objects.get(user=self.other, game='Mega-sena', rule_name='limit_sequence_count').numeric_value, 4,
+        )
+
+    def test_sequence_protection_modal_only_for_sequence_games(self):
+        self.assertContains(self.client.get(self.url), 'id="modal-sem-sequencia"')
+        lotomania = reverse('generation_rules', kwargs={'jogo': 'lotomania'})
+        self.assertNotContains(self.client.get(lotomania), 'id="modal-sem-sequencia"')
+
+    def test_row_column_fields_shown_for_quina_and_hidden_for_lotomania(self):
+        quina = self.client.get(reverse('generation_rules', kwargs={'jogo': 'quina'}))
+        self.assertContains(quina, 'name="value_limit_row_count"')
+        self.assertContains(quina, 'name="value_limit_column_count"')
+        self.assertContains(quina, '8 linhas x 10 colunas')
+        lotomania = self.client.get(reverse('generation_rules', kwargs={'jogo': 'lotomania'}))
+        self.assertNotContains(lotomania, 'limit_row_count')
+
+    def test_home_links_to_rules_of_each_game(self):
+        response = self.client.get(reverse('home'))
+        for game in GAMES_CONFIG:
+            self.assertContains(response, reverse('generation_rules', kwargs={'jogo': game.lower()}))
+
+
+def _rule(name, value=None, enabled=True, choice=None):
+    return GenerationRule(rule_name=name, numeric_value=value, choice_value=choice, enabled=enabled)
+
+
+class BetSatisfiesRulesTests(TestCase):
+    def test_no_rules_is_ok(self):
+        self.assertEqual(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', []), (True, []))
+
+    def test_sequence_count_is_max_run_length(self):
+        rules = [_rule('limit_sequence_count', 2)]
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 3, 20, 30, 40], [], 'Mega-sena', rules),
+            (False, ['limit_sequence_count']),
+        )
+
+    def test_sequence_count_one_forbids_any_pair(self):
+        rules = [_rule('limit_sequence_count', 1)]
+        self.assertFalse(bet_satisfies_rules([1, 2, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertTrue(bet_satisfies_rules([1, 3, 10, 20, 30, 40], [], 'Mega-sena', rules)[0])
+
+    def test_sequence_pairs_counts_runs(self):
+        rules = [_rule('limit_sequence_pairs', 1)]
+        self.assertTrue(bet_satisfies_rules([1, 2, 3, 20, 30, 40], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 20, 21, 40, 50], [], 'Mega-sena', rules)[1],
+            ['limit_sequence_pairs'],
+        )
+
+    def test_row_and_column_limits(self):
+        # Mega-sena 6x10: 1..10 e a linha 1; coluna 1 = 1, 11, 21...
+        self.assertEqual(
+            bet_satisfies_rules([1, 3, 5, 30, 40, 55], [], 'Mega-sena', [_rule('limit_row_count', 2)]),
+            (False, ['limit_row_count']),
+        )
+        self.assertTrue(bet_satisfies_rules([1, 13, 25, 37, 49, 60], [], 'Mega-sena', [_rule('limit_row_count', 1)])[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 11, 21, 34, 45, 58], [], 'Mega-sena', [_rule('limit_column_count', 2)]),
+            (False, ['limit_column_count']),
+        )
+
+    def test_quina_grid_is_8_rows_by_10(self):
+        rules = [_rule('limit_row_count', 1)]
+        self.assertFalse(bet_satisfies_rules([71, 72, 1, 15, 33], [], 'Quina', rules)[0])
+
+    def test_homogeneous_requires_one_per_band(self):
+        rules = [_rule('distribution_type', choice='homogenea')]
+        self.assertTrue(bet_satisfies_rules([5, 15, 25, 35, 45, 55], [], 'Mega-sena', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 25, 35, 45, 55], [], 'Mega-sena', rules)[1], ['distribution_type'],
+        )
+
+    def test_homogeneous_lotofacil_needs_three_per_row(self):
+        rules = [_rule('distribution_type', choice='homogenea')]
+        ok = [1, 2, 3, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23]
+        self.assertTrue(bet_satisfies_rules(ok, [], 'Lotofacil', rules)[0])
+        self.assertFalse(bet_satisfies_rules(list(range(11, 26)), [], 'Lotofacil', rules)[0])
+
+    def test_min_sequences(self):
+        rules = [_rule('limit_min_sequences', 2)]
+        self.assertFalse(bet_satisfies_rules([1, 2, 10, 20, 30], [], 'Lotofacil', rules)[0])
+        self.assertEqual(
+            bet_satisfies_rules([1, 5, 9, 13], [], 'Lotofacil', rules)[1], ['limit_min_sequences'],
+        )
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 11, 20], [], 'Lotofacil', rules)[0])
+
+    def test_min_gap_between_sequences(self):
+        rules = [_rule('limit_min_gap_between_sequences', 2)]
+        # sequencias 1-2 e 4-5: 1 numero entre elas (3) -> viola
+        self.assertEqual(
+            bet_satisfies_rules([1, 2, 4, 5, 20], [], 'Lotofacil', rules)[1],
+            ['limit_min_gap_between_sequences'],
+        )
+        self.assertTrue(bet_satisfies_rules([1, 2, 5, 6, 20], [], 'Lotofacil', rules)[0])
+        # 0 ou 1 sequencia: satisfeita
+        self.assertTrue(bet_satisfies_rules([1, 2, 10, 20], [], 'Lotofacil', rules)[0])
+        self.assertTrue(bet_satisfies_rules([1, 5, 9], [], 'Lotofacil', rules)[0])
+
+    def test_min_rules_ignored_without_value_or_disabled(self):
+        rules = [_rule('limit_min_sequences', None), _rule('limit_min_gap_between_sequences', 5, enabled=False)]
+        self.assertTrue(bet_satisfies_rules([1, 5, 9], [], 'Lotofacil', rules)[0])
+
+    def test_random_distribution_never_violates(self):
+        rules = [_rule('distribution_type', choice='totalmente_aleatoria')]
+        self.assertTrue(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules)[0])
+
+    def test_returns_complete_list_of_violations(self):
+        rules = [_rule('limit_sequence_count', 1), _rule('limit_row_count', 1)]
+        ok, violated = bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules)
+        self.assertFalse(ok)
+        self.assertEqual(sorted(violated), ['limit_row_count', 'limit_sequence_count'])
+
+    def test_ignores_disabled_valueless_and_unknown_rules(self):
+        rules = [
+            _rule('limit_sequence_count', 1, enabled=False),
+            _rule('limit_sequence_pairs', None),
+            _rule('unknown_rule', 5),
+            _rule('limit_min_sequences', None),
+        ]
+        self.assertEqual(bet_satisfies_rules([1, 2, 3, 4, 5, 6], [], 'Mega-sena', rules), (True, []))
+
+
+class GenerateBetWithRulesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
+
+    def _save(self, name, value=None, enabled=True, choice=None, game='Mega-sena'):
+        GenerationRule.objects.create(
+            user=self.user, game=game, rule_name=name, numeric_value=value,
+            choice_value=choice, enabled=enabled,
+        )
+
+    def test_custom_rules_are_always_satisfied(self):
+        self._save('limit_sequence_count', 1)
+        self._save('limit_row_count', 2)
+        rules = list(GenerationRule.objects.filter(user=self.user))
+        for _ in range(30):
+            nums, _clovers = generate_bet('Mega-sena', self.user)
+            self.assertEqual(len(nums), 6)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Mega-sena', rules)[0])
+
+    def test_customized_ignores_adaptive_sequence_rule(self):
+        self._save('limit_sequence_pairs', 6, enabled=False)
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence') as recent:
+            for _ in range(5):
+                generate_bet('Mega-sena', self.user)
+            recent.assert_not_called()
+
+    def test_all_disabled_means_free_draw(self):
+        for name in RULE_NAMES_BY_GAME['Quina']:
+            self._save(name, None, enabled=False, game='Quina')
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence') as recent:
+            nums, _ = generate_bet('Quina', self.user)
+            recent.assert_not_called()
+        self.assertEqual(len(nums), 5)
+
+    def test_no_rows_keeps_adaptive_behavior(self):
+        GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='1',
+            numbers=[1, 2, 10, 20, 30, 40], clovers=[], sequential_pairs=1,
+        )
+        for _ in range(20):
+            nums, _ = generate_bet('Mega-sena', self.user)
+            self.assertEqual(count_sequential_pairs(nums), 0)
+
+    def test_rules_of_other_game_do_not_apply(self):
+        self._save('limit_sequence_count', 1, game='Quina')
+        with patch('apps.loterias_core.utils.recent_bets_had_sequence', return_value=False) as recent:
+            generate_bet('Mega-sena', self.user)
+            recent.assert_called()
+
+    def test_homogeneous_generation_one_per_band(self):
+        self._save('distribution_type', choice='homogenea')
+        for extra in ('Quina', 'Milionaria', 'Dupla-Sena'):
+            self._save('distribution_type', choice='homogenea', game=extra)
+        for game_name in ('Mega-sena', 'Quina', 'Milionaria', 'Dupla-Sena'):
+            rules = list(GenerationRule.objects.filter(user=self.user, game=game_name))
+            for _ in range(20):
+                nums, _ = generate_bet(game_name, self.user)
+                self.assertEqual(len(nums), GAMES_CONFIG[game_name]['bets_count'])
+                self.assertEqual(len(set(nums)), len(nums))
+                self.assertTrue(bet_satisfies_rules(nums, [], game_name, rules)[0])
+
+    def test_homogeneous_lotofacil_generates_three_per_row(self):
+        self._save('distribution_type', choice='homogenea', game='Lotofacil')
+        for _ in range(20):
+            nums, _ = generate_bet('Lotofacil', self.user)
+            self.assertEqual(len(set(nums)), 15)
+            for row in range(5):
+                self.assertEqual(sum(1 for n in nums if row * 5 < n <= row * 5 + 5), 3)
+
+    def test_lotofacil_min_sequences_and_gap_generation(self):
+        self._save('limit_min_sequences', 3, game='Lotofacil')
+        self._save('limit_min_gap_between_sequences', 1, game='Lotofacil')
+        rules = list(GenerationRule.objects.filter(user=self.user, game='Lotofacil'))
+        for _ in range(10):
+            nums, _, relaxed = generate_bet_with_relaxation('Lotofacil', self.user)
+            self.assertIsNone(relaxed)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Lotofacil', rules)[0])
+
+    def test_lotomania_generation_respects_its_three_rules(self):
+        self._save('limit_sequence_count', 6, game='Lotomania')
+        self._save('limit_min_sequences', 4, game='Lotomania')
+        self._save('limit_min_gap_between_sequences', 1, game='Lotomania')
+        rules = list(GenerationRule.objects.filter(user=self.user, game='Lotomania'))
+        for _ in range(5):
+            nums, _clovers, relaxed = generate_bet_with_relaxation('Lotomania', self.user)
+            self.assertIsNone(relaxed)
+            self.assertEqual(len(set(nums)), 50)
+            self.assertTrue(bet_satisfies_rules(nums, [], 'Lotomania', rules)[0])
+
+    def test_milionaria_still_returns_clovers(self):
+        self._save('limit_sequence_count', 2, game='Milionaria')
+        nums, clovers = generate_bet('Milionaria', self.user)
+        self.assertEqual(len(clovers), 2)
+
+    def test_impossible_rules_return_none(self):
+        """Duas regras inatingiveis: relaxar UMA nao basta -- nunca relaxa uma segunda (Story 4.5)."""
+        self._save('limit_column_count', 0)
+        self._save('limit_row_count', 0)
+        self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
+        self.assertEqual(generate_bet_with_relaxation('Mega-sena', self.user), (None, None, None))
+
+    def test_relaxes_the_only_impossible_rule_in_memory(self):
+        """Story 4.5 (FR-22): uma regra inatingivel e relaxada, o jogo sai e o banco nao muda."""
+        self._save('limit_sequence_count', 3)
+        self._save('limit_row_count', 0)
+        nums, clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertEqual(len(nums), 6)
+        self.assertEqual(relaxed, 'limit_row_count')
+        self.assertTrue(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').enabled)
+        self.assertEqual(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').numeric_value, 0)
+
+    def test_relaxation_picks_newest_updated_at_among_violated_rules_only(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+        from django.utils import timezone
+        self._save('limit_sequence_count', 1)
+        self._save('limit_sequence_pairs', 1)
+        self._save('limit_row_count', 5)  # a mais recente de todas, mas NAO violada
+        base = timezone.now()
+        for offset, name in enumerate(('limit_sequence_count', 'limit_sequence_pairs', 'limit_row_count')):
+            GenerationRule.objects.filter(user=self.user, rule_name=name).update(updated_at=base + timedelta(minutes=offset))
+        calls = []
+
+        def fake_draw(config, game, rules, attempts=10000):
+            calls.append([rule.rule_name for rule in rules])
+            if len(calls) == 1:
+                return None, ['limit_sequence_count', 'limit_sequence_pairs']
+            return [1, 12, 23, 34, 45, 56], []
+
+        with patch('apps.loterias_core.utils._draw_with_rules', side_effect=fake_draw):
+            nums, _clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertEqual(relaxed, 'limit_sequence_pairs')
+        self.assertEqual(sorted(calls[1]), ['limit_row_count', 'limit_sequence_count'])
+        self.assertEqual(nums, [1, 12, 23, 34, 45, 56])
+
+    def test_default_mode_never_relaxes_and_wrapper_keeps_two_values(self):
+        nums, clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
+        self.assertIsNone(relaxed)
+        self.assertEqual(len(generate_bet('Mega-sena', self.user)), 2)
+
+
+class RelaxationViewsTests(TestCase):
+    """Story 4.5: regra relaxada -> jogo gerado como sucesso + aviso nomeando regra e Jogo."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='relax@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
+        )
+        self.expected = (
+            "O jogo de Mega-sena foi gerado relaxando a regra "
+            "'Limita quantidade de números na mesma linha do volante'"
+        )
+
+    def test_create_view_saves_bet_and_names_relaxed_rule(self):
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
+        msgs = [(m.level_tag, m.message) for m in response.context['messages']]
+        self.assertTrue(any(level == 'success' for level, _ in msgs))
+        self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
+
+    def test_regenerate_view_replaces_bet_and_names_relaxed_rule(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+        )
+        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        bet.refresh_from_db()
+        self.assertNotEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        msgs = [(m.level_tag, m.message) for m in response.context['messages']]
+        self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
+
+    def test_api_returns_bet_and_relaxed_rule_label(self):
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(len(body['numeros']), 6)
+        self.assertEqual(body['regra_relaxada'], 'Limita quantidade de números na mesma linha do volante')
+
+    def test_no_relaxation_message_without_conflict(self):
+        GenerationRule.objects.filter(user=self.user).delete()
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertFalse(any(m.level_tag == 'warning' for m in response.context['messages']))
+
+
+class GenerationRulesViewsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='rv@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_column_count', numeric_value=0, enabled=True,
+        )
+        GenerationRule.objects.create(
+            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
+        )
+
+    def test_create_view_warns_and_saves_nothing_when_impossible(self):
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertContains(response, 'com as suas regras de geracao')
+        self.assertNotContains(response, 'apos muitas tentativas')
+
+    def test_regenerate_view_keeps_bet_when_impossible(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+        )
+        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        bet.refresh_from_db()
+        self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        self.assertContains(response, 'com as suas regras de geracao')
+
+    def test_api_returns_422_when_impossible(self):
+        response = self.client.post(
+            reverse('api_create_bet'),
+            data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('regras de geracao', response.json()['error'])
+
+
+class RepeatedBetsAllowedTests(TestCase):
+    """Boss (2026-09-21): repetir o mesmo jogo no mesmo Concurso ou em varios Concursos e permitido."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='repete@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def test_same_numbers_can_be_saved_repeatedly_and_across_contests(self):
+        fixed = ([1, 2, 3, 4, 5, 6], [], None)
+        with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=fixed):
+            for contest in ('3000', '3000', '3001'):
+                self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': contest})
+        self.assertEqual(GeneratedBet.objects.filter(user=self.user, numbers=[1, 2, 3, 4, 5, 6]).count(), 3)
+
+    def test_regenerate_can_return_same_numbers_as_another_bet(self):
+        GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='1', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        bet = GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='2', numbers=[7, 8, 9, 10, 11, 12], clovers=[])
+        with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=([1, 2, 3, 4, 5, 6], [], None)):
+            self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        bet.refresh_from_db()
+        self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+
+    def test_regenerate_deletes_stale_hit_notification(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='5', numbers=[1, 2, 3, 4, 5], clovers=[],
+            result_checked=True, hits=5, prize=Decimal('100'),
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+
+class NotificationMatchedNumbersTests(TestCase):
+    """Retro Epic 2 (F3): numeros batidos reusam calculate_bet_prize (2o sorteio da Dupla-Sena, trevos)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='batidos@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    def _notification(self, game, numbers, clovers, result_kwargs):
+        bet = GeneratedBet.objects.create(user=self.user, game=game, contest='10', numbers=numbers, clovers=clovers)
+        LotteryResult.objects.create(game=game, contest='10', **result_kwargs)
+        HitNotification.objects.create(bet=bet, won=True)
+        return self.client.get(reverse('notifications')).context['notificacoes'][0]
+
+    def test_dupla_sena_shows_matches_of_second_draw_when_it_pays_more(self):
+        n = self._notification('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], {
+            'numbers': [50, 51, 52, 53, 54, 55],
+            'numbers_second_draw': [1, 2, 3, 4, 5, 6],
+            'prizes': {}, 'prizes_second_draw': {'6': {'value': 'R$ 1.000,00'}},
+        })
+        self.assertEqual(n.matched_numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(n.matched_draw, 2)
+        self.assertContains(self.client.get(reverse('notifications')), '2º sorteio')
+
+    def test_dupla_sena_first_draw_keeps_first(self):
+        n = self._notification('Dupla-Sena', [1, 2, 3, 4, 5, 6], [], {
+            'numbers': [1, 2, 3, 4, 5, 6], 'numbers_second_draw': [50, 51, 52, 53, 54, 55],
+            'prizes': {'6': {'value': 'R$ 1.000,00'}}, 'prizes_second_draw': {},
+        })
+        self.assertEqual(n.matched_numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(n.matched_draw, 1)
+
+    def test_milionaria_shows_matched_clovers(self):
+        n = self._notification('Milionaria', [1, 2, 3, 4, 5, 6], [3, 4], {
+            'numbers': [1, 2, 3, 4, 5, 6], 'clovers': [4, 6],
+            'prizes': {'6': {'value': 'R$ 5.000,00'}},
+        })
+        self.assertEqual(n.matched_clovers, [4])
+        self.assertContains(self.client.get(reverse('notifications')), 'lq-ball-clover')
+
+
+class LottiqBaseTemplateTests(TestCase):
+    """Story 5.1: base com a marca e o CSS do Lottiq Design System."""
+
+    def test_anonymous_header_shows_brand_and_cta(self):
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, '<title>Entrar - Lottiq</title>', html=False)
+        self.assertContains(response, 'lottiq-mark.svg')
+        self.assertContains(response, 'css/lottiq.css')
+        self.assertContains(response, 'Criar conta grátis')
+        self.assertNotContains(response, 'Gerador de Loterias')
+
+    def test_logged_user_sees_nav_with_active_item_and_no_old_navbar(self):
+        user = User.objects.create_user(email='nav@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, 'Meus jogos')
+        self.assertContains(response, 'aria-current="page"')
+        self.assertNotContains(response, 'navbar-brand')
+
+    def test_static_files_exist(self):
+        from django.contrib.staticfiles import finders
+        for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
+            self.assertIsNotNone(finders.find(path), path)

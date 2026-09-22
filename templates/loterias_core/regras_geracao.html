@@ -1,0 +1,186 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Regras de Geração - {{ game_name }} - Lottiq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rules-page { padding: 28px 0 60px; }
+    .rules-back { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font: 500 14px var(--font-body); margin-bottom: 16px; }
+    .rules-back:hover { color: var(--teal-700); }
+    .rules-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .rules-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .rules-head-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .rule-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 0; border-bottom: 1px solid var(--border-default); flex-wrap: wrap; }
+    .rule-row:last-child { border-bottom: 0; }
+    .rule-info { flex: 1; min-width: 220px; }
+    .rule-info label { font: 600 15px var(--font-body); color: var(--lq-navy); display: block; margin-bottom: 4px; }
+    .rule-help { font: 400 13px/1.5 var(--font-body); color: var(--text-muted); margin: 0; max-width: 440px; }
+    .rule-error { font: 600 12px var(--font-body); color: var(--red-700); margin: 4px 0 0; }
+    .rule-controls { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+    .rule-switch-label { min-width: 72px; }
+    .rule-value { width: 120px; }
+    .rule-value.is-choice { width: 200px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lq-container rules-page">
+    <a class="rules-back" href="{% url 'home' %}"><span class="ms" aria-hidden="true">chevron_left</span>Voltar aos jogos</a>
+
+    <div class="rules-head">
+        <h1>Regras de Geração — {{ game_name }}</h1>
+        <div class="rules-head-right">
+            {% if is_customized %}
+            <span class="lq-status lq-status-win" id="regras-indicador"><span class="ms" style="font-size:14px;" aria-hidden="true">check</span> Personalizado por você</span>
+            <button type="button" class="lq-btn lq-btn-outline lq-btn-sm" data-open-dialog="modal-restaurar">Restaurar padrão</button>
+            {% else %}
+            <span class="lq-status lq-status-empty" id="regras-indicador"><span class="ms" style="font-size:14px;" aria-hidden="true">settings</span> Usando regras padrão do sistema</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" id="form-regras" novalidate>
+        {% csrf_token %}
+        <div class="lq-card">
+            {% for row in rows %}
+            <div class="rule-row" data-rule="{{ row.rule_name }}">
+                <div class="rule-info">
+                    <label for="enabled-{{ row.rule_name }}">{{ row.label }}</label>
+                    {% if row.help %}<p class="rule-help" id="help-{{ row.rule_name }}">{{ row.help }}</p>{% endif %}
+                    {% if row.error %}<p class="rule-error" id="error-{{ row.rule_name }}" role="alert">{{ row.error }}</p>{% endif %}
+                </div>
+                <div class="rule-controls">
+                    <label class="lq-switch rule-switch-label" for="enabled-{{ row.rule_name }}">
+                        <input type="checkbox" class="rule-toggle" id="enabled-{{ row.rule_name }}" name="enabled_{{ row.rule_name }}"
+                               {% if row.help %}aria-describedby="help-{{ row.rule_name }}"{% endif %}
+                               {% if row.enabled %}checked{% endif %}>
+                        <span class="lq-switch-track" aria-hidden="true"></span>
+                        <span class="rule-switch-text" aria-hidden="true">{% if row.enabled %}Sim{% else %}Não{% endif %}</span>
+                    </label>
+                    {% if row.kind == 'choice' %}
+                    <select class="lq-select rule-value is-choice" id="value-{{ row.rule_name }}" name="value_{{ row.rule_name }}"
+                            aria-label="Valor: {{ row.label }}"
+                            {% if row.error %}aria-invalid="true" aria-describedby="error-{{ row.rule_name }}"{% endif %}
+                            {% if not row.enabled %}disabled{% endif %}>
+                        <option value="">Selecione</option>
+                        {% for code, text in row.choices %}
+                        <option value="{{ code }}" {% if row.value == code %}selected{% endif %}>{{ text }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <input type="number" class="lq-input is-mono rule-value" id="value-{{ row.rule_name }}"
+                           name="value_{{ row.rule_name }}" min="1" max="{{ row.max }}" step="1" placeholder="—"
+                           aria-label="Valor: {{ row.label }}"
+                           {% if row.error %}aria-invalid="true" aria-describedby="error-{{ row.rule_name }}"{% endif %}
+                           value="{% if row.value != None %}{{ row.value }}{% endif %}"
+                           {% if not row.enabled %}disabled{% endif %}>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="regras-live" class="lq-sr-only" aria-live="polite" aria-atomic="true"></div>
+
+        <p class="lq-small" style="display:flex; gap:8px; align-items:flex-start; margin-top:16px;">
+            <span class="ms" aria-hidden="true" style="font-size:18px;">info</span>
+            As mudanças valem a partir do próximo jogo gerado — jogos já gerados não são recalculados.
+        </p>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+            <button type="submit" class="lq-btn lq-btn-primary" id="btn-salvar-regras">Salvar regras</button>
+        </div>
+    </form>
+</div>
+
+{% if is_customized %}
+<dialog class="lq-dialog" id="modal-restaurar" aria-labelledby="modal-restaurar-titulo">
+    <form method="post">
+        {% csrf_token %}
+        <div class="lq-dialog-head">
+            <h2 id="modal-restaurar-titulo">Restaurar padrão?</h2>
+            <button type="button" class="lq-icon-btn" data-close-dialog aria-label="Fechar"><span class="ms" aria-hidden="true">close</span></button>
+        </div>
+        <div class="lq-dialog-body">Suas regras personalizadas de {{ game_name }} serão apagadas e o jogo volta a usar as regras padrão do sistema.</div>
+        <div class="lq-dialog-foot">
+            <button type="button" class="lq-btn lq-btn-outline" data-close-dialog>Cancelar</button>
+            <button type="submit" name="restaurar" value="1" class="lq-btn" style="background:var(--red-700); color:#fff;">Restaurar padrão</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
+{% if requires_sequence_protection %}
+<dialog class="lq-dialog" id="modal-sem-sequencia" aria-labelledby="modal-sem-sequencia-titulo">
+    <div class="lq-dialog-head">
+        <h2 id="modal-sem-sequencia-titulo">Salvar sem proteção de sequência?</h2>
+        <button type="button" class="lq-icon-btn" data-close-dialog aria-label="Fechar"><span class="ms" aria-hidden="true">close</span></button>
+    </div>
+    <div class="lq-dialog-body">Nenhuma regra de sequência está ligada para {{ game_name }}. Os jogos gerados poderão ter qualquer quantidade de números em sequência.</div>
+    <div class="lq-dialog-foot">
+        <button type="button" class="lq-btn lq-btn-outline" data-close-dialog>Cancelar</button>
+        <button type="button" class="lq-btn lq-btn-primary" id="btn-confirmar-sem-sequencia">Salvar mesmo assim</button>
+    </div>
+</dialog>
+{% endif %}
+
+{{ sequence_rule_names|json_script:"sequence-rule-names" }}
+<script>
+(function () {
+    var form = document.getElementById('form-regras');
+    var live = document.getElementById('regras-live');
+
+    // O campo Valor nunca some: o switch so alterna o atributo disabled nativo.
+    document.querySelectorAll('.rule-toggle').forEach(function (toggle) {
+        toggle.addEventListener('change', function () {
+            var row = toggle.closest('.rule-row');
+            var field = row.querySelector('.rule-value');
+            var text = row.querySelector('.rule-switch-text');
+            var label = row.querySelector('.rule-info label').textContent.trim();
+            field.disabled = !toggle.checked;
+            text.textContent = toggle.checked ? 'Sim' : 'Não';
+            live.textContent = label + ': ' + (toggle.checked ? 'ligada, campo Valor habilitado.' : 'desligada, campo Valor desabilitado.');
+        });
+    });
+
+    // Dialogs nativos (<dialog>), sem Bootstrap JS: showModal()/close() ja tratam foco e Esc.
+    document.querySelectorAll('[data-open-dialog]').forEach(function (opener) {
+        opener.addEventListener('click', function () {
+            document.getElementById(opener.dataset.openDialog).showModal();
+        });
+    });
+    document.querySelectorAll('.lq-dialog').forEach(function (dialog) {
+        dialog.querySelectorAll('[data-close-dialog]').forEach(function (btn) {
+            btn.addEventListener('click', function () { dialog.close(); });
+        });
+    });
+
+    {% if requires_sequence_protection %}
+    var sequenceRules = JSON.parse(document.getElementById('sequence-rule-names').textContent);
+    var modalEl = document.getElementById('modal-sem-sequencia');
+    var saveButton = document.getElementById('btn-salvar-regras');
+    var confirmed = false;
+
+    function hasSequenceProtection() {
+        return sequenceRules.some(function (name) {
+            var toggle = document.getElementById('enabled-' + name);
+            return toggle && toggle.checked;
+        });
+    }
+
+    form.addEventListener('submit', function (event) {
+        if (confirmed || hasSequenceProtection()) { return; }
+        event.preventDefault();
+        modalEl.showModal();
+    });
+    document.getElementById('btn-confirmar-sem-sequencia').addEventListener('click', function () {
+        confirmed = true;
+        modalEl.close();
+        form.submit();
+    });
+    modalEl.addEventListener('close', function () { saveButton.focus(); });
+    {% endif %}
+})();
+</script>
+{% endblock %}

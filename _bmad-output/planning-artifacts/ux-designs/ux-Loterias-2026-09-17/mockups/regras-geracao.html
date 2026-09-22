@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Key Screen — Regras de Geração</title>
+<style>
+/*
+  Governed by EXPERIENCE.md (adendo 2026-09-17):
+  - Information Architecture: "/regras/<jogo>/" (nova, FR-18) — pagina por Jogo, nao aba/JS
+  - Component Patterns: rule-toggle-row (novo, FR-18 a FR-21) — os 5 campos da familia
+    Mega-Sena/Dupla-Sena/Quina/+Milionaria (FR-19); texto de ajuda linha/coluna [NOTE FOR UX,
+    PRD §8.5 nao concluido — texto abaixo e placeholder ate o levantamento do volante oficial]
+  - State Patterns: "Regra de Geracao — default vs. personalizada" (indicador + botao
+    "Restaurar padrao" [ASSUMPTION]); confirmacao de que a mudanca vale so daqui pra frente
+  - Accessibility Floor: campo Valor desabilitado usa `disabled` nativo, nao so CSS
+  - Key Flow: UJ-3, passos 2-4 (estado pos-salvar: "Personalizado por voce")
+  Tokens: DESIGN.md frontmatter (light theme) — disabled-bg/disabled-text sao os unicos tokens
+  novos desta rodada; campo Valor NUNCA usa display:none quando o toggle esta em NAO.
+*/
+:root {
+  --bg-primary:#f8f9fa; --bg-secondary:#ffffff; --bg-card:#ffffff; --bg-navbar:#ffffff;
+  --text-primary:#212529; --text-secondary:#6c757d; --text-muted:#adb5bd;
+  --border-color:#dee2e6; --accent-primary:#0d6efd; --success:#198754;
+  --disabled-bg:#e9ecef; --disabled-text:#adb5bd;
+  --shadow: rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; padding:24px 16px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+  background:#e9ecef; color:var(--text-primary);
+}
+.caption { max-width:920px; margin:0 auto 12px; font-size:13px; color:#495057; }
+.caption b { color:#212529; }
+.browser-frame {
+  max-width:920px; margin:0 auto; background:#fff; border-radius:10px; overflow:hidden;
+  box-shadow:0 8px 30px rgba(0,0,0,.14); border:1px solid #d0d5db;
+}
+.browser-chrome { background:#e9ecef; padding:10px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #d0d5db; }
+.chrome-dot { width:10px; height:10px; border-radius:50%; }
+.chrome-address { flex:1; background:#fff; border:1px solid #d0d5db; border-radius:6px; padding:5px 12px; font-size:12px; color:#495057; margin-left:8px; }
+
+.container { max-width:820px; margin:0 auto; padding:28px 24px 36px; }
+.back-link { display:inline-flex; align-items:center; gap:6px; color:var(--text-secondary); font-size:.85rem; text-decoration:none; margin-bottom:14px; }
+
+.page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:12px; }
+.page-title-group { display:flex; align-items:center; gap:12px; }
+.page-icon { width:44px; height:44px; border-radius:50%; background:rgba(13,110,253,.1); color:var(--accent-primary); display:flex; align-items:center; justify-content:center; }
+.page-title { font-size:1.35rem; font-weight:700; margin:0; }
+
+.status-row { display:flex; align-items:center; gap:12px; }
+.badge-status { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:.8rem; font-weight:600; }
+.badge-status.personalizado { background:rgba(25,135,84,.12); color:var(--success); }
+.btn { display:inline-flex; align-items:center; gap:6px; border-radius:8px; padding:8px 16px; font-weight:600; font-size:.85rem; border:1px solid transparent; cursor:pointer; text-decoration:none; }
+.btn-outline { background:#fff; border-color:var(--border-color); color:var(--text-secondary); }
+.btn-primary { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; padding:10px 24px; font-size:.95rem; }
+
+.card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; box-shadow:0 2px 8px var(--shadow); }
+.card-body { padding:8px 24px 22px; }
+
+.rule-toggle-row { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:18px 0; border-bottom:1px solid var(--border-color); }
+.rule-toggle-row:last-of-type { border-bottom:none; }
+.rule-info { flex:1; min-width:0; }
+.rule-label { font-weight:600; font-size:.94rem; margin:0 0 4px; }
+.rule-help { font-size:.78rem; color:var(--text-secondary); margin:4px 0 0; max-width:440px; line-height:1.4; }
+.rule-controls { display:flex; align-items:center; gap:16px; flex-shrink:0; }
+
+/* switch */
+.form-switch { position:relative; width:42px; height:24px; flex-shrink:0; }
+.form-switch input { opacity:0; width:0; height:0; }
+.switch-track { position:absolute; inset:0; background:var(--disabled-bg); border-radius:999px; border:1px solid var(--border-color); transition:background .15s; }
+.switch-thumb { position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:left .15s; }
+.form-switch.on .switch-track { background:var(--accent-primary); border-color:var(--accent-primary); }
+.form-switch.on .switch-thumb { left:20px; }
+
+.value-field { width:110px; padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); font-size:.9rem; color:var(--text-primary); background:#fff; text-align:center; }
+.value-field:disabled { background:var(--disabled-bg); color:var(--disabled-text); border-color:var(--border-color); }
+.value-select { width:200px; padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); font-size:.9rem; color:var(--text-primary); background:#fff; }
+
+.save-note { font-size:.78rem; color:var(--text-secondary); margin:18px 0 0; display:flex; gap:8px; align-items:flex-start; }
+.form-actions { margin-top:20px; display:flex; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<div class="caption"><b>Edição de Regras de Geração — Mega-Sena</b> — FR-18/FR-19, UJ-3 (José, passos 2-4). Estado "Personalizado por você", já salvo: 1º toggle ligado com valor habilitado; demais desligados com campo Valor visível-porém-desabilitado.</div>
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <span class="chrome-dot" style="background:#ff5f56"></span>
+    <span class="chrome-dot" style="background:#ffbd2e"></span>
+    <span class="chrome-dot" style="background:#27c93f"></span>
+    <span class="chrome-address">app.loterias.exemplo/regras/mega-sena/</span>
+  </div>
+
+  <div class="container">
+    <a class="back-link" href="#">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      Voltar aos jogos
+    </a>
+
+    <div class="page-header">
+      <div class="page-title-group">
+        <div class="page-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4Z"/><path d="M7 5H4v1a3 3 0 0 0 3 3"/><path d="M17 5h3v1a3 3 0 0 1-3 3"/><path d="M12 12v3"/><path d="M9 19h6"/><path d="M10 16h4l1 3H9l1-3Z"/></svg>
+        </div>
+        <h1 class="page-title">Regras de Geração — Mega-Sena</h1>
+      </div>
+      <div class="status-row">
+        <span class="badge-status personalizado">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          Personalizado por você
+        </span>
+        <button class="btn btn-outline">Restaurar padrão</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+
+        <div class="rule-toggle-row">
+          <div class="rule-info">
+            <p class="rule-label">Limita quantidade de números em sequência</p>
+          </div>
+          <div class="rule-controls">
+            <label class="form-switch on">
+              <input type="checkbox" checked>
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+            <input class="value-field" type="number" value="2">
+          </div>
+        </div>
+
+        <div class="rule-toggle-row">
+          <div class="rule-info">
+            <p class="rule-label">Limita quantidade de sequências num jogo</p>
+          </div>
+          <div class="rule-controls">
+            <label class="form-switch">
+              <input type="checkbox">
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+            <input class="value-field" type="number" value="" placeholder="—" disabled>
+          </div>
+        </div>
+
+        <div class="rule-toggle-row">
+          <div class="rule-info">
+            <p class="rule-label">Limita quantidade de números na mesma linha do volante</p>
+            <p class="rule-help">Considera as linhas do volante oficial da Mega-Sena na Caixa.</p>
+          </div>
+          <div class="rule-controls">
+            <label class="form-switch">
+              <input type="checkbox">
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+            <input class="value-field" type="number" value="" placeholder="—" disabled>
+          </div>
+        </div>
+
+        <div class="rule-toggle-row">
+          <div class="rule-info">
+            <p class="rule-label">Limita quantidade de números na mesma coluna do volante</p>
+            <p class="rule-help">Considera as colunas do volante oficial da Mega-Sena na Caixa.</p>
+          </div>
+          <div class="rule-controls">
+            <label class="form-switch">
+              <input type="checkbox">
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+            <input class="value-field" type="number" value="" placeholder="—" disabled>
+          </div>
+        </div>
+
+        <div class="rule-toggle-row">
+          <div class="rule-info">
+            <p class="rule-label">Tipo de distribuição</p>
+          </div>
+          <div class="rule-controls">
+            <label class="form-switch on">
+              <input type="checkbox" checked>
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+            <select class="value-select">
+              <option>Totalmente Aleatória</option>
+              <option>Homogênea</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="save-note">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      As mudanças valem a partir do próximo jogo gerado — jogos já gerados não são recalculados.
+    </p>
+
+    <div class="form-actions">
+      <button class="btn btn-primary">Salvar Regras</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

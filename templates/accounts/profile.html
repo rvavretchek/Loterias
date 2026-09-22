@@ -1,73 +1,49 @@
 {% extends 'base/base.html' %}
-{% load crispy_forms_tags %}
+{% load lottiq_ui %}
 
-{% block title %}Meu Perfil - Gerador de Loterias{% endblock %}
+{% block title %}Meu Perfil - Lottiq{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-person-circle me-2 text-primary"></i>Meu Perfil
-                </div>
-                <div class="card-body p-4">
-                    <div class="row">
-                        <div class="col-md-4 text-center mb-4">
-                            {% if user.avatar %}
-                                <img src="{{ user.avatar.url }}" alt="Avatar" class="rounded-circle mb-3" width="120" height="120">
-                            {% else %}
-                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3" style="width:120px;height:120px;font-size:48px;font-weight:700;">
-                                    {{ user.get_initials }}
-                                </div>
-                            {% endif %}
-                            <h5>{{ user.get_full_name }}</h5>
-                            <p class="text-secondary">{{ user.email }}</p>
-                            <span class="badge bg-primary">{{ user.preferred_theme|title }} Mode</span>
-                        </div>
-                        <div class="col-md-8">
-                            <form method="post" enctype="multipart/form-data">
-                                {% csrf_token %}
-                                {{ form|crispy }}
+<div class="lq-auth">
+    <div class="lq-container">
+        <div class="lq-auth-card lq-auth-wide">
+            <div class="lq-auth-head">
+                <h1>Meu perfil</h1>
+            </div>
 
-                                <div class="d-grid gap-2 mt-4">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-check-circle me-2"></i>Salvar Alteracoes
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+            <div style="display:flex; flex-wrap:wrap; gap:28px;">
+                <div style="flex:0 0 200px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                    {% if user.avatar %}
+                        <img src="{{ user.avatar.url }}" alt="Avatar" class="lq-avatar-lg">
+                    {% else %}
+                        <span class="lq-avatar-lg" aria-hidden="true">{{ user.get_initials }}</span>
+                    {% endif %}
+                    <strong style="font-family:var(--font-display); color:var(--lq-navy);">{{ user.get_full_name }}</strong>
+                    <span class="lq-small">{{ user.email }}</span>
+                </div>
+                <div style="flex:1 1 300px; min-width:0;">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        {% lq_form form %}
+                        <button type="submit" class="lq-btn lq-btn-primary" style="margin-top:4px;">Salvar alterações</button>
+                    </form>
                 </div>
             </div>
 
-            <div class="card mt-4">
-                <div class="card-header">
-                    <i class="bi bi-graph-up me-2 text-primary"></i>Resumo da Conta
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <div class="stat-card">
-                                <i class="bi bi-ticket-perforated text-primary"></i>
-                                <div class="stat-value">{{ user.bets.count }}</div>
-                                <div class="stat-label">Jogos Gerados</div>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="stat-card">
-                                <i class="bi bi-calendar text-success"></i>
-                                <div class="stat-value">{{ user.date_joined|date:"d/m/Y" }}</div>
-                                <div class="stat-label">Membro desde</div>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="stat-card">
-                                <i class="bi bi-envelope-check text-info"></i>
-                                <div class="stat-value">{% if user.is_active %}Sim{% else %}Nao{% endif %}</div>
-                                <div class="stat-label">Conta Ativa</div>
-                            </div>
-                        </div>
+            <div>
+                <h2 class="lq-card-title" style="font-size:18px; margin-bottom:12px;">Resumo da conta</h2>
+                <div class="lq-stats">
+                    <div class="lq-stat">
+                        <div class="lq-stat-value">{{ user.bets.count }}</div>
+                        <div class="lq-stat-label">Jogos gerados</div>
+                    </div>
+                    <div class="lq-stat">
+                        <div class="lq-stat-value">{{ user.date_joined|date:"d/m/Y" }}</div>
+                        <div class="lq-stat-label">Membro desde</div>
+                    </div>
+                    <div class="lq-stat">
+                        <div class="lq-stat-value">{% if user.is_active %}Sim{% else %}Não{% endif %}</div>
+                        <div class="lq-stat-label">Conta ativa</div>
                     </div>
                 </div>
             </div>

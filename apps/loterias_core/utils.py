@@ -6,7 +6,7 @@ import requests
 from django.utils import timezone
 
 from .models import (
-    GeneratedBet, LotteryResult, PrizeTier,
+    GeneratedBet, LotteryResult, PrizeTier, GenerationRule, GAME_GRID,
     GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL,
 )
 
@@ -56,11 +56,196 @@ def recent_bets_had_sequence(user, game_name, interval=MIN_SEQUENCE_INTERVAL):
     return False
 
 
+def _sequence_run_lengths(numbers):
+    """Tamanhos dos 'runs' (blocos de numeros consecutivos) de 2 ou mais, na lista ordenada."""
+    runs = []
+    current = 1
+    ordered = sorted(numbers)
+    for previous, following in zip(ordered, ordered[1:]):
+        if following == previous + 1:
+            current += 1
+        else:
+            if current >= 2:
+                runs.append(current)
+            current = 1
+    if current >= 2:
+        runs.append(current)
+    return runs
+
+
+def _distribution_bands(config, game=None):
+    """Faixas da Distribuicao Homogenea: lista de (inicio, fim, quota) inclusivos.
+    Padrao: bets_count faixas de largura igual (a ultima absorve o resto), 1 numero cada. Quando isso
+    daria faixas de 1 numero (Lotofacil, 15 de 25), usa uma faixa por linha do volante com
+    bets_count // linhas numeros em cada (3 por linha). Sem esquema aplicavel, retorna []."""
+    count = config['bets_count']
+    total = config['numbers_count']
+    width = total // count if count else 0
+    if width >= 2:
+        return [
+            (index * width + 1, (index + 1) * width if index < count - 1 else total, 1)
+            for index in range(count)
+        ]
+    grid = GAME_GRID.get(game or config['name'])
+    if not grid or not grid[0] or count % grid[0]:
+        return []
+    rows, cols = grid
+    return [(row * cols + 1, (row + 1) * cols, count // rows) for row in range(rows)]
+
+
+def _sequence_spans(numbers):
+    """Blocos (inicio, fim) de 2+ numeros consecutivos, na lista ordenada."""
+    spans = []
+    ordered = sorted(numbers)
+    start = None
+    for previous, following in zip(ordered, ordered[1:]):
+        if following == previous + 1:
+            if start is None:
+                start = previous
+        elif start is not None:
+            spans.append((start, previous))
+            start = None
+    if start is not None:
+        spans.append((start, ordered[-1]))
+    return spans
+
+
+def bet_satisfies_rules(numbers, clovers, game, rules):
+    """Checa um candidato contra as Regras de Geracao (AD-12). Funcao pura, sem I/O. Retorna
+    (ok, violated_rule_names) com a lista COMPLETA de regras violadas. Ignora regra desligada, sem
+    valor ou desconhecida."""
+    violated = []
+    config = GAMES_CONFIG.get(game)
+    grid = GAME_GRID.get(game)
+    ordered = sorted(numbers)
+
+    for rule in rules:
+        if not rule.enabled:
+            continue
+        name = rule.rule_name
+        value = rule.numeric_value
+
+        if name == 'limit_sequence_count':
+            if value is None:
+                continue
+            runs = _sequence_run_lengths(ordered)
+            longest = max(runs) if runs else 1
+            if longest > value:
+                violated.append(name)
+        elif name == 'limit_sequence_pairs':
+            if value is None:
+                continue
+            if len(_sequence_run_lengths(ordered)) > value:
+                violated.append(name)
+        elif name in ('limit_row_count', 'limit_column_count'):
+            if value is None or grid is None:
+                continue
+            cols = grid[1]
+            counts = {}
+            for n in ordered:
+                key = (n - 1) // cols + 1 if name == 'limit_row_count' else (n - 1) % cols + 1
+                counts[key] = counts.get(key, 0) + 1
+            if counts and max(counts.values()) > value:
+                violated.append(name)
+        elif name == 'distribution_type':
+            if rule.choice_value != 'homogenea' or config is None:
+                continue
+            for start, end, quota in _distribution_bands(config, game):  # sem faixas = nao se aplica
+                if sum(1 for n in ordered if start <= n <= end) != quota:
+                    violated.append(name)
+                    break
+        elif name == 'limit_min_sequences':
+            if value is None:
+                continue
+            if len(_sequence_spans(ordered)) < value:
+                violated.append(name)
+        elif name == 'limit_min_gap_between_sequences':
+            if value is None:
+                continue
+            spans = _sequence_spans(ordered)
+            if any(nxt[0] - prev[1] - 1 < value for prev, nxt in zip(spans, spans[1:])):
+                violated.append(name)
+    return (not violated), violated
+
+
+def _random_numbers(config, homogeneous=False, game=None):
+    if homogeneous:
+        numbers = []
+        for start, end, quota in _distribution_bands(config, game):
+            numbers.extend(random.sample(range(start, end + 1), quota))
+        return sorted(numbers)
+    numbers = []
+    while len(numbers) < config['bets_count']:
+        number = random.randint(1, config['numbers_count'])
+        if number not in numbers:
+            numbers.append(number)
+    return sorted(numbers)
+
+
+def _random_clovers(config):
+    clovers = []
+    if config['clovers_count'] > 0:
+        while len(clovers) < config['clovers']:
+            clover = random.randint(1, config['clovers_count'])
+            if clover not in clovers:
+                clovers.append(clover)
+        clovers.sort()
+    return clovers
+
+
 def generate_bet(game_name, user=None):
-    """Gera uma aposta valida respeitando as regras de sequencia."""
+    """Compat: gera uma aposta e devolve (numeros, trevos). Ver generate_bet_with_relaxation."""
+    numbers, clovers, _relaxed = generate_bet_with_relaxation(game_name, user)
+    return numbers, clovers
+
+
+def _draw_with_rules(config, game_name, active_rules, attempts=10000):
+    """Sorteia ate `attempts` candidatos contra `active_rules`. Retorna (numeros|None, violadas do
+    ultimo candidato)."""
+    homogeneous = bool(_distribution_bands(config, game_name)) and any(
+        rule.rule_name == 'distribution_type' and rule.choice_value == 'homogenea'
+        for rule in active_rules
+    )
+    violated = []
+    for _ in range(attempts):
+        candidate = _random_numbers(config, homogeneous, game_name)
+        ok, violated = bet_satisfies_rules(candidate, [], game_name, active_rules)
+        if ok:
+            return candidate, []
+    return None, violated
+
+
+def generate_bet_with_relaxation(game_name, user=None):
+    """Gera uma aposta valida e devolve (numeros, trevos, regra_relaxada).
+
+    Sem personalizacao salva (ou user None): Regra de Sequencia adaptativa (regra_relaxada=None).
+    Com linhas GenerationRule do user+game (mesmo todas desligadas): so as regras ligadas valem e a
+    adaptativa nao e consultada (Story 4.4). Se nada valido sai em 10000 tentativas, relaxa UMA regra
+    (Story 4.5, FR-22/AD-12): a de maior updated_at entre as que o ULTIMO candidato violou, so em
+    memoria, e tenta mais 10000 vezes; se ainda falhar devolve (None, None, None)."""
     config = GAMES_CONFIG.get(game_name)
     if not config:
-        return None, None
+        return None, None, None
+
+    if user is not None and getattr(user, 'is_authenticated', True):
+        user_rules = GenerationRule.objects.filter(user=user, game=game_name)
+        has_customization = user_rules.exists()
+    else:
+        has_customization = False
+
+    if has_customization:
+        active_rules = list(user_rules.filter(enabled=True))
+        candidate, violated = _draw_with_rules(config, game_name, active_rules)
+        relaxed = None
+        if candidate is None and violated:
+            blocking = [rule for rule in active_rules if rule.rule_name in violated]
+            relaxed_rule = max(blocking, key=lambda rule: (rule.updated_at, rule.pk))
+            relaxed = relaxed_rule.rule_name
+            reduced = [rule for rule in active_rules if rule is not relaxed_rule]
+            candidate, _violated = _draw_with_rules(config, game_name, reduced)
+        if candidate is None:
+            return None, None, None
+        return candidate, _random_clovers(config), relaxed
 
     applies_sequence_rule = game_name in GAMES_WITH_SEQUENCE_RULE
 
@@ -102,7 +287,7 @@ def generate_bet(game_name, user=None):
                 bet_clovers.append(clover)
         bet_clovers.sort()
 
-    return bet_numbers, bet_clovers
+    return bet_numbers, bet_clovers, None
 
 
 def check_duplicate_bet(user, game_name, numbers, clovers):
@@ -260,7 +445,12 @@ def calculate_bet_prize(game, user_numbers, user_clovers=None, official_result=N
         )
         if _parse_currency(second_draw_result['value']) > _parse_currency(result['value']):
             result = second_draw_result
+            result['draw'] = 2
 
+    # Trevos da +Milionaria: so pra exibir a comparacao (nao entram no calculo do premio).
+    result['matched_clovers'] = sorted(
+        set(normalize_numbers(user_clovers or [])) & set(normalize_numbers(official_result.get('clovers') or []))
+    )
     result['result'] = official_result
     return result
 
@@ -299,6 +489,8 @@ def _calculate_prize_for_draw(game, user_numbers, draw_numbers, prizes, referenc
         'hits': hits,
         'value': _format_currency(amount),
         'category': prize_key or 'Sem premio',
+        'matched_numbers': sorted(user_numbers_set & result_numbers),
+        'draw': 1,
     }
 
 

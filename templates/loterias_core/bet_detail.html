@@ -1,174 +1,124 @@
 {% extends 'base/base.html' %}
 {% load static %}
 
-{% block title %}Detalhes do Jogo - {{ jogo.game }}{% endblock %}
+{% block title %}{{ jogo.game }} - Concurso {{ jogo.contest }} - Lottiq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-page { padding: 28px 0 60px; max-width: 720px; margin: 0 auto; }
+    .detail-crumbs { font: 500 13px var(--font-body); color: var(--text-muted); margin-bottom: 16px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .detail-crumbs a:hover { color: var(--teal-700); }
+    .detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .detail-head h1 { font: 700 24px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .detail-section-title { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .detail-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+    .prize-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    @media (min-width: 480px) { .prize-grid { grid-template-columns: repeat(4, 1fr); } }
+    .prize-item-label { font: 400 12px var(--font-body); color: var(--text-muted); }
+    .prize-item-value { font: 700 16px var(--font-mono); color: var(--lq-navy); margin-top: 2px; }
+    .prev-list { display: flex; flex-direction: column; }
+    .prev-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 12px 0; border-top: 1px solid var(--border-default); }
+    .prev-item:first-child { border-top: 0; }
+    .prev-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <!-- Breadcrumb -->
-            <nav aria-label="breadcrumb" class="mb-4">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Inicio</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'history' %}">Historico</a></li>
-                    <li class="breadcrumb-item active">{{ jogo.game }} - Concurso {{ jogo.contest }}</li>
-                </ol>
-            </nav>
+<div class="lq-container detail-page">
+    <nav class="detail-crumbs" aria-label="Navegação">
+        <a href="{% url 'home' %}">Início</a><span aria-hidden="true">/</span>
+        <a href="{% url 'history' %}">Histórico</a><span aria-hidden="true">/</span>
+        <span>{{ jogo.game }} — Concurso {{ jogo.contest }}</span>
+    </nav>
 
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <div>
-                        <h4 class="mb-0">
-                            <i class="bi bi-ticket-perforated me-2 text-primary"></i>
-                            {{ jogo.game }}
-                        </h4>
-                        <small class="text-secondary">Concurso {{ jogo.contest }}</small>
-                    </div>
-                    <span class="badge bg-primary fs-6">{{ jogo.created_at|date:"d/m/Y H:i" }}</span>
-                </div>
-                <div class="card-body text-center py-5">
-                    <!-- Numeros -->
-                    <h5 class="mb-4 text-secondary">Numeros Sorteados</h5>
-                    <div class="mb-4">
-                        {% for num in jogo.numbers %}
-                        <span class="numero-bola fs-5">{{ num|stringformat:"02d" }}</span>
-                        {% endfor %}
-                    </div>
+    <div class="lq-card" style="margin-bottom:16px;">
+        <div class="detail-head">
+            <h1>{{ jogo.game }}</h1>
+            <span class="lq-status lq-status-waiting">Concurso {{ jogo.contest }}</span>
+        </div>
+        <p class="lq-small">Guardado em {{ jogo.created_at|date:"d/m/Y H:i" }}</p>
 
-                    <!-- Trevos -->
-                    {% if jogo.clovers %}
-                    <h5 class="mb-3 text-secondary">Trevos</h5>
-                    <div class="mb-4">
-                        {% for trevo in jogo.clovers %}
-                        <span class="trevo-bola fs-5">{{ trevo|stringformat:"02d" }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
-                    <!-- Info Sequencia -->
-                    {% if aplica_regra_sequencia %}
-                    <div class="alert {% if jogo.sequential_pairs > 0 %}alert-warning{% else %}alert-success{% endif %} d-inline-block">
-                        <i class="bi {% if jogo.sequential_pairs > 0 %}bi-exclamation-triangle{% else %}bi-check-circle{% endif %} me-2"></i>
-                        Pares sequenciais: <strong>{{ jogo.sequential_pairs }}</strong>
-                        {% if jogo.sequential_pairs > 0 %}
-                        <br><small>Este jogo possui numeros consecutivos</small>
-                        {% else %}
-                        <br><small>Nenhum par sequencial encontrado</small>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    <div class="mt-4">
-                        <a href="{% url 'check_bet_result' jogo.pk %}" class="btn btn-outline-primary">
-                            <i class="bi bi-check-circle me-2"></i>Verificar Resultado da CEF
-                        </a>
-                    </div>
-                </div>
-                <div class="card-footer d-flex justify-content-between align-items-center">
-                    <div>
-                        <a href="{% url 'regenerate_bet' jogo.pk %}" class="btn btn-success me-2">
-                            <i class="bi bi-arrow-repeat me-2"></i>Gerar Novamente
-                        </a>
-                        <a href="{% url 'history' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left me-2"></i>Voltar
-                        </a>
-                    </div>
-                    <form method="post" action="{% url 'delete_bet' jogo.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline-danger btn-delete">
-                            <i class="bi bi-trash me-2"></i>Excluir
-                        </button>
-                    </form>
-                </div>
+        <div style="margin-top:20px;">
+            <div class="detail-section-title">Números sorteados</div>
+            <div class="lq-balls" role="list" aria-label="Números do jogo">
+                {% for num in jogo.numbers %}<span class="lq-ball" role="listitem">{{ num|stringformat:"02d" }}</span>{% endfor %}
             </div>
+        </div>
 
-            {% if resultado_oficial or premio_info %}
-            <div class="card mt-4">
-                <div class="card-header">
-                    <i class="bi bi-trophy me-2 text-warning"></i>Resultado e Premiação
-                </div>
-                <div class="card-body">
-                    {% if resultado_oficial %}
-                    <p><strong>Concurso:</strong> {{ resultado_oficial.contest }}</p>
-                    <p><strong>Jogo:</strong> {{ resultado_oficial.game }}</p>
-                    {% if resultado_oficial.numbers_second_draw %}
-                    <p><strong>Números sorteados (1º sorteio):</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
-                    <p><strong>Números sorteados (2º sorteio):</strong> {% for num in resultado_oficial.numbers_second_draw %}{{ num|stringformat:"02d" }} {% endfor %}</p>
-                    {% else %}
-                    <p><strong>Números sorteados:</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
-                    {% endif %}
-                    <p><strong>Origem:</strong> {{ resultado_oficial.source }}</p>
-                    {% endif %}
-
-                    {% if premio_info %}
-                    <div class="table-responsive">
-                        <table class="table table-bordered mt-3 mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Acertos</th>
-                                    <th>Categoria</th>
-                                    <th>Premio</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>{{ premio_info.hits }}</td>
-                                    <td>{{ premio_info.category }}</td>
-                                    <td>{{ premio_info.value }}</td>
-                                    <td>{% if premio_info.won %}<span class="badge bg-success">Ganhou</span>{% else %}<span class="badge bg-secondary">Sem premio</span>{% endif %}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    {% endif %}
-                </div>
+        {% if jogo.clovers %}
+        <div style="margin-top:20px;">
+            <div class="detail-section-title">Trevos</div>
+            <div class="lq-balls" role="list" aria-label="Trevos">
+                {% for trevo in jogo.clovers %}<span class="lq-ball lq-ball-clover" role="listitem">{{ trevo|stringformat:"02d" }}</span>{% endfor %}
             </div>
-            {% endif %}
+        </div>
+        {% endif %}
 
-            <!-- Jogos Anteriores -->
-            {% if jogos_anteriores %}
-            <div class="card mt-4">
-                <div class="card-header">
-                    <i class="bi bi-clock-history me-2 text-primary"></i>
-                    Jogos Anteriores de {{ jogo.game }}
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Concurso</th>
-                                    <th>Numeros</th>
-                                    <th>Data</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for j in jogos_anteriores %}
-                                <tr>
-                                    <td>{{ j.contest }}</td>
-                                    <td>
-                                        {% for num in j.numbers %}
-                                        <span class="numero-bola" style="width:32px;height:32px;font-size:12px;">{{ num|stringformat:"02d" }}</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td>{{ j.created_at|date:"d/m/Y" }}</td>
-                                    <td>
-                                        <a href="{% url 'bet_detail' j.pk %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+        {% if aplica_regra_sequencia %}
+        <div class="lq-banner {% if jogo.sequential_pairs > 0 %}lq-banner-warn{% endif %}" role="status" style="margin-top:20px;">
+            <span class="ms" aria-hidden="true">{% if jogo.sequential_pairs > 0 %}warning{% else %}check_circle{% endif %}</span>
+            <span class="lq-banner-text">
+                Pares sequenciais: <strong>{{ jogo.sequential_pairs }}</strong><br>
+                {% if jogo.sequential_pairs > 0 %}Este jogo tem números consecutivos.{% else %}Nenhum par sequencial encontrado.{% endif %}
+            </span>
+        </div>
+        {% endif %}
+
+        <div class="detail-actions">
+            <a href="{% url 'regenerate_bet' jogo.pk %}" class="lq-btn lq-btn-primary"><span class="ms" aria-hidden="true">autorenew</span>Gerar novamente</a>
+            <a href="{% url 'check_bet_result' jogo.pk %}" class="lq-btn lq-btn-outline"><span class="ms" aria-hidden="true">fact_check</span>Conferir resultado da Caixa</a>
+            <form method="post" action="{% url 'delete_bet' jogo.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="lq-btn lq-btn-danger btn-delete"><span class="ms" aria-hidden="true">delete</span>Excluir</button>
+            </form>
         </div>
     </div>
+
+    {% if resultado_oficial or premio_info %}
+    <div class="lq-card" style="margin-bottom:16px;">
+        <div class="detail-section-title">Resultado e premiação</div>
+        {% if resultado_oficial %}
+        {% if resultado_oficial.numbers_second_draw %}
+        <p class="lq-small"><strong>1º sorteio:</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+        <p class="lq-small"><strong>2º sorteio:</strong> {% for num in resultado_oficial.numbers_second_draw %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+        {% else %}
+        <p class="lq-small"><strong>Números sorteados:</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
+        {% endif %}
+        <p class="lq-small"><strong>Origem:</strong> {{ resultado_oficial.source }}</p>
+        {% endif %}
+
+        {% if premio_info %}
+        <div class="prize-grid" style="margin-top:16px;">
+            <div><div class="prize-item-label">Acertos</div><div class="prize-item-value">{{ premio_info.hits }}</div></div>
+            <div><div class="prize-item-label">Categoria</div><div class="prize-item-value" style="font-family:var(--font-display); font-size:14px;">{{ premio_info.category }}</div></div>
+            <div><div class="prize-item-label">Prêmio</div><div class="prize-item-value">{{ premio_info.value }}</div></div>
+            <div>
+                <div class="prize-item-label">Status</div>
+                {% if premio_info.won %}<span class="lq-status lq-status-win">Ganhou</span>{% else %}<span class="lq-status lq-status-empty">Sem prêmio</span>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if jogos_anteriores %}
+    <div class="lq-card">
+        <div class="detail-section-title">Jogos anteriores de {{ jogo.game }}</div>
+        <div class="prev-list">
+            {% for j in jogos_anteriores %}
+            <div class="prev-item">
+                <div class="prev-meta">
+                    <span style="font:700 13px var(--font-mono); color:var(--lq-navy);">{{ j.contest }}</span>
+                    <span class="lq-small">{{ j.created_at|date:"d/m/Y" }}</span>
+                </div>
+                <div class="lq-balls" role="list" aria-label="Números do jogo" style="flex:1;">
+                    {% for num in j.numbers %}<span class="lq-ball lq-ball-xs" role="listitem">{{ num|stringformat:"02d" }}</span>{% endfor %}
+                </div>
+                <a href="{% url 'bet_detail' j.pk %}" class="lq-icon-btn" aria-label="Ver jogo do concurso {{ j.contest }}"><span class="ms" aria-hidden="true">visibility</span></a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

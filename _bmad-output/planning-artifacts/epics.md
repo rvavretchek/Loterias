@@ -1,13 +1,15 @@
 ---
-stepsCompleted: [1, "1-confirmed", 2, 3, "3-confirmed", 4]
-inputDocuments: ["_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md", "_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md"]
+stepsCompleted: [1, "1-confirmed", 2, 3, "3-confirmed", 4, "adendo-2026-09-17:1", "adendo-2026-09-17:1-confirmed", "adendo-2026-09-17:2-approved", "adendo-2026-09-17:3", "adendo-2026-09-17:4-complete"]
+inputDocuments: ["_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md", "_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md", "_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-17/ARCHITECTURE-SPINE.md", "_bmad-output/planning-artifacts/ux-designs/ux-Loterias-2026-09-17/DESIGN.md", "_bmad-output/planning-artifacts/ux-designs/ux-Loterias-2026-09-17/EXPERIENCE.md"]
 ---
 
 # Loterias - Detalhamento de Épicos
 
 ## Visão Geral
 
-Este documento decompõe em epics e stories os requisitos da PRD `prd-Loterias-2026-09-07` (verificação/notificação diária de resultados + novo fluxo de cadastro em duas etapas) e as decisões técnicas da espinha de arquitetura `architecture-Loterias-2026-09-08` (9 ADs), incluindo a renomeação de código legado para inglês decidida durante a revisão da PRD (§3.1). Não há documento de UX formal para este projeto.
+Este documento decompõe em epics e stories os requisitos da PRD `prd-Loterias-2026-09-07` (verificação/notificação diária de resultados + novo fluxo de cadastro em duas etapas) e as decisões técnicas da espinha de arquitetura `architecture-Loterias-2026-09-08` (9 ADs — 10 após a Story 2.8/2.11), incluindo a renomeação de código legado para inglês decidida durante a revisão da PRD (§3.1). Não havia documento de UX formal pros Epics 1-3.
+
+**Adendo 2026-09-17:** Epic 4 adicionado a partir do adendo do mesmo PRD (§4.3-§4.5, FR-16 a FR-24) — home reorganizada, Regras de Geração personalizadas por usuário+Jogo, histórico com filtros. Espinha de arquitetura própria (`architecture-Loterias-2026-09-17`, AD-11 a AD-14, herda AD-1 a AD-10 acima) e primeiro par de spine de UX formal do projeto (`ux-Loterias-2026-09-17/DESIGN.md`+`EXPERIENCE.md`).
 
 ## Inventário de Requisitos
 
@@ -43,6 +45,26 @@ FR-13: Se o Vínculo expirar antes da senha ser definida, a conta permanece pend
 
 FR-14: No primeiro login bem-sucedido após FR-12, antes de qualquer outra tela do sistema, o usuário é obrigado a informar nome e sobrenome; em logins subsequentes essa tela não aparece mais.
 
+*Adendo 2026-09-17 (PRD §4.3-§4.5) — FR-16 a FR-24:*
+
+FR-16: O resumo de atividade (jogos gerados/tipos/recentes) sai do topo da área útil da home e vira uma barra lateral fixa; a área central abre direto na área de "jogo selecionado", com o seletor de jogos logo abaixo — gerar um jogo não exige scroll em viewports ≥1280×720.
+
+FR-17: Cada um dos 6 Jogos no seletor exibe um ícone visualmente distinto dos demais (hoje todos usam o mesmo ícone genérico).
+
+FR-18: A partir do seletor de jogos, uma ação "editar" por Jogo abre uma tela de edição da Regra de Geração daquele Jogo específico pra aquele usuário — pré-carregada com os valores atuais (default do sistema, se nunca personalizado). Salvar aplica a partir da próxima geração; jogos já gerados antes não são recalculados.
+
+FR-19: Regras de Geração pra Mega-Sena/+Milionária/Quina/Dupla-Sena (mesmo conjunto pras 4): limite de números em sequência, limite de sequências no jogo, limite por linha do volante, limite por coluna do volante (liga/desliga + valor cada), e Tipo de distribuição (Homogênea/Totalmente Aleatória). Grid de linha/coluna = volante oficial de cada Jogo na Caixa.
+
+FR-20: Regras de Geração pra Lotofácil (conjunto próprio, 7 regras): as mesmas 5 de FR-19, mais limite de espaço mínimo entre sequências e limite de quantidade mínima de sequências no jogo.
+
+FR-21: Regras de Geração pra Lotomania (conjunto reduzido, 3 regras): limite de números em sequência, limite de espaço mínimo entre sequências, limite de quantidade mínima de sequências — sem linha/coluna/distribuição.
+
+FR-22: Quando as Regras de Geração ligadas por um usuário pra um Jogo são, em conjunto, impossíveis de satisfazer, a geração tenta um número limitado de vezes respeitando todas; se não conseguir, relaxa a regra mais recentemente alterada (entre as que causaram o conflito) e avisa qual foi relaxada — nunca falha silenciosamente nem trava sem gerar.
+
+FR-23: A Regra de Sequência adaptativa hoje existente continua sendo o default de todo usuário. As novas Regras de Geração personalizadas só entram em vigor pra um Jogo depois que o usuário efetivamente edita e salva a Regra de Geração daquele Jogo — os dois mecanismos nunca coexistem pro mesmo Jogo+usuário.
+
+FR-24: A tela de histórico ganha filtros cumulativos (Jogo, período, só premiados) sempre visíveis no topo da lista. A exibição de números continua legível mesmo pra Jogos com muitos números (Lotomania: 50; Lotofácil: 15) e pra Dupla-Sena (2 sorteios).
+
 ### Requisitos Não-Funcionais
 
 NFR-1: Um valor de prêmio exibido numa Notificação sempre rastreia a um `LotteryResult.prizes` concreto ou a uma Faixa de Premiação (`PrizeTier`) oficial vigente (FR-8) — o sistema nunca estima ou arredonda prêmio na ausência de um desses dois dados oficiais confirmados (PRD §4.1/FR-9).
@@ -54,6 +76,8 @@ NFR-3: O Vínculo de Confirmação de Cadastro é de uso único e expira, via o 
 NFR-4: Nenhuma senha é solicitada antes da confirmação do e-mail — elimina o caso de alguém criar senha para um e-mail que não controla (PRD §4.2/FR-14).
 
 NFR-5: O volume de e-mails de acerto por usuário permanece baixo — um e-mail por Acerto Premiado real, nunca reenviado por reexecução da rotina diária (PRD §7, SM-C1, reforçado pela Arquitetura AD-4 via `get_or_create`+`created=True`).
+
+NFR-6 *(adendo 2026-09-17)*: A geração de um jogo com Regras de Geração personalizadas ativas responde na mesma ordem de grandeza de tempo que a geração hoje (sem Regras) percebe como instantânea — o caminho de conflito do FR-22 (até 2×`max_attempts` no pior caso) não introduz espera perceptível, já que cada tentativa é trabalho em memória sem I/O (PRD §4.4, Architecture Spine `architecture-Loterias-2026-09-17` §Stack).
 
 ### Requisitos Adicionais
 
@@ -69,9 +93,37 @@ NFR-5: O volume de e-mails de acerto por usuário permanece baixo — um e-mail 
 - **Starter template:** não aplicável — projeto brownfield existente, sem template novo envolvido.
 - **Faixas de premiação e retenção de dados (AD-10, resolve a ambiguidade original de FR-8):** `PrizeTier` é um model novo (`game`, `hits`, `value`, `reference_month`) capturado mensalmente por `update_monthly_prize_values`, retendo só as 3 capturas mais recentes por (Jogo, quantidade de acertos). `calculate_bet_prize` valida contra `PrizeTier` em vez do `if/elif` hardcoded por Jogo. `LotteryResult` não tem purge automático (retenção integral por padrão); o Django admin ganha uma ação customizada de purge por data de corte (FR-15).
 
+*Adendo 2026-09-17 — extraídas de `architecture-Loterias-2026-09-17/ARCHITECTURE-SPINE.md` (AD-11 a AD-14, herda AD-1 a AD-10 acima como read-only):*
+
+- **`GenerationRule` (AD-11):** uma tabela relacional só, uma linha por (`user`, `game`, `rule_name`) — `unique_together`. `numeric_value`/`choice_value` nullable, `CheckConstraint` garantindo XOR entre os dois. O conjunto de `rule_name` válido por Jogo vive num dict Python único, `RULE_NAMES_BY_GAME` em `models.py` (ao lado de `GAMES_CONFIG`) — nunca hardcoded em mais de um lugar. `updated_at` por linha é o que sustenta "regra mais recentemente alterada" do FR-22.
+- **`generate_bet()`/`bet_satisfies_rules()` (AD-12):** nova função pura `bet_satisfies_rules(numbers, clovers, game, rules) -> (bool, list[str])` (lista completa de regras violadas, não só a primeira). `generate_bet()` usa duas queries distintas — `has_customization` (sem filtro `enabled`, decide o modo) e `active_rules` (com `enabled=True`, alimenta a checagem) — e o mesmo `max_attempts=10000` já existente na função (não um valor novo). Relaxa no máximo 1 regra por chamada, a de maior `updated_at` entre as que o último candidato violou.
+- **Default vs. personalizado, sem campo de estado novo (AD-13):** ausência de qualquer linha `GenerationRule` pra um (user, game) é o único "default". `regras_geracao_view` nunca deleta uma linha ao desmarcar um toggle — sempre `update_or_create` com `enabled=False`. O único caminho que deleta é o botão "Restaurar padrão" (apaga todas as linhas daquele user+game).
+- **Filtros de histórico (AD-14):** `GeneratedBet.objects.filter(...)` direto — Jogo, `prize__gt=0` (premiado, reusa o cache existente), `created_at__range` (período, limites inclusivos convertidos pro início/fim do dia no `TIME_ZONE` do projeto) — cumulativos via `AND`, sem join novo.
+- **Sem infraestrutura/dependência nova:** mesmo stack do spine pai; nenhuma migration além de `CREATE TABLE GenerationRule`.
+
 ### Requisitos de UX
 
-Não há documento de UX formal para este projeto (não existe `DESIGN.md`/`EXPERIENCE.md` nem doc de UX legado). A PRD originalmente deixava "local exato definido por UX" em dois pontos; FR-4 já foi fechado durante a criação destas stories (badge no cabeçalho — ver Story 2.4). Resta só o layout fino da tela de detalhe (FR-5), tratado como decisão de implementação dentro da própria story.
+*Épicos 1-3 (originais): não havia documento de UX formal — FR-4 foi fechado durante a criação das stories (badge no cabeçalho, Story 2.4); FR-5 tratou o layout como decisão de implementação dentro da própria story.*
+
+*Adendo 2026-09-17 — extraídas de `ux-Loterias-2026-09-17/DESIGN.md` + `EXPERIENCE.md` (primeiro par de spine de UX formal do projeto):*
+
+UX-DR1: Cada um dos 6 Jogos no `game-selector` ganha um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-123`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack` — todos `aria-hidden="true"` (decorativos, o nome do Jogo já é texto visível).
+
+UX-DR2: O resumo (`sidebar-summary`) migra dos 3 `stat-card` horizontais no topo pra uma coluna lateral fixa em viewports ≥1280px; abaixo disso empilha abaixo da área principal (scroll aceitável, não é meta).
+
+UX-DR3: `rule-toggle-row` — quando o switch está NÃO, o campo Valor fica visível porém desabilitado (`disabled` nativo, nunca `display:none`) — com uma região `aria-live="polite"` anunciando a transição de habilitado/desabilitado no momento do toggle.
+
+UX-DR4: A área "jogo selecionado" no topo da home atualiza via JS ao trocar de jogo no seletor, sem reload — região `aria-live="polite" aria-atomic="true"` pra leitores de tela perceberem a troca de conteúdo.
+
+UX-DR5: `filter-bar` do histórico sempre visível no topo (nunca colapsável); cada filtro ativo é um `<button>` com `aria-label` nomeando a ação de remover (não só o glifo "✕"); foco pós-remoção de filtro vai pro heading da barra, não pro topo do documento.
+
+UX-DR6: `number-badge` quebra linha (`flex-wrap`) pra jogos com muitos números, com `role="list"`/`role="listitem"` na sequência; Dupla-Sena mostra 2 grupos `role="group"` rotulados "1º sorteio"/"2º sorteio", empilhados (nunca lado a lado).
+
+UX-DR7: Estado "selecionado" do `game-selector` usa um indicador não-cromático (ícone de check) além de cor de borda/fundo — acessível a quem depende só de percepção de cor.
+
+UX-DR8: Confirmação ao desligar a última proteção de sequência (FR-23) é um modal Bootstrap (`.modal`) com gerenciamento de foco completo (foco move pro modal, preso dentro, volta ao botão "Salvar" ao fechar, fecha via Esc) — não um `window.confirm()` nativo.
+
+UX-DR9: Texto de ajuda das regras de linha/coluna (grid do volante) associado ao campo via `aria-describedby`, não só posicionamento visual.
 
 ### Mapa de Cobertura de FRs
 
@@ -91,6 +143,15 @@ FR-13: Epic 3 - Vínculo expirado
 FR-14: Epic 3 - Nome e sobrenome obrigatórios no primeiro login
 FR-15: Epic 2 - Purge manual de resultados oficiais antigos
 rename-legado-§3.1: Epic 1 - Renomeação do código legado para inglês (sem FR numerada própria)
+FR-16: Epic 4 - Reorganização da área útil da home
+FR-17: Epic 4 - Ícone por Jogo no seletor
+FR-18: Epic 4 - Edição de Regra de Geração por usuário+Jogo
+FR-19: Epic 4 - Regras de Geração (Mega-Sena/+Milionária/Quina/Dupla-Sena)
+FR-20: Epic 4 - Regras de Geração (Lotofácil)
+FR-21: Epic 4 - Regras de Geração (Lotomania)
+FR-22: Epic 4 - Resolução de conflito entre Regras de Geração
+FR-23: Epic 4 - Regra de Sequência atual permanece o default
+FR-24: Epic 4 - Filtros cumulativos e exibição legível no histórico
 
 ## Lista de Épicos
 
@@ -102,9 +163,29 @@ Alinha todo o código já existente (models, funções, views) à convenção de
 O jogador sabe se ganhou sem precisar lembrar de checar manualmente — o sistema vigia os resultados oficiais da Caixa sozinho e avisa ao logar, diferenciando acerto premiado de não premiado.
 **FRs cobertos:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-15
 
-### Epic 3: Novo Fluxo de Cadastro
+#### Story 2.20: Permitir vários jogos por Jogo+Concurso
+
+Como jogador,
+Eu quero gerar e guardar quantos jogos eu quiser pro mesmo Jogo+Concurso,
+Para montar vários palpites pro mesmo sorteio.
+
+**Critérios de Aceite:**
+
+**Dado** o usuário já tem um ou mais `GeneratedBet` pro mesmo Jogo+Concurso ainda sem resultado
+**Quando** ele gera (`create_bet_view`) ou guarda um jogo manual (`save_manual_bet_view`) pra esse mesmo par
+**Então** um novo `GeneratedBet` é criado normalmente, sem bloqueio nem erro
+**E** o bloqueio de concurso já sorteado (Story 2.2) continua valendo, inclusive com jogos já existentes do usuário pro par
+**E** "Refazer" (Story 2.17) segue substituindo o jogo in-place — trocar os números de um jogo não é criar outro
+
+*Sem FR numerada nova — reverte a decisão (a) da Story 2.14 (2026-09-14), por decisão do Boss em 2026-09-18 ("isso é bug": a intenção sempre foi gerar quantos jogos quiser por concurso, como no PRD UJ-1).*
+
+## Epic 3: Novo Fluxo de Cadastro
 Uma pessoa se cadastra só com e-mail, confirma, cria senha, e só depois informa nome/sobrenome — cadastro deliberado em vez do genérico do allauth.
 **FRs cobertos:** FR-10, FR-11, FR-12, FR-13, FR-14
+
+### Epic 4: Home Reorganizada, Regras de Geração Personalizadas e Histórico com Filtros
+*(adendo 2026-09-17, PRD §4.3-§4.5)* Gerar um jogo não exige mais scroll (resumo vira sidebar, jogo selecionado sobe pro topo, cada Jogo com seu ícone); cada usuário pode personalizar como cada Jogo é gerado pra ele (regras de sequência/linha/coluna/distribuição, por família de Jogo); e o histórico ganha filtros cumulativos com exibição legível mesmo pra Jogos com muitos números. Depende dos Epics 1-3 concluídos (código já em inglês, app já em produção).
+**FRs cobertos:** FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24
 
 ## Epic 1: Renomeação do Código Legado para Inglês
 
@@ -411,6 +492,8 @@ Para que o aviso não seja apenas cosmético.
 
 *Sem FR numerada nova — correção de bug pré-existente, achado em revisão.*
 
+**Revertida em 2026-09-18 (Story 2.20):** o Boss esclareceu que a intenção do produto é gerar e guardar quantos jogos quiser por Jogo+Concurso (até o concurso ser sorteado) — a opção (a) acima contradizia isso. `_block_if_duplicate_bet` foi removido; o bloqueio de concurso já sorteado (Story 2.2) continua.
+
 ### Story 2.15: Runbook de Backfill Inicial de Notificações
 
 Como operador (Boss),
@@ -580,3 +663,316 @@ Para completar meu cadastro.
 **E** usuários que já existiam antes desta feature (`profile_completed=True` via migration de dados) não são pegos por esse gate
 **E** depois de salvar nome/sobrenome, essa tela não aparece mais em logins subsequentes
 **E** (smoke test de fechamento do épico) uma pessoa nova completa a UJ-2 inteira numa passada só — cadastro só com e-mail → confirmação → criação de senha → login → nome/sobrenome → home — sem travar em nenhum ponto, antes de o Epic 3 ser considerado concluído
+
+## Epic 4: Home Reorganizada, Regras de Geração Personalizadas e Histórico com Filtros
+
+*(adendo 2026-09-17, PRD §4.3-§4.5)* Gerar um jogo não exige mais scroll (resumo vira sidebar, jogo selecionado sobe pro topo, cada Jogo com seu ícone); cada usuário pode personalizar como cada Jogo é gerado pra ele (regras de sequência/linha/coluna/distribuição, por família de Jogo); e o histórico ganha filtros cumulativos com exibição legível mesmo pra Jogos com muitos números. Depende dos Epics 1-3 concluídos. Arquitetura própria em `architecture-Loterias-2026-09-17/ARCHITECTURE-SPINE.md` (AD-11 a AD-14); UX em `ux-Loterias-2026-09-17/DESIGN.md`+`EXPERIENCE.md` (mockups em `mockups/`).
+
+### Story 4.1: Reorganização da área útil da home
+
+Como jogador autenticado,
+Eu quero que a home abra direto na área de gerar um jogo, sem precisar rolar a tela,
+Para gerar uma aposta rapidamente sem esforço extra.
+
+**Critérios de Aceite:**
+
+**Dado** a home autenticada carrega
+**Quando** a página abre
+**Então** a área de "jogo selecionado" (formulário de geração, incl. campo Concurso) fica no topo da área útil central
+**E** o seletor de jogos fica logo abaixo
+**E** o resumo de atividade (jogos gerados/tipos/recentes) fica numa barra lateral fixa, fora do fluxo principal, em viewports ≥1280×720
+**Dado** nenhum jogo foi selecionado ainda
+**Quando** a home carrega
+**Então** a área de "jogo selecionado" mostra um prompt leve convidando a escolher um jogo abaixo, sem ficar em branco
+**Dado** um viewport abaixo de 1280px
+**Quando** a home carrega
+**Então** a sidebar de resumo empilha abaixo da área principal (scroll aceitável, não é meta desta story)
+**E** nenhum dado do resumo (jogos gerados/tipos/recentes) muda de conteúdo — só posição/tamanho
+**Dado** o campo de Concurso (editável, aceita concursos especiais/comemorativos — FR-2/UJ-1)
+**Quando** a área "jogo selecionado" é reposicionada
+**Então** o campo continua existindo exatamente como hoje — a reorganização muda posição, nunca remove ou esconde esse campo
+
+*Referências: FR-16, UX-DR2, `mockups/home.html`.*
+
+### Story 4.2: Ícone por Jogo no seletor
+
+Como jogador,
+Eu quero que cada Jogo no seletor tenha um ícone diferente,
+Para identificar visualmente qual jogo é qual, sem depender só do nome.
+
+**Critérios de Aceite:**
+
+**Dado** o seletor de jogos na home
+**Quando** a página renderiza
+**Então** cada um dos 6 Jogos exibe um ícone Bootstrap Icons distinto: Mega-Sena `bi-trophy`, +Milionária `bi-flower1`, Lotomania `bi-123`, Lotofácil `bi-lightning`, Quina `bi-star`, Dupla-Sena `bi-stack`
+**E** nenhum ícone é compartilhado entre dois Jogos (hoje todos usam `bi-dice-5`)
+**E** cada ícone tem `aria-hidden="true"` (decorativo — o nome do Jogo já é texto visível ao lado)
+**Dado** um jogo é selecionado no seletor
+**Quando** o clique acontece
+**Então** a área "jogo selecionado" no topo atualiza via JS sem reload (mesma função `selectGame()` já existente, estendida)
+**E** a atualização acontece numa região `aria-live="polite" aria-atomic="true"`, pra leitores de tela perceberem a troca de conteúdo
+**Dado** um Jogo está selecionado no seletor
+**Quando** o card renderiza
+**Então** o estado "selecionado" usa um indicador não-cromático (ícone de check no canto do card) além da cor de borda/fundo — nunca só cor sozinha carregando o significado
+
+*Referências: FR-17, UX-DR1, UX-DR4, UX-DR7.*
+
+### Story 4.3: Model GenerationRule e tela de edição de Regras de Geração por Jogo
+
+Como jogador,
+Eu quero abrir uma tela de edição das regras de geração de um Jogo específico a partir do seletor,
+Para poder personalizar como aquele Jogo é gerado pra mim.
+
+**Critérios de Aceite:**
+
+**Dado** o model `GenerationRule` (novo, `apps/loterias_core/models.py`)
+**Quando** a migration é aplicada
+**Então** a tabela tem os campos `user`, `game`, `rule_name`, `enabled`, `numeric_value`, `choice_value`, `updated_at`, com `unique_together = (user, game, rule_name)`
+**E** um `CheckConstraint` garante que `numeric_value` e `choice_value` nunca estão ambos preenchidos na mesma linha
+**E** `RULE_NAMES_BY_GAME` (dict Python, ao lado de `GAMES_CONFIG`) define o conjunto de `rule_name` válido por Jogo — fonte única, nenhuma outra parte do código hardcoda esse conjunto separadamente
+**Dado** um usuário clica no ícone de editar de um Jogo no seletor (sem selecionar o jogo pra gerar)
+**Quando** a página `/regras/<jogo>/` abre
+**Então** vejo o formulário de Regras de Geração daquele Jogo, pré-carregado com os valores atuais
+**E** se eu nunca personalizei esse Jogo, vejo um indicador "Usando regras padrão do sistema" e todos os toggles em NÃO, com os campos Valor visíveis-porém-desabilitados (nunca escondidos)
+**E** se eu já personalizei, vejo "Personalizado por você" com os valores salvos
+**Dado** eu desmarco um toggle e salvo
+**Quando** o formulário é submetido
+**Então** a linha correspondente em `GenerationRule` é gravada com `enabled=False` (nunca deletada) — `update_or_create`, nunca `DELETE`
+**E** uma linha é gravada por `rule_name` mostrado na tela daquele Jogo (ligadas e desligadas), de modo que `GenerationRule.objects.filter(user=, game=).exists()` reflita corretamente que esse Jogo foi configurado
+**Dado** eu nunca abri a tela de edição de um Jogo
+**Quando** um jogo desse tipo é gerado
+**Então** a geração usa a Regra de Sequência adaptativa de hoje (comportamento inalterado) — `GenerationRule.exists()` é `False` pra esse par
+**Dado** eu salvei ao menos uma vez a Regra de Geração de um Jogo
+**Quando** um jogo desse tipo é gerado
+**Então** a Regra de Sequência adaptativa não é mais consultada pra esse Jogo+usuário — só os toggles explícitos valem, mesmo que todos estejam desligados
+**E** uma confirmação (modal Bootstrap, foco gerenciado) é mostrada se eu estou desligando a última proteção de sequência ativa
+**Dado** eu clico em "Restaurar padrão" na tela de edição
+**Quando** confirmo
+**Então** todas as linhas de `GenerationRule` daquele user+game são apagadas — único caminho que deleta linhas — e o Jogo volta ao comportamento adaptativo de antes
+**Dado** esta story ainda não implementa nenhuma família de regra concreta (isso é escopo das Stories 4.4/4.6/4.7)
+**Quando** ela é entregue
+**Então** a tela de edição já funciona ponta a ponta pro fluxo de "nenhum `rule_name` real cadastrado ainda" — as próximas stories só adicionam entradas em `RULE_NAMES_BY_GAME` e os campos correspondentes no template
+
+*Referências: FR-18, FR-23, AD-11, AD-13, UX-DR3, UX-DR8, UX-DR9, `mockups/regras-geracao.html`.*
+
+### Story 4.4: Regras de Geração — Mega-Sena, +Milionária, Quina, Dupla-Sena
+
+Como jogador dessas 4 loterias,
+Eu quero configurar limites de sequência, linha, coluna e tipo de distribuição,
+Para que a geração respeite exatamente o padrão que eu quero.
+
+**Critérios de Aceite:**
+
+**Dado** a tela de edição de Regras de Geração de um desses 4 Jogos
+**Quando** ela carrega
+**Então** vejo os 5 campos: limite de números em sequência, limite de sequências no jogo, limite por linha do volante, limite por coluna do volante (cada um liga/desliga+valor), e Tipo de distribuição (Homogênea/Totalmente Aleatória)
+**E** pra Mega-Sena, os campos de linha/coluna usam o grid confirmado do volante oficial (6 linhas × 10 colunas, PRD §8.5) com texto de ajuda associado via `aria-describedby`
+**E** +Milionária/Quina/Dupla-Sena têm os mesmos 5 campos (inclusive linha/coluna), com grid em `GAME_GRID` (5×10, 8×10, 5×10 — confirmadas pelo Boss em 2026-09-19; a tela já os mostra desde a Story 4.3)
+**Dado** eu ativo Regras de Geração pra um desses Jogos e gero uma aposta
+**Quando** `generate_bet()` roda
+**Então** a nova função `bet_satisfies_rules(numbers, clovers, game, rules)` checa cada candidato contra as regras ativas (`enabled=True`), retornando a lista completa de `rule_name` violadas
+**E** o loop de tentativas usa `max_attempts=10000` (mesmo valor já existente na função) antes de considerar relaxar (Story 4.5)
+**E** um candidato que satisfaz todas as regras ativas é aceito
+**Dado** "Totalmente Aleatória" está selecionado
+**Quando** um jogo é gerado
+**Então** o comportamento é o sorteio uniforme de hoje, sem restrição de distribuição
+**Dado** "Homogênea" está selecionado
+**Quando** um jogo é gerado
+**Então** os números são sorteados um por faixa de largura igual do intervalo do Jogo (`numbers_count` dividido em `bets_count` faixas), garantindo espalhamento pelas dezenas
+**Dado** uma regra de linha/coluna está ativa pra Mega-Sena
+**Quando** um candidato tem mais números na mesma linha/coluna do que o limite configurado
+**Então** o candidato é rejeitado e uma nova tentativa acontece
+
+*Referências: FR-19, AD-11, AD-12, AD-13, PRD §8.5/§8.9, NFR-6.*
+
+### Story 4.5: Resolução de conflito entre Regras de Geração
+
+Como jogador que personalizou regras,
+Eu quero que a geração ainda funcione mesmo se minhas regras forem difíceis de satisfazer juntas,
+Para nunca ficar sem conseguir gerar um jogo.
+
+**Critérios de Aceite:**
+
+**Dado** as Regras de Geração ativas de um usuário pra um Jogo são, em conjunto, impossíveis de satisfazer dentro de `max_attempts=10000`
+**Quando** `generate_bet()` esgota as tentativas
+**Então** identifica quais `rule_name` o último candidato violou
+**E** escolhe a de maior `updated_at` entre essas (nunca a mais recente entre todas as regras do usuário — relaxar uma regra que não causou o conflito não ajudaria)
+**E** desliga só essa regra em memória (nunca grava no banco) e roda mais até 10000 tentativas com o conjunto reduzido
+**Dado** a segunda rodada de tentativas também esgota
+**Quando** isso acontece
+**Então** a geração cai na mensagem já existente "Não foi possível gerar um jogo único" — nunca tenta relaxar uma segunda regra
+**Dado** uma regra foi relaxada com sucesso na segunda rodada
+**Quando** o jogo é gerado
+**Então** uma mensagem nomeia qual regra foi relaxada e em qual Jogo — nunca um aviso genérico
+**E** o jogo é salvo normalmente, como um sucesso (não um erro)
+
+*Referências: FR-22, AD-12, EXPERIENCE.md Voice and Tone.*
+
+### Story 4.6: Regras de Geração — Lotofácil
+
+Como jogador de Lotofácil,
+Eu quero configurar regras específicas de espaço mínimo e quantidade mínima de sequências, além das já disponíveis pro grupo principal,
+Para ter mais controle sobre um jogo com mais números disponíveis.
+
+**Critérios de Aceite:**
+
+**Dado** a tela de edição de Regras de Geração da Lotofácil
+**Quando** ela carrega
+**Então** vejo 7 campos: os 5 já existentes pro grupo principal (Story 4.4) mais limite de espaço mínimo entre sequências e limite de quantidade mínima de sequências no jogo
+**E** os campos de linha/coluna usam o grid confirmado do volante oficial (5×5, PRD §8.5)
+**Dado** a regra de espaço mínimo entre sequências está ativa
+**Quando** um candidato tem duas sequências mais próximas que o valor configurado
+**Então** o candidato é rejeitado
+**Dado** a regra de quantidade mínima de sequências está ativa
+**Quando** um candidato tem menos sequências que o valor configurado
+**Então** o candidato é rejeitado
+**Dado** as regras compartilhadas com o grupo principal (sequência/linha/coluna/distribuição, Story 4.4)
+**Quando** ativas pra Lotofácil
+**Então** se comportam exatamente como especificado na Story 4.4, sem lógica duplicada — reusam a mesma `bet_satisfies_rules()`
+
+*Referências: FR-20, AD-11, PRD §8.5.*
+
+### Story 4.7: Regras de Geração — Lotomania
+
+Como jogador de Lotomania,
+Eu quero configurar um conjunto reduzido de regras (sem linha/coluna/distribuição, que não fazem sentido pra esse Jogo),
+Para ter controle sobre sequências sem opções que não se aplicam.
+
+**Critérios de Aceite:**
+
+**Dado** a tela de edição de Regras de Geração da Lotomania
+**Quando** ela carrega
+**Então** vejo só 3 campos: limite de números em sequência, limite de espaço mínimo entre sequências, limite de quantidade mínima de sequências
+**E** nenhum campo de linha/coluna/distribuição aparece — `RULE_NAMES_BY_GAME` pra Lotomania não os inclui
+**Dado** essas 3 regras reusam a mesma lógica já implementada nas Stories 4.4/4.6
+**Quando** ativas pra Lotomania
+**Então** `bet_satisfies_rules()` as avalia sem código novo — só a entrada em `RULE_NAMES_BY_GAME` muda
+
+*Referências: FR-21, AD-11.*
+
+### Story 4.8: Filtros cumulativos e exibição legível no histórico
+
+Como jogador,
+Eu quero filtrar meu histórico por Jogo, período e se ganhei,
+Para revisitar jogos antigos sem rolar a lista inteira procurando manualmente.
+
+**Critérios de Aceite:**
+
+**Dado** a tela de histórico
+**Quando** ela carrega
+**Então** uma barra de filtros (Jogo, período, só premiados) fica sempre visível no topo da lista, nunca colapsável
+**Dado** eu aplico um ou mais filtros
+**Quando** a página recarrega (GET com querystring)
+**Então** os filtros combinam por `AND` (cumulativos) — Jogo via `filter(game=)`, premiado via `filter(prize__gt=0)`, período via `filter(created_at__range=(inicio, fim))` com limites inclusivos convertidos pro início/fim do dia no `TIME_ZONE` do projeto
+**E** cada filtro ativo aparece como um badge removível com `aria-label` nomeando a ação (ex. "Remover filtro Jogo: Lotomania")
+**E** remover um filtro individual preserva os demais, e o foco pós-reload vai pro heading da barra de filtros
+**Dado** nenhum resultado bate com os filtros aplicados
+**Quando** a lista renderiza
+**Então** uma mensagem nomeia o que foi filtrado (não um vazio genérico) com um botão "Limpar filtros"
+**Dado** um jogo de Lotomania (50 números) ou Lotofácil (15 números) aparece na lista
+**Quando** a linha renderiza
+**Então** as bolinhas de número quebram linha naturalmente (`flex-wrap`), com `role="list"`/`role="listitem"`, sem cortar/sobrepor nem exigir scroll horizontal
+**Dado** um jogo de Dupla-Sena (2 sorteios) aparece na lista
+**Quando** a linha renderiza
+**Então** os 2 conjuntos de números aparecem empilhados, rotulados "1º sorteio:"/"2º sorteio:", cada um num container `role="group"` com `aria-label` próprio
+
+*Referências: FR-24, AD-14, UX-DR5, UX-DR6, `mockups/historico.html`.*
+
+
+## Epic 5: Migração para o Lottiq Design System e Renomeação do Produto
+
+Adotar o Lottiq Design System (projeto "Lottiq Design System" no Claude Design; tokens, componentes, 10 telas de referência em `images/Lottiq Telas.dc.html`) em toda a interface e renomear o produto de "Gerador de Loterias" para **Lottiq** (decisão do Boss, 2026-09-21). Bootstrap e Bootstrap Icons saem por completo; ícones passam a Material Symbols Rounded; tema escuro fica para uma rodada futura. Regras de conteúdo do DS valem em toda tela: vocabulário "palpite → jogo → conferir" (nunca "verificar"/"validar"), sem emoji, âmbar só em contexto de prêmio, um botão primário por tela.
+
+**Estratégia de transição:** o CSS do DS é carregado ao lado do Bootstrap enquanto há telas não migradas; o Bootstrap só é removido na última story, quando nenhuma tela depende dele. Cada story deixa o app inteiro funcionando e é validada no navegador pelo Boss antes da próxima.
+
+### Story 5.1: Fundação do Lottiq Design System e renomeação para Lottiq
+
+Como pessoa que usa o produto,
+Eu quero que o app carregue a identidade visual do Lottiq (cores, tipografia, componentes) e se chame Lottiq,
+Para que toda tela migrada depois tenha base consistente.
+
+**Critérios de Aceite:**
+
+**Dado** o app carregando
+**Quando** qualquer página renderiza
+**Então** os tokens do DS (cor, tipografia Sora/Figtree/JetBrains Mono, espaço, raio, sombra) estão disponíveis como variáveis CSS em `static/`, e as fontes e Material Symbols Rounded carregam via Google Fonts
+**E** existe um CSS de componentes do DS (botão, campo, switch, bola de número, cartão, banner/aviso, badge de status, estado vazio) usável por classe nos templates Django
+**Dado** o cabeçalho e o rodapé em `base/base.html`
+**Quando** renderizam
+**Então** usam a marca Lottiq (símbolo + wordmark de `images/`), navegação e estados de foco do DS, e o título das páginas e dos e-mails do app diz "Lottiq"
+**E** as telas ainda não migradas continuam funcionando (Bootstrap segue carregado até a Story 5.7)
+
+*Referências: DS `tokens/*.css`, `components/`, `ui_kits/app/AppShell.jsx`.*
+
+### Story 5.2: Landing page
+
+Como visitante,
+Eu quero uma landing page clara do Lottiq,
+Para entender o produto e criar minha conta.
+
+**Critérios de Aceite:**
+
+**Dado** um visitante não autenticado em `/`
+**Quando** a página carrega
+**Então** vê a landing do Claude Design (tela 01 de `Lottiq Telas.dc.html`), com o texto e o vocabulário do DS, as fotos de `images/` (Jogadora/Ganhador) nos espaços reservados, sem o card Multitenant nem os 3 cards antigos, e CTAs "Criar conta grátis"/"Entrar"
+**E** a página funciona em celular sem rolagem horizontal
+
+### Story 5.3: Entrar, criar conta e telas de conta
+
+Como visitante ou usuário,
+Eu quero as telas de entrar, cadastro, confirmação de e-mail, senha e perfil no visual do Lottiq,
+Para ter uma experiência consistente desde o primeiro acesso.
+
+**Critérios de Aceite:**
+
+**Dado** as telas de `templates/account/` e `templates/accounts/`
+**Quando** renderizam
+**Então** usam os componentes do DS (campos, botões, avisos), sem classes Bootstrap, e mantêm todo o comportamento existente (cooldown de reenvio, mensagens genéricas, validações)
+
+### Story 5.4: Home e geração de jogo
+
+Como usuário logado,
+Eu quero a home (seletor de Jogo, resumo, gerar/guardar) no visual do Lottiq,
+Para gerar jogos com a clareza do design de referência (telas 04/05).
+
+**Critérios de Aceite:**
+
+**Dado** a home autenticada
+**Quando** renderiza em desktop e celular
+**Então** segue as telas 04/05 do DS, mantendo o seletor acessível por teclado, o resumo ao lado, o ícone por Jogo (Material Symbols) e todo o comportamento das Stories 4.1/4.2
+
+### Story 5.5: Regras de Geração
+
+Como usuário logado,
+Eu quero a tela de Regras de Geração no visual do Lottiq,
+Para configurar regras com os controles do DS (tela 06).
+
+**Critérios de Aceite:**
+
+**Dado** `/regras/<jogo>/`
+**Quando** renderiza
+**Então** usa `Switch`, `Stepper`/campos, `Select` e avisos do DS, sem Bootstrap (inclusive os modais de confirmação, hoje Bootstrap JS), mantendo as regras de acessibilidade e o comportamento da Story 4.3
+
+### Story 5.6: Histórico, detalhe, notificações, estatísticas e preferências
+
+Como usuário logado,
+Eu quero histórico, detalhe do jogo, avisos, estatísticas e preferências no visual do Lottiq,
+Para acompanhar meus jogos e acertos (telas 07-10).
+
+**Critérios de Aceite:**
+
+**Dado** as telas restantes de `templates/loterias_core/`
+**Quando** renderizam
+**Então** usam os componentes do DS (`GameCard`, `NumberBall`, `StatusBadge`, `CelebrationCard` no acerto, `EmptyState`), mantêm os filtros, a legibilidade da Lotomania/Lotofácil/Dupla-Sena e a semântica das Stories 4.8/2.x, e trocam "verificar" por "conferir" na interface
+
+### Story 5.7: Remover o Bootstrap e fechar a migração
+
+Como mantenedor,
+Eu quero remover o Bootstrap e o Bootstrap Icons,
+Para não carregar dois sistemas de estilo.
+
+**Critérios de Aceite:**
+
+**Dado** todas as telas migradas
+**Quando** o Bootstrap (CSS/JS) e o Bootstrap Icons são removidos de `base/base.html`
+**Então** nenhum template usa classe Bootstrap ou `bi-*`, todas as telas seguem íntegras, e README/`CLAUDE.md` documentam o Lottiq e o Design System

@@ -574,7 +574,7 @@ class ExpiredConfirmationLinkTests(TestCase):
     def test_invalid_key_shows_expired_message_with_resend_form(self):
         response = self.client.get(reverse('account_confirm_email', kwargs={'key': 'chave-invalida-123'}))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Vinculo expirado ou invalido')
+        self.assertContains(response, 'Vínculo expirado ou inválido')
         self.assertContains(response, 'name="email"')
 
     def test_invalid_key_never_authenticates(self):
@@ -767,3 +767,31 @@ class FullSignupJourneyTests(TestCase):
 
         home_response = self.client.get(reverse('home'))
         self.assertEqual(home_response.status_code, 200)
+
+
+class LottiqAccountScreensTests(TestCase):
+    """Story 5.3: telas de conta no Lottiq Design System (sem crispy/Bootstrap nos formularios)."""
+
+    def test_login_and_signup_use_design_system_fields(self):
+        for name in ('account_login', 'account_signup', 'account_reset_password'):
+            response = self.client.get(reverse(name))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'lq-auth-card')
+            self.assertContains(response, 'lq-input')
+            self.assertContains(response, 'lq-btn-primary')
+            html = response.content.decode()
+            self.assertNotRegex(html, r'class="[^"]*(?<![\w-])form-control')
+            self.assertNotRegex(html, r'class="[^"]*(?<![\w-])btn-primary')
+
+    def test_login_shows_field_errors_accessibly(self):
+        response = self.client.post(reverse('account_login'), {'login': 'x@example.com', 'password': 'errada'})
+        self.assertContains(response, 'lq-banner-error')
+        self.assertContains(response, 'role="alert"')
+
+    def test_profile_and_complete_profile_render(self):
+        user = User.objects.create_user(email='perfil@example.com', password='SenhaForte123', first_name='Ana', last_name='Lima')
+        self.client.force_login(user)
+        response = self.client.get(reverse('profile'))
+        self.assertContains(response, 'Resumo da conta')
+        self.assertContains(response, 'lq-stats')
+        self.assertNotContains(response, 'bi-')
