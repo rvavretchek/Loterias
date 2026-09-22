@@ -18,7 +18,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-card-title { font: 700 22px/1.25 var(--font-display); letter-spacing: -.02em; color: var(--text-heading); margin: 0; }
 .lq-lead { font: 400 18px/1.6 var(--font-body); color: var(--text-muted); }
 .lq-small { font: 400 14px/1.5 var(--font-body); color: var(--text-muted); }
-.lq-eyebrow { font: 700 12px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--teal-700); }
+.lq-eyebrow { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
 .lq-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* Cabecalho */

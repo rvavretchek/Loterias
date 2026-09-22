@@ -285,18 +285,7 @@ def save_manual_bet_view(request):
 
     result = fetch_cef_result(selected_game, contest)
     if result:
-        LotteryResult.objects.update_or_create(
-            game=selected_game,
-            contest=contest,
-            defaults={
-                'numbers': result.get('numbers', []),
-                'clovers': result.get('clovers', []),
-                'prizes': result.get('prizes', {}),
-                'numbers_second_draw': result.get('numbers_second_draw', []),
-                'prizes_second_draw': result.get('prizes_second_draw', {}),
-                'source': 'CEF',
-            }
-        )
+        LotteryResult.objects.save_official_result(selected_game, contest, result)
         prize = calculate_bet_prize(selected_game, bet.numbers, bet.clovers, result)
         apply_prize_to_bet(bet, prize)
         if prize['won']:
@@ -319,18 +308,7 @@ def check_bet_result_view(request, pk):
         messages.warning(request, 'Nao foi possivel consultar o resultado oficial da CEF neste momento.')
         return redirect('bet_detail', pk=pk)
 
-    LotteryResult.objects.update_or_create(
-        game=bet.game,
-        contest=bet.contest,
-        defaults={
-            'numbers': result.get('numbers', []),
-            'clovers': result.get('clovers', []),
-            'prizes': result.get('prizes', {}),
-            'numbers_second_draw': result.get('numbers_second_draw', []),
-            'prizes_second_draw': result.get('prizes_second_draw', {}),
-            'source': 'CEF',
-        }
-    )
+    LotteryResult.objects.save_official_result(bet.game, bet.contest, result)
 
     prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
     apply_prize_to_bet(bet, prize)

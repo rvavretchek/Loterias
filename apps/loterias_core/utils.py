@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from .models import (
     GeneratedBet, LotteryResult, PrizeTier, GenerationRule, GAME_GRID,
-    GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL,
+    GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL, normalize_contest,
 )
 
 
@@ -298,19 +298,6 @@ def check_duplicate_bet(user, game_name, numbers, clovers):
         numbers=numbers,
         clovers=clovers if clovers else []
     ).exists()
-
-
-def normalize_contest(raw):
-    """Normaliza um numero de concurso digitado pelo usuario pra uma forma canonica (Story 2.12):
-    remove zeros a esquerda convertendo pra inteiro e re-serializando, garantindo que duas grafias
-    do mesmo concurso real (ex. '2500' e '02500') nunca sejam tratadas como concursos distintos em
-    nenhum ponto que compara/grava `contest` (bloqueio de concurso ja sorteado, duplicata,
-    LotteryResult, purga manual). Levanta ValueError pra qualquer valor vazio ou nao numerico --
-    nunca grava/compara um concurso invalido silenciosamente."""
-    stripped = raw.strip()
-    if not stripped.isdecimal():
-        raise ValueError(f'Numero de concurso invalido: {raw!r}')
-    return str(int(stripped))
 
 
 def suggest_next_contest(game_name):

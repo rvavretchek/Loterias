@@ -4030,3 +4030,56 @@ class LottiqBaseTemplateTests(TestCase):
         from django.contrib.staticfiles import finders
         for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
             self.assertIsNotNone(finders.find(path), path)
+
+
+class ContestNormalizationOnSaveTests(TestCase):
+    """Retro do Epic 2, item 7: contest normalizado em qualquer caminho de escrita (nao so views),
+    sem nunca rejeitar valor legado nao-numerico -- ver NormalizesContestOnSave.save()."""
+
+    def test_generatedbet_save_normalizes_leading_zeros(self):
+        user = User.objects.create_user(email='norm@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(user=user, game='Mega-sena', contest='02500', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        self.assertEqual(bet.contest, '2500')
+
+    def test_lotteryresult_and_capturefailurealert_save_normalize_too(self):
+        result = LotteryResult.objects.create(game='Mega-sena', contest='00300', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
+        self.assertEqual(result.contest, '300')
+        alert = CaptureFailureAlert.objects.create(game='Mega-sena', contest='00007')
+        self.assertEqual(alert.contest, '7')
+
+    def test_legacy_non_numeric_contest_is_tolerated_not_rejected(self):
+        user = User.objects.create_user(email='legado@example.com', password='SenhaForte123')
+        bet = GeneratedBet.objects.create(user=user, game='Mega-sena', contest='ESPECIAL-2026', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
+        self.assertEqual(bet.contest, 'ESPECIAL-2026')
+
+
+class SaveOfficialResultTests(TestCase):
+    """Retro do Epic 2, itens 1 e 7: fonte unica pra gravar LotteryResult, com retry sob corrida."""
+
+    def _result(self, **extra):
+        return {'numbers': [1, 2, 3, 4, 5, 6], 'clovers': [], 'prizes': {'6': {'value': 'R$ 1,00'}}, **extra}
+
+    def test_creates_then_updates_the_same_row(self):
+        obj, created = LotteryResult.objects.save_official_result('Mega-sena', '9000', self._result())
+        self.assertTrue(created)
+        obj2, created2 = LotteryResult.objects.save_official_result('Mega-sena', '9000', self._result(source='CEF'))
+        self.assertFalse(created2)
+        self.assertEqual(obj.pk, obj2.pk)
+        self.assertEqual(LotteryResult.objects.filter(game='Mega-sena', contest='9000').count(), 1)
+
+    def test_retries_once_on_integrity_error_from_a_concurrent_writer(self):
+        real_update_or_create = LotteryResult.objects.update_or_create
+        calls = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                LotteryResult.objects.create(game='Quina', contest='9001', numbers=[1, 2, 3, 4, 5], clovers=[])
+                raise IntegrityError('unique_together corrida simulada')
+            return real_update_or_create(*args, **kwargs)
+
+        with patch.object(LotteryResult.objects, 'update_or_create', side_effect=flaky):
+            obj, created = LotteryResult.objects.save_official_result('Quina', '9001', self._result(numbers=[1, 2, 3, 4, 5]))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='9001').count(), 1)
+        self.assertEqual(obj.numbers, [1, 2, 3, 4, 5])

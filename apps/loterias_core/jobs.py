@@ -47,18 +47,7 @@ def fetch_daily_results(final=False):
                 logger.info('fetch_daily_results: sem resultado disponivel para %s/%s', game, contest)
                 still_open.append((game, contest))
                 continue
-            LotteryResult.objects.update_or_create(
-                game=game,
-                contest=contest,
-                defaults={
-                    'numbers': result.get('numbers', []),
-                    'clovers': result.get('clovers', []),
-                    'prizes': result.get('prizes', {}),
-                    'numbers_second_draw': result.get('numbers_second_draw', []),
-                    'prizes_second_draw': result.get('prizes_second_draw', {}),
-                    'source': 'CEF',
-                }
-            )
+            LotteryResult.objects.save_official_result(game, contest, result)
             resolved += 1
         except Exception:
             logger.exception('fetch_daily_results: falha ao capturar/gravar resultado para %s/%s', game, contest)

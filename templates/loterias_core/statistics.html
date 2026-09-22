@@ -31,10 +31,10 @@
 
     {% if estatisticas %}
     <div class="stats-summary">
-        <div class="home-stat"><div class="home-stat-label">Total de jogos</div><div class="home-stat-value">{{ total_geral }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Tipos de jogo</div><div class="home-stat-value">{{ estatisticas|length }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Com sequência</div><div class="home-stat-value">{{ total_com_sequencia }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Sem sequência</div><div class="home-stat-value">{{ total_sem_sequencia }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Total de jogos</div><div class="home-stat-value">{{ total_geral }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Tipos de jogo</div><div class="home-stat-value">{{ estatisticas|length }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Com sequência</div><div class="home-stat-value">{{ total_com_sequencia }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Sem sequência</div><div class="home-stat-value">{{ total_sem_sequencia }}</div></div>
     </div>
 
     <div class="stats-grid">
@@ -54,7 +54,7 @@
                 <div class="lq-progress"><div class="lq-progress-bar" style="width: {{ stats.without_sequence_percentage }}%;"></div></div>
             </div>
 
-            <div class="detail-section-title" style="font:700 11px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--text-muted); margin-bottom:12px;">Números mais frequentes</div>
+            <div class="lq-eyebrow" style="margin-bottom:12px;">Números mais frequentes</div>
             <div class="frequent-list">
                 {% for num, freq in stats.most_frequent %}
                 <div class="frequent-item">

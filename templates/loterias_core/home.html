@@ -18,9 +18,7 @@
     }
     .home-head p { margin: 6px 0 0; }
     .home-stat { background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 16px; }
-    .home-stat-label { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
     .home-stat-value { font: 700 22px var(--font-mono); color: var(--lq-navy); margin-top: 6px; font-variant-numeric: tabular-nums; }
-    .home-eyebrow { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
     [hidden] { display: none !important; }
 
     /* Jogo selecionado (regiao aria-live) */
@@ -78,7 +76,7 @@
         {% csrf_token %}
 
         <div class="lq-card" id="jogo-selecionado" style="display:flex; flex-direction:column; gap:18px;">
-            <div class="home-eyebrow">Jogo selecionado</div>
+            <div class="lq-eyebrow">Jogo selecionado</div>
             <!-- Região aria-live: o conteúdo sempre existe (nunca alterna display), só o texto/ícone mudam,
                  pra leitores de tela anunciarem a troca de jogo de forma confiável. -->
             <div id="jogo-selecionado-info" aria-live="polite" aria-atomic="true">
@@ -101,7 +99,7 @@
         </div>
 
         <div class="lq-card" style="display:flex; flex-direction:column; gap:16px;">
-            <div class="home-eyebrow">Loteria</div>
+            <div class="lq-eyebrow">Loteria</div>
             <div id="seletor-de-jogos" class="game-grid">
                 {% for key, config in jogos_disponiveis.items %}
                 <div class="game-tile">
@@ -131,7 +129,7 @@
     </form>
 
     <div class="lq-card">
-        <div class="home-eyebrow" style="margin-bottom:14px;">Guardar palpite manual</div>
+        <div class="lq-eyebrow" style="margin-bottom:14px;">Guardar palpite manual</div>
         <form method="post" action="{% url 'save_manual_bet' %}">
             {% csrf_token %}
             <div class="manual-grid">
@@ -159,7 +157,7 @@
     {% if ultimos_jogos %}
     <div class="lq-card">
         <div class="lq-row-between" style="margin-bottom:6px;">
-            <div class="home-eyebrow">Últimos jogos</div>
+            <div class="lq-eyebrow">Últimos jogos</div>
             <a href="{% url 'history' %}" class="lq-btn lq-btn-outline lq-btn-sm">Ver todos</a>
         </div>
         <div class="recent-list">
@@ -185,15 +183,15 @@
     <!-- Resumo de atividade: sidebar (>=1280px) / abaixo da coluna principal (<1280px) -->
     <aside class="home-sidebar" id="resumo-lateral" aria-label="Resumo de atividade">
         <div class="home-stat">
-            <div class="home-stat-label">Jogos guardados</div>
+            <div class="lq-eyebrow">Jogos guardados</div>
             <div class="home-stat-value">{{ total_jogos }}</div>
         </div>
         <div class="home-stat">
-            <div class="home-stat-label">Tipos de jogo</div>
+            <div class="lq-eyebrow">Tipos de jogo</div>
             <div class="home-stat-value">{{ jogos_por_tipo|length }}</div>
         </div>
         <div class="home-stat">
-            <div class="home-stat-label">Jogos recentes</div>
+            <div class="lq-eyebrow">Jogos recentes</div>
             <div class="home-stat-value">{{ ultimos_jogos|length }}</div>
         </div>
     </aside>
