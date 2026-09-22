@@ -74,6 +74,31 @@ curl -I -H 'Host: www.loterias.internal' http://127.0.0.1/
 dig +short @192.168.50.71 www.loterias.internal
 ```
 
+### Smoke-test de ambiente para stories que tocam deploy/cron
+
+**Retro do Epic 2, item 8:** o container `loterias-cron` rodou sem sucesso por 5 dias (2026-09-08 a 2026-09-11) sem nenhum log de erro -- o cron nao herda o ambiente do container pro processo do job (`printenv > /etc/environment`, ver comentario no `docker-compose.yml`), entao os jobs caiam silenciosamente no `DATABASE_NAME` default do Django (banco vazio) em vez do volume real. O código ficou "pronto" bem antes do critério de aceite (cron rodando de verdade) ser satisfeito, e ninguém percebeu porque validar só o container `loterias-web` (`curl`/`docker ps` acima) não prova nada sobre o `loterias-cron`.
+
+**Sempre que uma story tocar `Dockerfile`, `deploy/lab/docker-compose.yml`, `CRONJOBS`/`apps/loterias_core/jobs.py`, ou qualquer variável de ambiente usada dentro do container**, rodar isto **dentro do próprio container** (não no host, não em `manage.py shell` local) antes de marcar a story como pronta:
+
+```bash
+# 1. O container do cron enxerga o MESMO banco real que o loterias-web (nao um arquivo vazio)
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron python manage.py shell -c "
+from django.conf import settings
+print('DATABASE_NAME visto pelo Django:', settings.DATABASES['default']['NAME'])
+from apps.loterias_core.models import GeneratedBet
+print('linhas em GeneratedBet:', GeneratedBet.objects.count())"
+
+# 2. O cron do sistema (no PATH/env do cron, nao do shell interativo) enxerga as mesmas variaveis
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron sh -c "cat /etc/environment | grep -c DATABASE_NAME"
+
+# 3. O job agendado roda de verdade (nao so "existe no crontab")
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron python manage.py shell -c "
+from apps.loterias_core.jobs import fetch_daily_results
+fetch_daily_results()"
+```
+
+Se o passo 1 mostrar uma contagem de linhas muito menor que a esperada, ou um `DATABASE_NAME` diferente de `/app/data/db.sqlite3`, é o mesmo bug de novo -- não seguir em frente até corrigir.
+
 ## Backup e validacao de migration antes de aplicar em producao
 
 **Nota (2026-09-08):** enquanto este ambiente for um lab/staging de teste (sem dados reais de usuario), este procedimento nao precisa ser seguido — o volume `loterias_data` pode ser recriado livremente. Ele passa a ser obrigatorio **a partir do dia em que o Boss declarar este ambiente como producao**.
