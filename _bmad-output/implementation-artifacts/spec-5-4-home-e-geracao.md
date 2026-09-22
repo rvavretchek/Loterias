@@ -26,3 +26,10 @@ context: ['{project-root}/_bmad-output/planning-artifacts/epics.md']
 - Resumo lateral virou 3 métricas (Jogos guardados, Tipos de jogo, Jogos recentes). O cartão âmbar "Prêmios no ano" do design não entrou: o app não calcula esse total.
 - "Verificar/gerado" → vocabulário do DS: "Guardar palpite manual", "Sugestão: concurso N".
 - Testes da home atualizados pros novos seletores (`lq-tile-input`, ícones Material, rótulos do resumo). Suíte: 415 OK. Não verificado em navegador (JS do seletor segue sem teste automatizado — item já em deferred-work).
+
+## Correção pós-entrega (2026-09-22)
+
+- **Bug reportado pelo Boss:** navegando só por teclado, não dava pra selecionar um jogo -- o Tab ia parar no botão "editar regras" no lugar do próximo jogo, e o link de editar parecia não funcionar.
+- **Causa raiz:** cada tile tinha seu próprio `<a>` "editar regras" intercalado entre os radios do mesmo grupo (`name="jogo"`). Radios não marcados de um grupo saem inteiramente da sequência de Tab (só ficam alcançáveis pelas setas) -- então, ao focar o 1º radio, o próximo Tab pulava direto pro link de editar daquele tile, nunca pro 2º jogo. Isso valia pra qualquer lugar que o link ficasse (intercalado ou em bloco), porque a exclusão dos outros radios da sequência de Tab independe de onde o link está.
+- **Correção:** um único link "Editar regras de geração" depois de todo o grupo de radios (nunca entre eles), com o texto/`href` atualizados por `selectGame()` pro jogo escolhido (via novo `data-regras-url` em cada radio). Antes de qualquer seleção, o link mostra "Editar regras de geração" e aponta pro primeiro Jogo -- funciona sem JS (link real, `href` de servidor), e o JS só refina texto/destino. Tab: `[grupo de radios, setas escolhem] → [link de editar, agora único] → resto da página`.
+- Teste novo: `test_only_one_edit_rules_link_and_it_comes_after_the_whole_radio_group`. Suíte: 416 OK.

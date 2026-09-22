@@ -1299,6 +1299,23 @@ class HomeViewTests(TestCase):
         self.assertEqual(html.count('game-selector-check" aria-hidden="true"'), len(GAMES_CONFIG))
         self.assertRegex(html, r'\.lq-tile-input:checked \+ \.lq-tile \.game-selector-check\s*\{\s*display:\s*block')
 
+    def test_only_one_edit_rules_link_and_it_comes_after_the_whole_radio_group(self):
+        """Regressao (Boss, 2026-09-22): um <a> entre radios do mesmo grupo tira o foco do Tab
+        do grupo assim que o 1o radio recebe foco (radios nao-marcados saem da sequencia de Tab
+        inteiramente) -- so ha 1 link de editar regras, depois de todos os radios/labels."""
+        user = User.objects.create_user(email='tabfix@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertEqual(html.count('id="jogo-regras-link"'), 1)
+        selector = html[html.index('id="seletor-de-jogos"'):html.index('</form>', html.index('id="seletor-de-jogos"'))]
+        last_radio = max(selector.index('id="jogo-%s"' % game) for game in GAMES_CONFIG)
+        last_label_close = selector.rindex('</label>')
+        link_pos = selector.index('id="jogo-regras-link"')
+        self.assertGreater(link_pos, last_radio)
+        self.assertGreater(link_pos, last_label_close)
+        for game in GAMES_CONFIG:
+            self.assertIn('data-regras-url="%s"' % reverse('generation_rules', kwargs={'jogo': game.lower()}), selector)
+
     def test_selected_game_area_is_polite_atomic_live_region(self):
         """Story 4.2 (UX-DR4): area 'jogo selecionado' anunciavel por leitor de tela."""
         user = User.objects.create_user(email='live@example.com', password='SenhaForte123')

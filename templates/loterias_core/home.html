@@ -48,9 +48,7 @@
     .lq-tile-input:checked + .lq-tile { border: 2px solid var(--lq-navy); padding: 15px 9px 19px; background: var(--surface-sunken); }
     .lq-tile-input:checked + .lq-tile .game-selector-check { display: block; }
     .lq-tile-input:focus-visible + .lq-tile { box-shadow: var(--ring-focus); border-color: var(--action-primary); }
-    .game-edit-link { position: absolute; bottom: 2px; right: 2px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); border-radius: 50%; }
-    .game-edit-link:hover { color: var(--teal-700); background: var(--status-waiting-bg); }
-    .game-edit-link .ms { font-size: 20px; }
+    .game-edit-link { align-self: flex-start; margin-top: 4px; }
 
     /* Formulario manual */
     .manual-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
@@ -109,6 +107,7 @@
                 <div class="game-tile">
                     <input type="radio" class="lq-tile-input" name="jogo" id="jogo-{{ key }}" value="{{ key }}"
                            autocomplete="off" required data-name="{{ config.name }}"
+                           data-regras-url="{% url 'generation_rules' key|lower %}"
                            data-resumo="{{ config.bets_count }} números de {{ config.numbers_count }} possíveis{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}">
                     <label class="lq-tile" for="jogo-{{ key }}">
                         <span class="ms msf game-selector-check" aria-hidden="true">check_circle</span>
@@ -116,13 +115,18 @@
                         <span class="tile-name">{{ config.name }}</span>
                         <span class="tile-meta">{{ config.bets_count }} de {{ config.numbers_count }}{% if config.clovers > 0 %} + {{ config.clovers }} trevos{% endif %}</span>
                     </label>
-                    <a href="{% url 'generation_rules' key|lower %}" class="game-edit-link"
-                       aria-label="Editar regras de geração de {{ config.name }}" title="Editar regras de geração">
-                        <span class="ms" aria-hidden="true">tune</span><span class="lq-sr-only">editar</span>
-                    </a>
                 </div>
                 {% endfor %}
             </div>
+            <!-- Um unico link, depois do grupo de radios inteiro (nunca entre eles): um <a> entre
+                 radios do mesmo grupo tira o foco do Tab do grupo assim que o primeiro radio recebe
+                 foco -- e' o proprio grupo de radios que so aceita Tab de entrada/saida nas pontas
+                 (setas navegam entre eles); um link intercalado quebra isso (achado do Boss, 2026-09-22). -->
+            {% for key, config in jogos_disponiveis.items %}{% if forloop.first %}
+            <a href="{% url 'generation_rules' key|lower %}" class="lq-btn lq-btn-outline lq-btn-sm game-edit-link" id="jogo-regras-link">
+                <span class="ms" aria-hidden="true">tune</span><span id="jogo-regras-texto">Editar regras de geração</span>
+            </a>
+            {% endif %}{% endfor %}
         </div>
     </form>
 
@@ -210,6 +214,12 @@ function selectGame(radio) {
     nome.textContent = radio.dataset.name;
     nome.className = 'selected-game-name';
     document.getElementById('jogo-selecionado-resumo').textContent = radio.dataset.resumo;
+
+    var regrasLink = document.getElementById('jogo-regras-link');
+    if (regrasLink && radio.dataset.regrasUrl) {
+        regrasLink.href = radio.dataset.regrasUrl;
+        document.getElementById('jogo-regras-texto').textContent = 'Editar regras de ' + radio.dataset.name;
+    }
 
     preencherConcursoSugerido(radio.value);
 }
