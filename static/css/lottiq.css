@@ -81,6 +81,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-input:focus, .lq-select:focus { outline: none; border-color: var(--action-primary); box-shadow: var(--ring-focus); }
 .lq-input.is-mono { font: 700 15px var(--font-mono); }
 .lq-input.is-error { border: 1.5px solid var(--red-500); }
+.lq-input:disabled, .lq-select:disabled { background: var(--neutral-50); color: var(--text-faint); cursor: not-allowed; }
 .lq-helper { font: 400 12px var(--font-body); color: var(--text-faint); }
 .lq-error { font: 600 12px var(--font-body); color: var(--red-700); }
 
@@ -154,3 +155,11 @@ a:hover { color: var(--action-primary-hover); }
 .lq-stat { border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 16px; text-align: center; }
 .lq-stat-value { font: 700 20px var(--font-mono); color: var(--lq-navy); font-variant-numeric: tabular-nums; }
 .lq-stat-label { font: 400 13px var(--font-body); color: var(--text-muted); }
+
+/* Dialog nativo (<dialog>): sem depender do Bootstrap JS. Abrir com showModal(), fechar com close(). */
+.lq-dialog { border: none; border-radius: var(--radius-2xl); padding: 0; max-width: 440px; width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+.lq-dialog::backdrop { background: rgba(10, 42, 66, .45); }
+.lq-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--border-default); }
+.lq-dialog-head h2 { font: 700 18px var(--font-display); color: var(--lq-navy); margin: 0; }
+.lq-dialog-body { padding: 20px 24px; font: 400 15px/1.55 var(--font-body); color: var(--text-body-color); }
+.lq-dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border-default); flex-wrap: wrap; }

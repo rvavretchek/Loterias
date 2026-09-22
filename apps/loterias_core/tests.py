@@ -3495,7 +3495,7 @@ class GenerationRulesViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Usando regras padrão do sistema')
-        self.assertNotContains(response, 'data-bs-target="#modal-restaurar"')
+        self.assertNotContains(response, 'data-open-dialog="modal-restaurar"')
         for name in RULE_NAMES_BY_GAME['Mega-sena']:
             self.assertContains(response, f'name="value_{name}"')
         self.assertContains(response, 'aria-describedby="help-limit_row_count"')
@@ -3513,7 +3513,7 @@ class GenerationRulesViewTests(TestCase):
         self.assertNotIn('disabled', enabled_field[:enabled_field.index('>')])
         disabled_field = html[html.index('id="value-limit_sequence_pairs"'):]
         self.assertIn('disabled', disabled_field[:disabled_field.index('>')])
-        self.assertIn('data-bs-target="#modal-restaurar"', html)
+        self.assertIn('data-open-dialog="modal-restaurar"', html)
         self.assertIn('name="restaurar"', html)
 
     def test_save_writes_one_row_per_rule_and_shows_customized(self):
