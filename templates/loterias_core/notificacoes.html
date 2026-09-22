@@ -65,7 +65,7 @@
                    aria-label="Ver jogo de {{ notificacao.bet.game }}, concurso {{ notificacao.bet.contest }}">
                     <span class="ms" aria-hidden="true">visibility</span>Ver jogo
                 </a>
-                <form method="post" action="{% url 'mark_notification_read' notificacao.pk %}" class="d-inline">
+                <form method="post" action="{% url 'mark_notification_read' notificacao.pk %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <button type="submit" class="lq-btn lq-btn-secondary lq-btn-sm"

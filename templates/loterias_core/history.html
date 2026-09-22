@@ -96,7 +96,7 @@
                 <div style="display:flex; gap:6px;">
                     <a href="{% url 'bet_detail' jogo.pk %}" class="lq-icon-btn" title="Ver detalhes" aria-label="Ver detalhes do jogo de {{ jogo.game }}, concurso {{ jogo.contest }}"><span class="ms" aria-hidden="true">visibility</span></a>
                     <a href="{% url 'regenerate_bet' jogo.pk %}" class="lq-icon-btn" title="Gerar novamente" aria-label="Gerar novamente o jogo de {{ jogo.game }}, concurso {{ jogo.contest }}"><span class="ms" aria-hidden="true">autorenew</span></a>
-                    <form method="post" action="{% url 'delete_bet' jogo.pk %}" class="d-inline">
+                    <form method="post" action="{% url 'delete_bet' jogo.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="lq-icon-btn btn-delete" title="Excluir" aria-label="Excluir o jogo de {{ jogo.game }}, concurso {{ jogo.contest }}"><span class="ms" aria-hidden="true">delete</span></button>
                     </form>

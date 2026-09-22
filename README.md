@@ -1,50 +1,50 @@
-# 🎰 Gerador de Loterias - Django
+# Lottiq
 
-Sistema web moderno para geração de apostas de loterias brasileiras, desenvolvido com Django, SQLite e multitenancy.
+Aplicação Django que gera, guarda e confere jogos para seis loterias brasileiras (Mega-Sena, +Milionária, Lotomania, Lotofácil, Quina, Dupla-Sena). Single-tenant, multiusuário: todo usuário compartilha um único banco SQLite.
 
-## ✨ Funcionalidades
+## Funcionalidades
 
-- **Geração Inteligente**: Algoritmo que respeita regras de sequencia e evita repetições
-- **Autenticação por E-mail**: Cadastro e login via e-mail com verificação (django-allauth)
-- **Temas Diurno/Noturno**: Interface moderna com alternância entre tema claro e escuro
-- **Histórico Completo**: Mantem registro de todos os jogos gerados
-- **Estatísticas**: Analise de números mais frequentes e padrões
-- **6 Loterias**: Mega-Sena, Milionária, Lotomania, Lotofacil, Quina, Dupla-Sena
+- **Geração com regras personalizadas**: cada usuário configura, por Jogo, limites de sequência, espaço entre sequências, distribuição no volante etc. (tela "Regras de Geração"); sem personalização, vale a regra adaptativa padrão.
+- **Palpite manual**: além de gerar, dá pra guardar um jogo já feito na lotérica.
+- **Autenticação por e-mail**: cadastro e login via e-mail com verificação obrigatória (django-allauth).
+- **Histórico com filtros**: por Jogo, período e premiados, com paginação.
+- **Conferência automática**: rotina diária busca o resultado oficial da Caixa e avisa acerto (no site e, opcionalmente, por e-mail).
+- **Estatísticas**: números mais frequentes e proporção de jogos com/sem sequência, por Jogo.
 
-## 🚀 Tecnologias
+## Tecnologias
 
 - **Django 5.0.6**
-- **django-allauth** (Autenticacao)
-- **Bootstrap 5** + **Crispy Forms**
+- **django-allauth** (autenticação)
+- **Lottiq Design System** — CSS próprio (`static/css/lottiq*.css`), sem framework de UI; ícones Material Symbols Rounded
 - **SQLite3**
 
-## 📁 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
-loterias_django/
 ├── apps/
-│   ├── accounts/          # Usuarios
-│   └── loterias_core/     # Jogos, Estatisticas, Utils
-├── loterias/              # Configuracoes Django
+│   ├── accounts/          # Usuários
+│   └── loterias_core/     # Jogos, regras de geração, estatísticas, utils
+├── loterias/              # Configurações Django
 ├── templates/             # Templates HTML
-│   ├── base/             # Template base com tema
-│   ├── account/          # Templates do allauth
-│   ├── accounts/         # Perfil, cadastro
-│   └── loterias_core/    # Home, historico, estatisticas
-├── static/               # CSS, JS, imagens
+│   ├── base/              # Template base (cabeçalho, rodapé, mensagens)
+│   ├── account/           # Templates do allauth
+│   ├── accounts/          # Perfil, cadastro
+│   ├── components/        # Componentes de template reutilizáveis (ex. formulário)
+│   └── loterias_core/     # Home, histórico, regras, estatísticas
+├── static/                # CSS (Lottiq Design System), imagens
 ├── manage.py
 └── requirements.txt
 ```
 
-## 🔧 Instalação
+## Instalação
 
 ### 1. Clone o repositório
 
 ```bash
-cd loterias_django
+cd Loterias
 ```
 
-### 2. Crie o ambiente virtual
+### 2. Crie o ambiente virtual (fixado em Python 3.11 — Django 5.0.6 não suporta 3.13+)
 
 ```bash
 python -m venv venv
@@ -63,13 +63,14 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edite o arquivo .env com suas configuracoes
+# Edite o arquivo .env com suas configurações
 ```
 
 ### 5. Execute as migrações
 
 ```bash
 python manage.py migrate
+python manage.py createcachetable
 ```
 
 ### 6. Crie um superusuário
@@ -86,7 +87,7 @@ python manage.py runserver
 
 Acesse: http://localhost:8000
 
-## 📧 Configuração de E-mail
+## Configuração de e-mail
 
 Para envio de e-mails reais, configure no `.env`:
 
@@ -97,38 +98,33 @@ EMAIL_PORT=587
 EMAIL_USE_TLS=True
 EMAIL_HOST_USER=seu-email@gmail.com
 EMAIL_HOST_PASSWORD=sua-senha-de-app
-DEFAULT_FROM_EMAIL=Lotérias <noreply@loterias.com>
+DEFAULT_FROM_EMAIL=Lottiq <noreply@lottiq.com>
 ```
 
-Para desenvolvimento, os e-mails sao exibidos no console por padrao.
+Para desenvolvimento, os e-mails são exibidos no console por padrão.
 
-## 🎨 Temas
-
-O sistema possui tema claro e escuro. O usuario pode alternar clicando no icone de sol/lua na navbar. A preferencia e salva no perfil do usuario.
-
-## 📝 Comandos Uteis
+## Comandos úteis
 
 ```bash
 # Shell Django
 python manage.py shell
 
-# Coletar arquivos estaticos
+# Coletar arquivos estáticos
 python manage.py collectstatic
+
+# Testes
+python manage.py test
 ```
 
-## 🔒 Segurança
+## Segurança
 
-- CSRF protection habilitado
-- XSS filtering
-- Clickjacking protection
-- Password validators
-- Email verification obrigatoria
-- HTTPS em producao
+- Proteção CSRF habilitada
+- Filtro XSS
+- Proteção contra clickjacking
+- Validadores de senha (Argon2id com pepper)
+- Verificação de e-mail obrigatória
+- HTTPS em produção
 
-## 📄 Licença
+## Licença
 
 MIT License
-
----
-
-Desenvolvido com <3 e Django

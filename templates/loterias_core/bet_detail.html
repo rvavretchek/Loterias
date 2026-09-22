@@ -67,7 +67,7 @@
         <div class="detail-actions">
             <a href="{% url 'regenerate_bet' jogo.pk %}" class="lq-btn lq-btn-primary"><span class="ms" aria-hidden="true">autorenew</span>Gerar novamente</a>
             <a href="{% url 'check_bet_result' jogo.pk %}" class="lq-btn lq-btn-outline"><span class="ms" aria-hidden="true">fact_check</span>Conferir resultado da Caixa</a>
-            <form method="post" action="{% url 'delete_bet' jogo.pk %}" class="d-inline">
+            <form method="post" action="{% url 'delete_bet' jogo.pk %}">
                 {% csrf_token %}
                 <button type="submit" class="lq-btn lq-btn-danger btn-delete"><span class="ms" aria-hidden="true">delete</span>Excluir</button>
             </form>

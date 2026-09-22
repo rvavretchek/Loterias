@@ -4,7 +4,7 @@ Este arquivo fornece orientação ao Claude Code (claude.ai/code) ao trabalhar c
 
 ## Visão geral do projeto
 
-Aplicação Django que gera combinações de jogo pra seis loterias brasileiras (Mega-Sena, +Milionária, Lotomania, Lotofácil, Quina, Dupla-Sena). Single-tenant, multiusuário: todo usuário compartilha um único banco SQLite — não há isolamento por organização (uma iteração anterior adicionou multitenancy via SQLite-por-tenant; foi removida em 2026-09-07 por estar arquiteturalmente errada pra esta aplicação e ser a causa raiz de um bug de "não consigo gerar jogos" — ver [docs/diagnostico-projeto.md](docs/diagnostico-projeto.md) pro diagnóstico completo).
+**Lottiq** é uma aplicação Django que gera, guarda e confere combinações de jogo pra seis loterias brasileiras (Mega-Sena, +Milionária, Lotomania, Lotofácil, Quina, Dupla-Sena). Single-tenant, multiusuário: todo usuário compartilha um único banco SQLite — não há isolamento por organização (uma iteração anterior adicionou multitenancy via SQLite-por-tenant; foi removida em 2026-09-07 por estar arquiteturalmente errada pra esta aplicação e ser a causa raiz de um bug de "não consigo gerar jogos" — ver [docs/diagnostico-projeto.md](docs/diagnostico-projeto.md) pro diagnóstico completo). Produto e código eram "Gerador de Loterias"; renomeados pra Lottiq no Epic 5 (2026-09-21/22), junto da migração de UI descrita em "Interface" abaixo.
 
 **Convenção de nomenclatura:** todo identificador de código — variáveis, constantes, classes, funções, parâmetros, variáveis locais, campos de model, nomes de método de teste — está em inglês, sem exceção (executado por completo em 2026-09-08, Epic 1 da PRD, em `apps/loterias_core` e `apps/accounts`). Strings de UI, `verbose_name`/labels, e o vocabulário de domínio em português (Jogo, Concurso, Acerto, ...) não são afetados e continuam em pt-br, assim como as chaves de dict de contexto de template, atributos `name=` de formulário HTML, e as chaves do payload JSON de `api_create_bet_view` (tratadas como contrato de dado/API, não identificadores). O mapeamento completo antigo→novo está na seção de nomenclatura da PRD ([_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md](_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md) §3.1). Toda a documentação do projeto (este arquivo incluso) é escrita em português do Brasil — código e identificadores de código são a única exceção.
 
@@ -41,6 +41,10 @@ python manage.py collectstatic
 `apps/__init__.py` precisa existir (vazio) pra `manage.py test` descobrir os testes — sem ele, `apps` vira um pacote de namespace PEP 420 e o test loader do Django trava/não acha nada.
 
 ## Arquitetura
+
+### Interface (Lottiq Design System)
+
+Toda a UI usa o **Lottiq Design System** — CSS próprio em `static/css/` (`lottiq-tokens.css` cor/tipografia/espaço/raio/sombra, `lottiq.css` componentes por classe `lq-*`, `legacy.css` residual de antes do Epic 5), fontes Sora/Figtree/JetBrains Mono e ícones Material Symbols Rounded (classe `.ms`, via Google Fonts). **Sem framework de UI**: Bootstrap, Bootstrap Icons e django-crispy-forms foram removidos por completo no Epic 5 (Story 5.7, 2026-09-22) — não reintroduza classes `btn`/`card`/`bi-*`/`data-bs-*` nem `{% load crispy_forms_tags %}`. Formulários Django genéricos (login, cadastro, perfil, preferências) renderizam via `{% load lottiq_ui %}{% lq_form form %}` ([apps/loterias_core/templatetags/lottiq_ui.py](apps/loterias_core/templatetags/lottiq_ui.py) + [templates/components/form.html](templates/components/form.html)), que aplica a classe certa por tipo de widget e liga `aria-describedby`/`aria-invalid`. Modais usam `<dialog>` nativo (`showModal()`/`close()`, ver `regras_geracao.html`), não JS de terceiros. Tema escuro do design system ainda não foi aplicado à interface (ficou pra uma rodada futura); o botão de alternar tema foi removido do cabeçalho nessa migração.
 
 ### Autenticação
 

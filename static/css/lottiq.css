@@ -179,3 +179,7 @@ a:hover { color: var(--action-primary-hover); }
 /* Barra de progresso */
 .lq-progress { height: 8px; border-radius: 999px; background: var(--neutral-100); overflow: hidden; }
 .lq-progress-bar { height: 100%; background: var(--action-primary); border-radius: 999px; }
+
+/* Layout base do body: rodape sempre no fim, mesmo com pouco conteudo (Story 5.7). */
+.lq-body { display: flex; flex-direction: column; min-height: 100vh; }
+.lq-main { flex: 1; }
