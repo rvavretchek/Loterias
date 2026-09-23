@@ -1796,6 +1796,43 @@ class FetchDailyResultsJobTests(TestCase):
         fetch_daily_results()
         self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='400').count(), 0)
 
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_manual_bet_saved_before_capture_is_checked_retroactively_when_it_wins(self, mock_fetch):
+        """Story 6.4 (FR-26): palpite manual guardado ANTES do resultado existir e conferido
+        certo assim que a captura roda depois -- ponta a ponta, sem nenhuma acao do usuario."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='500',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0, manual=True,
+        )
+        self.assertFalse(LotteryResult.objects.filter(game='Quina', contest='500').exists())
+        mock_fetch.return_value = {
+            'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {'5': {'value': 'R$ 2.000,00'}},
+        }
+        fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 5)
+        self.assertEqual(bet.prize, Decimal('2000.00'))
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_manual_bet_saved_before_capture_gets_no_false_positive_when_it_loses(self, mock_fetch):
+        """Story 6.4 (FR-26): o mesmo cenario, mas o jogo NAO bate -- nunca cria HitNotification."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='501',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0, manual=True,
+        )
+        mock_fetch.return_value = {
+            'numbers': [50, 51, 52, 53, 54], 'clovers': [], 'prizes': {},
+        }
+        fetch_daily_results()
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 0)
+        self.assertEqual(bet.prize, Decimal('0'))
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
 
 class FetchDailyResultsCommandTests(TestCase):
     """Cobre a integracao command -> jobs.fetch_daily_results (nao coberta pelos testes que chamam
