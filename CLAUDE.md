@@ -31,7 +31,7 @@ python manage.py runserver
 # Testes (test runner padrao do Django, sem config de pytest no repo)
 python manage.py test
 python manage.py test apps.loterias_core
-python manage.py test apps.loterias_core.tests.SomeTestCase.test_something
+python manage.py test apps.loterias_core.tests.test_generation.SomeTestCase.test_something
 
 # Shell do Django / coleta de estaticos
 python manage.py shell
@@ -39,6 +39,16 @@ python manage.py collectstatic
 ```
 
 `apps/__init__.py` precisa existir (vazio) pra `manage.py test` descobrir os testes — sem ele, `apps` vira um pacote de namespace PEP 420 e o test loader do Django trava/não acha nada.
+
+`apps/loterias_core/tests/` é um pacote (Story 6.7, 2026-09-23), dividido por área — o `DiscoverRunner` padrão do Django já acha qualquer `test*.py` dentro dele sozinho, sem precisar reexportar nada no `__init__.py`:
+- `test_generation.py` — geração de jogo, Regras de Geração, `create`/`regenerate`/`save_manual_bet_view`
+- `test_results_and_prizes.py` — concurso, captura de resultado da CEF, cálculo de prêmio, `PrizeTier`, purga
+- `test_notifications.py` — `HitNotification`, e-mail de acerto, preferência de canal
+- `test_pages.py` — home, histórico, estatísticas, detalhe do jogo
+- `test_admin.py` — smoke tests do Django admin
+- `test_integration.py` — fluxos de ponta a ponta cruzando mais de uma área
+
+Ao adicionar teste novo, coloque no módulo da área certa; só crie um módulo novo se a área realmente não couber em nenhum dos acima.
 
 ## Convenção de testes
 
