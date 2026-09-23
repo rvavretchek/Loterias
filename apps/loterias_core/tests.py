@@ -769,8 +769,8 @@ class CreateBetViewTests(TestCase):
         )
         response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '2500'}, follow=True)
         self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
-        mensagens = [m.level_tag for m in response.context['messages']]
-        self.assertEqual(mensagens, ['error'])
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertEqual(mensagens, [('O concurso 2500 de Mega-sena ja foi sorteado. Escolha outro concurso.', 'error')])
 
     def test_allows_numeric_contest_without_lottery_result(self):
         """Story 2.12: mesmo um concurso especial/comemorativo (ex. Mega da Virada) tem um numero
@@ -1036,9 +1036,10 @@ class SaveManualBetViewTests(TestCase):
             'jogo': 'Lotofacil',
             'concurso': '3000',
             'numeros': self.numeros_str,
-        })
+        }, follow=True)
         self.assertEqual(GeneratedBet.objects.count(), 0)
-        self.assertRedirects(response, reverse('home'))
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertEqual(mensagens, [('O concurso 3000 de Lotofacil ja foi sorteado. Escolha outro concurso.', 'error')])
 
     def test_blocks_leading_zero_spelling_of_already_drawn_contest(self):
         """Story 2.12: '03000' normaliza pra '3000' antes do bloqueio."""
@@ -1197,10 +1198,17 @@ class RegenerateBetViewTests(TestCase):
         self.assertEqual(checked_bet.prize_description, '')
 
     def test_blocks_regenerating_for_contest_that_already_has_lottery_result(self):
+        """Story 6.3: alem da contagem nao mudar, o jogo original precisa ficar intocado -- uma
+        contagem igual sozinha nao provaria que 'Refazer' nao trocou os numeros da mesma linha."""
         LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
-        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        original_numbers = list(self.bet.numbers)
+        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]), follow=True)
         self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1)
-        self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
+        self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]), target_status_code=200)
+        self.bet.refresh_from_db()
+        self.assertEqual(self.bet.numbers, original_numbers)
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertEqual(mensagens, [('O concurso 5000 de Mega-sena ja foi sorteado. Escolha outro concurso.', 'error')])
 
 
 class StatisticsViewTests(TestCase):
