@@ -4128,3 +4128,53 @@ class SaveOfficialResultTests(TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(LotteryResult.objects.filter(game='Quina', contest='9001').count(), 1)
         self.assertEqual(obj.numbers, [1, 2, 3, 4, 5])
+
+
+class ContestCoverageStory62Tests(TestCase):
+    """Story 6.2: completa as 4 categorias de normalize_contest nos pontos de entrada que
+    ainda nao tinham -- vazio em save_manual_bet_view, invalido/valido no form do admin, e
+    fronteira com string de digitos anormalmente grande (limite embutido do Python pro int())."""
+
+    def test_save_manual_bet_rejects_empty_contest(self):
+        user = User.objects.create_user(email='vazio6.2@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Lotofacil', 'concurso': '', 'numeros': '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15',
+        }, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        mensagens = [(m.message, m.level_tag) for m in response.context['messages']]
+        self.assertIn(('Preencha o jogo, concurso e numeracao do jogo manual.', 'error'), mensagens)
+
+    def test_huge_digit_string_contest_is_rejected_not_a_crash(self):
+        """O int() do Python recusa strings de digito gigantes (protecao embutida desde 3.11) --
+        normalize_contest repassa isso como ValueError, que as views ja tratam como entrada
+        invalida. Trava esse comportamento (nao depende de nenhuma checagem propria no codigo)."""
+        with self.assertRaises(ValueError):
+            normalize_contest('9' * 5000)
+        user = User.objects.create_user(email='gigante6.2@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '9' * 5000}, follow=True)
+        self.assertEqual(GeneratedBet.objects.count(), 0)
+        self.assertTrue(any(m.level_tag == 'error' for m in response.context['messages']))
+
+    def test_admin_form_rejects_invalid_contest_with_clean_message(self):
+        """Story 2.16: _NormalizedContestFormMixin.clean_contest -- nunca exercitado por teste."""
+        admin_user = User.objects.create_superuser(email='adminform6.2@example.com', password='SenhaForte123')
+        self.client.force_login(admin_user)
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena', 'contest': 'ESPECIAL-2026', 'numbers': '[]', 'clovers': '[]',
+            'prizes': '{}', 'numbers_second_draw': '[]', 'prizes_second_draw': '{}', 'source': 'CEF',
+        })
+        self.assertEqual(response.status_code, 200)  # re-renderiza o form com erro, nao redireciona
+        self.assertContains(response, 'Numero de concurso invalido')
+        self.assertFalse(LotteryResult.objects.exists())
+
+    def test_admin_form_normalizes_valid_contest_with_leading_zeros(self):
+        admin_user = User.objects.create_superuser(email='adminform6.2b@example.com', password='SenhaForte123')
+        self.client.force_login(admin_user)
+        response = self.client.post('/admin/loterias_core/lotteryresult/add/', {
+            'game': 'Mega-sena', 'contest': '03500', 'numbers': '[1,2,3,4,5,6]', 'clovers': '[]',
+            'prizes': '{}', 'numbers_second_draw': '[]', 'prizes_second_draw': '{}', 'source': 'CEF',
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(LotteryResult.objects.filter(game='Mega-sena', contest='3500').exists())
