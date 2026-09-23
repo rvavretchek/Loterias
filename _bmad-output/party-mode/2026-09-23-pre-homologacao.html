@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Lottiq — Rodada de pré-homologação (23/09/2026)</title>
+<style>
+  :root {
+    --bg: #0f1720; --card: #17212c; --ink: #e8eef4; --muted: #93a4b5; --line: #263340;
+    --mary: #f2b134; --john: #4fa3d1; --sally: #e06b9a; --winston: #6fb98f; --amelia: #b98ae0; --murat: #e0725a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 80px; background: radial-gradient(circle at top, #16202b, #0b1218 70%);
+    color: var(--ink); font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 36px; }
+  header .mark { width: 56px; height: 56px; margin: 0 auto 14px; }
+  h1 { font-size: 1.7rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  header p { color: var(--muted); margin: 0; font-size: .95rem; }
+  .agenda { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 26px 0 40px; }
+  .agenda span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 7px 16px; font-size: .82rem; color: var(--muted); }
+  .agenda span b { color: var(--ink); }
+  .turn { display: flex; gap: 14px; margin-bottom: 18px; align-items: flex-start; opacity: 0; animation: rise .5s ease forwards; }
+  .turn:nth-child(odd) { animation-delay: .02s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: var(--card); border: 1.5px solid var(--line); }
+  .bubble { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; flex: 1; }
+  .who { font-weight: 700; font-size: .85rem; margin-bottom: 4px; }
+  .txt { color: #d7e0e8; font-size: .93rem; }
+  .txt i { color: var(--muted); font-style: normal; }
+  .name-mary .who, .name-mary .avatar { color: var(--mary); border-color: var(--mary); }
+  .name-john .who, .name-john .avatar { color: var(--john); border-color: var(--john); }
+  .name-sally .who, .name-sally .avatar { color: var(--sally); border-color: var(--sally); }
+  .name-winston .who, .name-winston .avatar { color: var(--winston); border-color: var(--winston); }
+  .name-amelia .who, .name-amelia .avatar { color: var(--amelia); border-color: var(--amelia); }
+  .name-murat .who, .name-murat .avatar { color: var(--murat); border-color: var(--murat); }
+  .name-boss .who { color: #fff; }
+  .name-boss .bubble { background: #1c2a3a; border-color: #33465c; }
+  .name-boss .avatar { border-color: #fff; color: #fff; }
+  .section-title { text-align: center; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; margin: 46px 0 18px; }
+  .outcomes { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; margin-top: 40px; }
+  .outcomes h2 { margin: 0 0 14px; font-size: 1.05rem; }
+  .outcomes ol { margin: 0; padding-left: 20px; color: #d7e0e8; font-size: .92rem; }
+  .outcomes li { margin-bottom: 10px; }
+  .outcomes .tag { display: inline-block; font-size: .68rem; background: #0f1720; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
+  footer { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="mark" viewBox="0 0 48 48"><rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="#0A2A42"/><g stroke="#7FD3CF" stroke-width="1.6" stroke-linecap="round" opacity=".55"><path d="M13 13 L13 35 L35 35"/><path d="M13 13 L35 24 L13 35"/><path d="M13 24 L24 24 L35 13"/></g><g fill="#F7FBFB"><circle cx="13" cy="13" r="3"/><circle cx="13" cy="24" r="2.4"/><circle cx="13" cy="35" r="3"/><circle cx="24" cy="24" r="2.4"/><circle cx="35" cy="35" r="3"/></g><circle cx="35" cy="13" r="3.4" fill="#F0A028"/></svg>
+    <h1>Lottiq — Rodada de pré-homologação</h1>
+    <p>23 de setembro de 2026 · mesa reunida: Mary, John, Sally, Winston, Amelia, Murat</p>
+  </header>
+
+  <div class="agenda">
+    <span>🔒 Homologação = dados que não se destroem mais</span>
+    <span>🧪 Regra de teste em 4 categorias</span>
+    <span>🌓 Tema escuro (tokens já existiam)</span>
+    <span>📢 Zona reservada pro AdSense</span>
+    <span>🍪 Consentimento de cookies/LGPD</span>
+  </div>
+
+  <p class="section-title">O que rolou na mesa</p>
+
+  <div class="turn name-mary"><div class="avatar">📊</div><div class="bubble"><div class="who">Mary</div><div class="txt">Faz uma temporada que a gente não senta — última vez foi a leitura do epics.md. Boss, virou Lottiq mesmo?</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Lottiq mesmo. Melhor que só Loterias, não acha?</div></div></div>
+  <div class="turn name-john"><div class="avatar">📋</div><div class="bubble"><div class="who">John</div><div class="txt">"Regras de sorteio" virou "regras de geração personalizadas" — migrou pelo caminho, isso é diferente do que foi pedido à letra.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Foi migrando pelo caminho. É "rodada finalizada", não "produto finalizado" — vocês dois têm razão.</div></div></div>
+  <div class="turn name-sally"><div class="avatar">🎨</div><div class="bubble"><div class="who">Sally</div><div class="txt">"Layout de página" pra mim inclui tema escuro. E o toggle sumiu do cabeçalho. Isso não fechou.</div></div></div>
+  <div class="turn name-winston"><div class="avatar">🏗️</div><div class="bubble"><div class="who">Winston</div><div class="txt">Boa notícia: os tokens de tema escuro já vinham prontos no design system original. Ninguém importou. É mecânico — Django não tem nada a ver com isso.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Ótima notícia. O agente que atuava antes ficou com preguiça — por mim teria sido feito já na rodada anterior.</div></div></div>
+  <div class="turn name-murat"><div class="avatar">🧪</div><div class="bubble"><div class="who">Murat</div><div class="txt">"Accepted-with-open-items" não é "pronto", é "pronto com uma lista". Proponho: todo teste novo segue 4 categorias — feliz, inválido, vazio, fronteira/corrida.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Pode incluir no CLAUDE.md! E teste se um jogo já sorteado é aceito — e se aceito, se aponta ganhador certo. Regras testadas em todas as combinações <i>possíveis</i>.</div></div></div>
+  <div class="turn name-murat"><div class="avatar">🧪</div><div class="bubble"><div class="who">Murat</div><div class="txt">Isso muda minha resposta sobre dividir tests.py: antes "sem benefício", agora "sim, há benefício" — a nova cobertura por categoria organiza melhor por área do que por ordem cronológica.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Então implemente a quebra, por favor.</div></div></div>
+  <div class="turn name-john"><div class="avatar">📋</div><div class="bubble"><div class="who">John</div><div class="txt">AdSense acende uma luz amarela: rastreio de usuário puxa consentimento de cookie, LGPD. Hoje não existe banner nem política de privacidade.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Concordo — tela de consentimento e gestão, com opção de aceitar, recusar ou parcial. Mais honesto assim.</div></div></div>
+  <div class="turn name-sally"><div class="avatar">🎨</div><div class="bubble"><div class="who">Sally</div><div class="txt">Um `&lt;iframe&gt;` do Google não respeita meus tokens. Zona reservada, longe do fluxo de gerar/conferir jogo, sem cor de anúncio nenhuma por enquanto.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Ainda não. Só penso nisso se for pra produção de verdade (conta OCI + AdSense). Planejamos e provisionamos o espaço — não ativamos.</div></div></div>
+  <div class="turn name-murat"><div class="avatar">🧪</div><div class="bubble"><div class="who">Murat</div><div class="txt">Há como capturar data/hora do próximo sorteio a cada execução, pra travar jogo até 1h antes? A API da Caixa expõe isso?</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Boa pergunta. Se tiver, resolvido: cutoff automático. Se não tiver, disclaimer claro de isenção pra jogo informado fora do prazo.</div></div></div>
+  <div class="turn name-winston"><div class="avatar">🏗️</div><div class="bubble"><div class="who">Winston</div><div class="txt">Homologação tratada como produção muda uma frase inteira do README do lab: dados param de ser descartáveis a partir de agora.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Sem prejuízo real ainda, só desconforto — mas se pudermos não destruir mais os dados a partir de agora, melhor.</div></div></div>
+  <div class="turn name-boss"><div class="avatar">👤</div><div class="bubble"><div class="who">Boss</div><div class="txt">Testes primeiro, layout depois. Pode mandar ver.</div></div></div>
+
+  <div class="outcomes">
+    <h2>O que sai desta rodada</h2>
+    <ol>
+      <li><b>Postura de dados do lab muda agora</b> — README/runbook atualizados, backup exercitado de verdade pela 1ª vez <span class="tag">Winston + Murat</span></li>
+      <li><b>Regra de teste em 4 categorias</b> vai pro CLAUDE.md; combinações possíveis de Regras de Geração; fluxo ponta a ponta manual + automático; concurso já sorteado <span class="tag">Murat + Amelia</span></li>
+      <li><b>tests.py quebra por área</b>, como efeito da nova cobertura <span class="tag">Murat</span></li>
+      <li><b>Pesquisar</b> se a API da Caixa expõe data/hora do próximo sorteio, pra decidir entre cutoff automático ou disclaimer <span class="tag">em aberto</span></li>
+      <li><b>Tema escuro</b> — mecânico, tokens já existem no DS original <span class="tag">Winston</span></li>
+      <li><b>Zona reservada pro AdSense</b> — só o espaço, sem conta/integração real ainda <span class="tag">Sally</span></li>
+      <li><b>Tela de consentimento de cookies (LGPD)</b> — aceitar / recusar / parcial <span class="tag">John</span></li>
+      <li><b>Ordem de execução:</b> testes → layout</li>
+    </ol>
+  </div>
+
+  <footer>Lottiq · sala "installed" · memória viva em _bmad-output/party-mode/memories/installed/.memlog.md</footer>
+</div>
+</body>
+</html>

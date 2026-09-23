@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, "1-confirmed", 2, 3, "3-confirmed", 4, "adendo-2026-09-17:1", "adendo-2026-09-17:1-confirmed", "adendo-2026-09-17:2-approved", "adendo-2026-09-17:3", "adendo-2026-09-17:4-complete"]
+stepsCompleted: [1, "1-confirmed", 2, 3, "3-confirmed", 4, "adendo-2026-09-17:1", "adendo-2026-09-17:1-confirmed", "adendo-2026-09-17:2-approved", "adendo-2026-09-17:3", "adendo-2026-09-17:4-complete", "epic-5:sem-prd-direto", "epic-6:sem-prd-direto", "epic-6:1", "epic-6:1-confirmed", "epic-6:2-approved", "epic-6:3", "epic-6:4-complete"]
 inputDocuments: ["_bmad-output/planning-artifacts/prds/prd-Loterias-2026-09-07/prd.md", "_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-08/ARCHITECTURE-SPINE.md", "_bmad-output/planning-artifacts/architecture/architecture-Loterias-2026-09-17/ARCHITECTURE-SPINE.md", "_bmad-output/planning-artifacts/ux-designs/ux-Loterias-2026-09-17/DESIGN.md", "_bmad-output/planning-artifacts/ux-designs/ux-Loterias-2026-09-17/EXPERIENCE.md"]
 ---
 
@@ -65,6 +65,16 @@ FR-23: A Regra de Sequência adaptativa hoje existente continua sendo o default 
 
 FR-24: A tela de histórico ganha filtros cumulativos (Jogo, período, só premiados) sempre visíveis no topo da lista. A exibição de números continua legível mesmo pra Jogos com muitos números (Lotomania: 50; Lotofácil: 15) e pra Dupla-Sena (2 sorteios).
 
+*Rodada de pré-homologação 2026-09-23 (decidida em `bmad-party-mode`, sem PRD formal por trás — ver `_bmad-output/party-mode/2026-09-23-pre-homologacao.html`) — FR-25 a FR-28:*
+
+FR-25: O sistema recusa registrar um jogo — gerado automaticamente, regenerado, ou digitado como palpite manual — pra um Jogo+Concurso cujo resultado oficial já foi capturado (`LotteryResult` existente). O comportamento já existe (`_block_if_contest_already_drawn`), mas só tem teste explícito pra parte dos 3 pontos de entrada.
+
+FR-26: Um palpite manual salvo pra um Jogo+Concurso cujo resultado oficial AINDA não foi capturado é conferido retroativamente (marcado premiado/sem prêmio corretamente, número a número) assim que a captura acontecer — seja pela rotina diária, seja por verificação manual — sem nenhuma ação adicional do usuário.
+
+FR-27: Toda combinação possível de Regras de Geração habilitadas por Jogo (dentro do universo de regras daquele Jogo) produz um jogo que satisfaz todas as regras ligadas simultaneamente, ou relaxa exatamente uma delas quando genuinamente inatingível (Story 4.5) — nunca devolve silenciosamente um jogo que viola uma regra ligada.
+
+FR-28: `normalize_contest` nunca aceita/normaliza silenciosamente uma entrada vazia ou não numérica vinda de formulário — sempre rejeita com erro claro; ao gravar direto num model (dado legado, sem passar por formulário), preserva o valor original sem quebrar.
+
 ### Requisitos Não-Funcionais
 
 NFR-1: Um valor de prêmio exibido numa Notificação sempre rastreia a um `LotteryResult.prizes` concreto ou a uma Faixa de Premiação (`PrizeTier`) oficial vigente (FR-8) — o sistema nunca estima ou arredonda prêmio na ausência de um desses dois dados oficiais confirmados (PRD §4.1/FR-9).
@@ -100,6 +110,13 @@ NFR-6 *(adendo 2026-09-17)*: A geração de um jogo com Regras de Geração pers
 - **Default vs. personalizado, sem campo de estado novo (AD-13):** ausência de qualquer linha `GenerationRule` pra um (user, game) é o único "default". `regras_geracao_view` nunca deleta uma linha ao desmarcar um toggle — sempre `update_or_create` com `enabled=False`. O único caminho que deleta é o botão "Restaurar padrão" (apaga todas as linhas daquele user+game).
 - **Filtros de histórico (AD-14):** `GeneratedBet.objects.filter(...)` direto — Jogo, `prize__gt=0` (premiado, reusa o cache existente), `created_at__range` (período, limites inclusivos convertidos pro início/fim do dia no `TIME_ZONE` do projeto) — cumulativos via `AND`, sem join novo.
 - **Sem infraestrutura/dependência nova:** mesmo stack do spine pai; nenhuma migration além de `CREATE TABLE GenerationRule`.
+
+*Rodada de pré-homologação 2026-09-23 — decisões de processo/qualidade (sem AD de arquitetura por trás, decididas em `bmad-party-mode`):*
+
+- **Convenção de teste em 4 categorias:** toda cobertura de teste nova (não retroativa a todo teste já existente) cobre caminho feliz, entrada inválida (formato errado/fora do intervalo), entrada vazia/ausente, e fronteira/concorrência (duplicata, corrida, estado já existente) — documentada no `CLAUDE.md`.
+- **`apps/loterias_core/tests.py` dividido por área funcional** (geração/regras, histórico, notificações, admin etc.) — consequência natural de organizar a cobertura nova por área, não uma reforma isolada à parte.
+- **Runbook de backup/restore exercitado de verdade:** o procedimento já documentado em `deploy/lab/README.md` (nunca rodado até hoje, porque o volume do lab sempre pôde ser recriado livremente) roda ao menos uma vez, ponta a ponta, com evidência registrada.
+- **Postura de dados do lab muda:** a partir de agora, o volume `loterias_data` deixa de ser tratado como descartável (o Boss trata a homologação como produção pra fins de preservação de dado, mesmo sem usuário real ainda) — `deploy/lab/README.md` atualizado pra refletir isso.
 
 ### Requisitos de UX
 
@@ -152,6 +169,11 @@ FR-21: Epic 4 - Regras de Geração (Lotomania)
 FR-22: Epic 4 - Resolução de conflito entre Regras de Geração
 FR-23: Epic 4 - Regra de Sequência atual permanece o default
 FR-24: Epic 4 - Filtros cumulativos e exibição legível no histórico
+FR-25: Epic 6 - Bloqueio de concurso já sorteado testado nos 3 pontos de entrada
+FR-26: Epic 6 - Conferência retroativa de palpite manual salvo antes da captura do resultado
+FR-27: Epic 6 - Cobertura de todas as combinações possíveis de Regras de Geração
+FR-28: Epic 6 - Cobertura de `normalize_contest` (entrada inválida/vazia)
+sem-fr-propria: Epic 5 - Migração pro Lottiq Design System e renomeação do produto (sem FR numerada própria — decidida direto em conversa, sem PRD formal)
 
 ## Lista de Épicos
 
@@ -186,6 +208,14 @@ Uma pessoa se cadastra só com e-mail, confirma, cria senha, e só depois inform
 ### Epic 4: Home Reorganizada, Regras de Geração Personalizadas e Histórico com Filtros
 *(adendo 2026-09-17, PRD §4.3-§4.5)* Gerar um jogo não exige mais scroll (resumo vira sidebar, jogo selecionado sobe pro topo, cada Jogo com seu ícone); cada usuário pode personalizar como cada Jogo é gerado pra ele (regras de sequência/linha/coluna/distribuição, por família de Jogo); e o histórico ganha filtros cumulativos com exibição legível mesmo pra Jogos com muitos números. Depende dos Epics 1-3 concluídos (código já em inglês, app já em produção).
 **FRs cobertos:** FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24
+
+### Epic 5: Migração para o Lottiq Design System e Renomeação do Produto
+*(decidido em conversa direta com o Boss, 2026-09-21/22, sem PRD formal)* Produto renomeado de "Gerador de Loterias" pra Lottiq; toda a UI migrada do Bootstrap pro Lottiq Design System (tokens/componentes próprios, Material Symbols Rounded), Bootstrap/Bootstrap Icons/crispy-forms removidos por completo.
+**FRs cobertos:** nenhuma FR numerada própria
+
+### Epic 6: Cobertura Sistemática de Testes e Validação do Runbook
+*(rodada de pré-homologação 2026-09-23, decidida em `bmad-party-mode`, sem PRD formal)* Fecha lacunas de teste identificadas na rodada — concurso já sorteado, conferência retroativa de palpite manual, todas as combinações possíveis de Regras de Geração, `normalize_contest` — sob uma convenção nova de 4 categorias (feliz/inválido/vazio/fronteira), com `tests.py` reorganizado por área como consequência. Fecha também validando de verdade o runbook de backup/restore do lab, cuja postura de descartabilidade de dado muda a partir de agora.
+**FRs cobertos:** FR-25, FR-26, FR-27, FR-28
 
 ## Epic 1: Renomeação do Código Legado para Inglês
 
@@ -976,3 +1006,118 @@ Para não carregar dois sistemas de estilo.
 **Dado** todas as telas migradas
 **Quando** o Bootstrap (CSS/JS) e o Bootstrap Icons são removidos de `base/base.html`
 **Então** nenhum template usa classe Bootstrap ou `bi-*`, todas as telas seguem íntegras, e README/`CLAUDE.md` documentam o Lottiq e o Design System
+
+
+## Epic 6: Cobertura Sistemática de Testes e Validação do Runbook
+
+Fecha lacunas de teste identificadas numa rodada de `bmad-party-mode` de pré-homologação (2026-09-23, registro completo em `_bmad-output/party-mode/2026-09-23-pre-homologacao.html`), sob uma convenção nova de 4 categorias, e valida de verdade — pela primeira vez — o runbook de backup/restore do lab, cuja postura de descartabilidade de dado muda a partir de agora (homologação tratada como produção pra fins de preservação de dado, mesmo sem usuário real ainda). Ordem pedida pelo Boss: este épico vem antes do Epic 7 (layout/AdSense-zone/tema-escuro/consentimento-LGPD).
+
+### Story 6.1: Convenção de teste em 4 categorias
+
+Como mantenedor,
+Eu quero uma convenção documentada de cobertura de teste,
+Para que toda cobertura nova siga o mesmo padrão sem precisar redecidir a cada story.
+
+**Critérios de Aceite:**
+
+**Dado** o `CLAUDE.md`
+**Quando** alguém for escrever teste novo pra uma funcionalidade
+**Então** encontra a convenção de 4 categorias (caminho feliz, entrada inválida, entrada vazia/ausente, fronteira/concorrência) documentada, com um exemplo real do próprio código
+**E** a convenção deixa claro que não é retroativa — não é preciso reescrever todo teste já existente, só aplicar em cobertura nova
+
+*Referências: decisão da rodada de pré-homologação 2026-09-23.*
+
+### Story 6.2: Cobertura de `normalize_contest`
+
+Como mantenedor,
+Eu quero `normalize_contest` coberto nas 4 categorias,
+Para confiar que concurso normaliza certo e nunca aceita lixo vindo de formulário.
+
+**Critérios de Aceite:**
+
+**Dado** `normalize_contest` (FR-28)
+**Quando** recebe concurso com zero à esquerda, vazio, não numérico, ou com espaço/whitespace
+**Então** normaliza ('02500'→'2500'), rejeita com `ValueError` claro (vazio/não numérico), conforme o caso
+**Dado** um model com `NormalizesContestOnSave` recebendo um `contest` legado não numérico direto no `save()` (sem passar por formulário)
+**Quando** salva
+**Então** preserva o valor original sem quebrar (comportamento já implementado na retro do Epic 2/5 — esta story garante teste explícito das 4 categorias, não reimplementa)
+
+### Story 6.3: Bloqueio de concurso já sorteado nos 3 pontos de entrada
+
+Como mantenedor,
+Eu quero o bloqueio de concurso já sorteado testado explicitamente pra criação, regeneração e palpite manual,
+Para confiar que os 3 pontos de entrada tratam esse caso do mesmo jeito.
+
+**Critérios de Aceite:**
+
+**Dado** um Jogo+Concurso com `LotteryResult` já capturado (FR-25)
+**Quando** o usuário tenta gerar (`create_bet_view`), regenerar (`regenerate_bet_view`), ou guardar um palpite manual (`save_manual_bet_view`) pra esse mesmo par
+**Então** os 3 são bloqueados com a mesma mensagem clara, nenhum `GeneratedBet` novo é criado, e existe um teste nomeado pra cada um dos 3 pontos de entrada (hoje só parte deles tem)
+
+### Story 6.4: Conferência retroativa de palpite manual salvo antes da captura
+
+Como mantenedor,
+Eu quero um teste de ponta a ponta pro cenário de corrida entre palpite manual e captura de resultado,
+Para confiar que um jogo salvo antes do resultado sair é conferido certo depois.
+
+**Critérios de Aceite:**
+
+**Dado** um palpite manual salvo pra um Jogo+Concurso cujo `LotteryResult` AINDA não existe (FR-26)
+**Quando** a captura do resultado acontece depois — pela rotina diária (`fetch_daily_results`) ou por verificação manual (`check_bet_result_view`)
+**Então** o jogo é conferido retroativamente e marcado premiado/sem prêmio corretamente, número a número, sem nenhuma ação adicional do usuário
+**E** o teste cobre tanto o caso "bate e ganha" quanto "não bate" (nunca falso positivo)
+
+### Story 6.5: Todas as combinações possíveis de Regras de Geração
+
+Como mantenedor,
+Eu quero as Regras de Geração testadas em todas as combinações possíveis por Jogo,
+Para confiar que nenhuma combinação realista de regras ligadas gera um jogo inválido silenciosamente.
+
+**Critérios de Aceite:**
+
+**Dado** o universo de regras de cada Jogo (`RULE_NAMES_BY_GAME`) (FR-27)
+**Quando** cada combinação possível de regras habilitadas (com valores realistas, não o produto cartesiano infinito de valores — combinações que um usuário poderia genuinamente configurar) é testada
+**Então** `generate_bet_with_relaxation` sempre devolve um jogo que satisfaz todas as regras ligadas simultaneamente, ou relaxa exatamente 1 regra quando genuinamente inatingível (Story 4.5), nunca devolvendo um jogo que viola silenciosamente uma regra ligada
+
+### Story 6.6: Fluxo ponta a ponta de uma aposta, manual e automática
+
+Como mantenedor,
+Eu quero um teste de ponta a ponta cobrindo o ciclo completo de uma aposta,
+Para confiar que geração/registro, captura de resultado, cálculo de prêmio e notificação nunca pulam etapa.
+
+**Critérios de Aceite:**
+
+**Dado** uma aposta automática e uma manual, cada uma do início ao fim
+**Quando** o ciclo completo roda — geração ou registro → captura de resultado oficial → cálculo de prêmio (`calculate_bet_prize`) → criação de `HitNotification`
+**Então** cada etapa produz o estado esperado na próxima (nenhuma etapa é pulada ou mockada por inteiro), com um teste de integração nomeado pra cada um dos 2 fluxos (manual e automático)
+
+### Story 6.7: Dividir `tests.py` por área funcional
+
+Como mantenedor,
+Eu quero `apps/loterias_core/tests.py` organizado por área funcional,
+Para navegar e adicionar cobertura nova sem um arquivo de ~4000 linhas em ordem cronológica de story.
+
+**Critérios de Aceite:**
+
+**Dado** `apps/loterias_core/tests.py` hoje (um arquivo, ordem cronológica de story)
+**Quando** a cobertura nova das Stories 6.2-6.6 é organizada
+**Então** os testes ficam divididos em módulos por área (ex.: geração/regras, histórico, notificações, admin), a suíte inteira continua passando 100%, e a divisão acontece como parte de organizar a cobertura nova — não uma reforma isolada tocando testes que já passavam sem necessidade
+
+*Decisão de processo: reverte a avaliação anterior ("sem benefício", retro Epic 2/4) — a nova convenção de 4 categorias cria estrutura repetida por área que justifica a divisão agora.*
+
+### Story 6.8: Validar o runbook de backup/restore e atualizar a postura de dados do lab
+
+Como mantenedor,
+Eu quero o runbook de backup/restore do lab exercitado de verdade,
+Para confiar nele antes de precisar dele de verdade, e deixar de tratar o volume do lab como descartável.
+
+**Critérios de Aceite:**
+
+**Dado** o runbook já documentado em `deploy/lab/README.md` (nunca exercitado até hoje)
+**Quando** o drill completo roda — backup do volume, validação da migration contra a cópia, aplicação no volume real
+**Então** cada passo funciona como documentado (ou o runbook é corrigido), com evidência registrada (contagem de linhas antes/depois batendo)
+**Dado** a decisão do Boss de tratar a homologação como produção pra fins de dado
+**Quando** `deploy/lab/README.md` é revisado
+**Então** a nota "enquanto lab de teste, o volume pode ser recriado livremente" é substituída por uma postura condizente — dados não devem mais ser destruídos livremente a partir de agora, mesmo sem prejuízo real hoje
+
+*Referências: `deploy/lab/README.md` (seção de smoke-test de ambiente adicionada na retro do Epic 5, e seção de backup/validação de migration já existente).*
