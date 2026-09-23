@@ -4283,3 +4283,64 @@ class AllPossibleRuleCombinationsTests(TestCase):
                     reduced = [r for r in rules if r.rule_name != relaxed]
                     ok, violated = bet_satisfies_rules(numbers, clovers, game, reduced)
                     self.assertTrue(ok, f'{game} {combo} relaxou {relaxed} mas ainda violou: {violated}')
+
+
+class EndToEndBetLifecycleTests(TestCase):
+    """Story 6.6: ciclo completo de uma aposta -- registro -> captura -> premio -> notificacao --
+    numa unica passagem, tanto pro fluxo automatico quanto pro manual."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='e2e6.6@example.com', password='SenhaForte123')
+        self.client.force_login(self.user)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    def test_automatic_bet_full_lifecycle(self, mock_fetch):
+        with patch(
+            'apps.loterias_core.views.generate_bet_with_relaxation',
+            return_value=([1, 2, 3, 4, 5], [], None),
+        ):
+            response = self.client.post(reverse('create_bet'), {'jogo': 'Quina', 'concurso': '9100'}, follow=True)
+        bet = GeneratedBet.objects.get(user=self.user, game='Quina', contest='9100')
+        self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
+        self.assertFalse(bet.result_checked)
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+        mock_fetch.return_value = {'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {'5': {'value': 'R$ 5.000,00'}}}
+        fetch_daily_results()
+
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 5)
+        self.assertEqual(bet.prize, Decimal('5000.00'))
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
+
+        detail = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertEqual(detail.context['premio_info']['hits'], 5)
+
+    @patch('apps.loterias_core.jobs.fetch_cef_result')
+    @patch('apps.loterias_core.views.fetch_cef_result')
+    def test_manual_bet_shows_prize_immediately_but_notification_waits_for_the_scan(self, mock_view_fetch, mock_job_fetch):
+        """save_manual_bet_view aplica o premio na hora (AD-12), mas quem cria a HitNotification
+        e sempre _notify_covered_bets (AD-4) -- nunca o proprio caminho de escrita do resultado."""
+        result = {'numbers': [1, 2, 3, 4, 5], 'clovers': [], 'prizes': {'5': {'value': 'R$ 3.000,00'}}}
+        mock_view_fetch.return_value = result
+        response = self.client.post(reverse('save_manual_bet'), {
+            'jogo': 'Quina', 'concurso': '9101', 'numeros': '1,2,3,4,5',
+        }, follow=True)
+        bet = GeneratedBet.objects.get(user=self.user, game='Quina', contest='9101')
+        self.assertRedirects(response, reverse('bet_detail', args=[bet.pk]))
+        bet.refresh_from_db()
+        self.assertTrue(bet.result_checked)
+        self.assertEqual(bet.hits, 5)
+        self.assertEqual(bet.prize, Decimal('3000.00'))
+        # O premio ja aparece na tela de detalhe -- mas a notificacao ainda nao existe.
+        detail = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertEqual(detail.context['premio_info']['hits'], 5)
+        self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
+
+        mock_job_fetch.return_value = result
+        fetch_daily_results()
+
+        notification = HitNotification.objects.get(bet=bet)
+        self.assertTrue(notification.won)
