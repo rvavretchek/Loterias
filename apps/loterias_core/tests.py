@@ -1,3 +1,4 @@
+import itertools
 import json
 import re
 from datetime import date, datetime, timedelta, timezone as dt_timezone
@@ -4223,3 +4224,62 @@ class ContestCoverageStory62Tests(TestCase):
         }, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(LotteryResult.objects.filter(game='Mega-sena', contest='3500').exists())
+
+
+class AllPossibleRuleCombinationsTests(TestCase):
+    """Story 6.5 (FR-27): pra cada Jogo, testa TODAS as 2^n combinacoes de quais regras ficam
+    ligadas (o eixo combinatorio real e tratavel), com um valor moderado por regra -- nao o
+    produto cartesiano infinito de valores, so das combinacoes possiveis de liga/desliga."""
+
+    MODERATE_VALUE = {
+        'limit_sequence_count': 3,
+        'limit_sequence_pairs': 2,
+        'limit_row_count': 3,
+        'limit_column_count': 3,
+        'limit_min_gap_between_sequences': 1,
+        'limit_min_sequences': 1,
+    }
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='combos6.5@example.com', password='SenhaForte123')
+
+    def _rule_subsets(self, game):
+        names = RULE_NAMES_BY_GAME[game]
+        for size in range(len(names) + 1):
+            for combo in itertools.combinations(names, size):
+                yield combo
+
+    def _save_combo(self, game, combo):
+        GenerationRule.objects.filter(user=self.user, game=game).delete()
+        for name in RULE_NAMES_BY_GAME[game]:
+            enabled = name in combo
+            kind = RULE_DEFINITIONS[name]['kind']
+            GenerationRule.objects.create(
+                user=self.user, game=game, rule_name=name, enabled=enabled,
+                numeric_value=self.MODERATE_VALUE[name] if kind == 'int' else None,
+                choice_value='totalmente_aleatoria' if kind == 'choice' else None,
+            )
+
+    def test_every_rule_subset_is_satisfied_or_relaxes_at_most_one(self):
+        for game in GAMES_CONFIG:
+            active_names = RULE_NAMES_BY_GAME[game]
+            for combo in self._rule_subsets(game):
+                self._save_combo(game, combo)
+                rules = list(GenerationRule.objects.filter(user=self.user, game=game, enabled=True))
+                numbers, clovers, relaxed = generate_bet_with_relaxation(game, self.user)
+                if numbers is None:
+                    # Combinacao apertada demais pra sair por sorteio uniforme dentro do
+                    # orcamento de tentativas, mesmo relaxando 1 regra -- comportamento definido
+                    # (AD-12), nao e falha desta story: so confere que ninguem travou nem devolveu
+                    # jogo invalido.
+                    self.assertIsNone(clovers)
+                    self.assertIsNone(relaxed)
+                    continue
+                if relaxed is None:
+                    ok, violated = bet_satisfies_rules(numbers, clovers, game, rules)
+                    self.assertTrue(ok, f'{game} {combo} violou regras ligadas sem relaxar: {violated}')
+                else:
+                    self.assertIn(relaxed, combo, f'{game} {combo} relaxou regra fora do combo: {relaxed}')
+                    reduced = [r for r in rules if r.rule_name != relaxed]
+                    ok, violated = bet_satisfies_rules(numbers, clovers, game, reduced)
+                    self.assertTrue(ok, f'{game} {combo} relaxou {relaxed} mas ainda violou: {violated}')
