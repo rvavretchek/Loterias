@@ -40,6 +40,17 @@ python manage.py collectstatic
 
 `apps/__init__.py` precisa existir (vazio) pra `manage.py test` descobrir os testes — sem ele, `apps` vira um pacote de namespace PEP 420 e o test loader do Django trava/não acha nada.
 
+## Convenção de testes
+
+Decidida numa rodada de `bmad-party-mode` de pré-homologação (2026-09-23, Epic 6): **toda cobertura de teste NOVA** cobre 4 categorias — não é retroativo, não exige reescrever teste que já existe:
+
+1. **Caminho feliz** — a entrada válida esperada, comportamento correto.
+2. **Entrada inválida** — formato errado ou fora do intervalo aceito (ex.: `normalize_contest('abc')`, valor de Regra de Geração fora de `1..numbers_count`).
+3. **Entrada vazia/ausente** — string vazia, `None`, campo não enviado no POST (ex.: `normalize_contest('')`, `bet_satisfies_rules(numbers, clovers, game, [])`).
+4. **Fronteira/concorrência** — duplicata, corrida entre dois processos, estado que já existe (ex.: concurso que já tem `LotteryResult` quando o usuário tenta gerar outro jogo pra ele; `LotteryResult.objects.save_official_result()` chamado duas vezes em corrida pro mesmo Jogo+Concurso).
+
+Ao adicionar cobertura pra uma função/fluxo que ainda não tem as 4, adicionar as que faltam nessa mesma story — não abrir story separada só pra "completar teste".
+
 ## Arquitetura
 
 ### Interface (Lottiq Design System)
