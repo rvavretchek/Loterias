@@ -178,6 +178,25 @@ class HomeViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['total_jogos'], 2)
 
+    def test_first_time_user_sees_onboarding_guide(self):
+        """Story 7.1 (FR-29): quem nunca gerou jogo ve o guia de 3 passos."""
+        user = User.objects.create_user(email='primeiravez@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'id="guia-primeiros-passos"')
+        self.assertContains(response, 'Gerar jogo')
+
+    def test_returning_user_does_not_see_onboarding_guide(self):
+        """Story 7.1 (UX-DR10): quem ja gerou jogo antes nao ve o guia de novo."""
+        user = User.objects.create_user(email='veterano@example.com', password='SenhaForte123')
+        GeneratedBet.objects.create(
+            user=user, game='Mega-sena', contest='1',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[], sequential_pairs=0,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'id="guia-primeiros-passos"')
+
     def test_home_context_exposes_suggested_contests_rendered_in_html(self):
         user = User.objects.create_user(email='sugestao@example.com', password='SenhaForte123')
         LotteryResult.objects.create(game='Mega-sena', contest='2500', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})

@@ -17,6 +17,14 @@
         .home-sidebar { width: 240px; flex-shrink: 0; grid-template-columns: 1fr; position: sticky; top: 88px; }
     }
     .home-head p { margin: 6px 0 0; }
+
+    /* Guia de primeiros passos (Story 7.1) -- so pra quem ainda nao gerou nenhum jogo */
+    .onboarding-guide { display: flex; flex-direction: column; gap: 12px; }
+    .onboarding-steps { display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; list-style: none; }
+    @media (min-width: 768px) { .onboarding-steps { flex-direction: row; } }
+    .onboarding-step { display: flex; align-items: flex-start; gap: 10px; flex: 1; }
+    .onboarding-step-number { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--status-waiting-bg); color: var(--teal-700); font: 700 13px var(--font-body); display: flex; align-items: center; justify-content: center; }
+    .onboarding-step-text { font: 400 14px/1.4 var(--font-body); color: var(--text-body-color); }
     .home-stat { background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 16px; }
     .home-stat-value { font: 700 22px var(--font-mono); color: var(--lq-navy); margin-top: 6px; font-variant-numeric: tabular-nums; }
     [hidden] { display: none !important; }
@@ -71,6 +79,26 @@
         <h1 class="lq-screen-title">Gerar jogo</h1>
         <p class="lq-small">Escolha a loteria e o concurso. As regras já vêm das suas configurações.</p>
     </div>
+
+    {% if total_jogos == 0 %}
+    <div class="lq-card onboarding-guide" id="guia-primeiros-passos" aria-labelledby="guia-primeiros-passos-titulo">
+        <div class="lq-eyebrow" id="guia-primeiros-passos-titulo">Como funciona</div>
+        <ol class="onboarding-steps">
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">1</span>
+                <span class="onboarding-step-text">Role até <strong>Loteria</strong>, logo abaixo, e clique numa das seis opções (Mega-Sena, Lotofácil...).</span>
+            </li>
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">2</span>
+                <span class="onboarding-step-text">Confira o número do <strong>Concurso</strong> que já vem sugerido — ou digite outro.</span>
+            </li>
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">3</span>
+                <span class="onboarding-step-text">Clique em <strong>Gerar jogo</strong>. O Lottiq guarda o jogo e avisa quando sair o resultado.</span>
+            </li>
+        </ol>
+    </div>
+    {% endif %}
 
     <form method="post" action="{% url 'create_bet' %}" class="home-main">
         {% csrf_token %}
