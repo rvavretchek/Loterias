@@ -617,6 +617,28 @@ class GenerationRuleModelTests(TestCase):
         with self.assertRaises(ValidationError):
             rule.clean()
 
+    def test_check_constraint_rejects_numeric_value_zero(self):
+        """Fronteira (feedback do Boss, 2026-09-25): 0 numeros permitidos por linha/coluna e
+        matematicamente impossivel de satisfazer (todo numero sorteado cai em alguma linha e
+        coluna) -- o minimo valido pra qualquer regra numerica e 1, sempre."""
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(
+                user=self.user, game='Quina', rule_name='limit_row_count',
+                enabled=True, numeric_value=0,
+            )
+
+    def test_check_constraint_rejects_negative_numeric_value(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            GenerationRule.objects.create(
+                user=self.user, game='Quina', rule_name='limit_column_count',
+                enabled=True, numeric_value=-1,
+            )
+
+    def test_clean_rejects_numeric_value_below_one(self):
+        rule = GenerationRule(user=self.user, game='Quina', rule_name='limit_row_count', numeric_value=0)
+        with self.assertRaises(ValidationError):
+            rule.clean()
+
 
 class GenerationRulesEditScreenTests(TestCase):
     def setUp(self):
@@ -964,21 +986,24 @@ class GenerateBetWithRulesTests(TestCase):
         self.assertEqual(len(clovers), 2)
 
     def test_impossible_rules_return_none(self):
-        """Duas regras inatingiveis: relaxar UMA nao basta -- nunca relaxa uma segunda (Story 4.5)."""
-        self._save('limit_column_count', 0)
-        self._save('limit_row_count', 0)
-        self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
-        self.assertEqual(generate_bet_with_relaxation('Mega-sena', self.user), (None, None, None))
+        """Duas regras inatingiveis: relaxar UMA nao basta -- nunca relaxa uma segunda (Story 4.5).
+        Lotofacil (grade 5x5, 15 numeros sorteados): 'no maximo 1 por linha/coluna' e
+        matematicamente inatingivel (casa dos pombos) mesmo com o minimo valido de 1 -- 0 nao e
+        mais um valor aceito pra numeric_value (constraint de banco, feedback do Boss 2026-09-25)."""
+        self._save('limit_column_count', 1, game='Lotofacil')
+        self._save('limit_row_count', 1, game='Lotofacil')
+        self.assertEqual(generate_bet('Lotofacil', self.user), (None, None))
+        self.assertEqual(generate_bet_with_relaxation('Lotofacil', self.user), (None, None, None))
 
     def test_relaxes_the_only_impossible_rule_in_memory(self):
         """Story 4.5 (FR-22): uma regra inatingivel e relaxada, o jogo sai e o banco nao muda."""
-        self._save('limit_sequence_count', 3)
-        self._save('limit_row_count', 0)
-        nums, clovers, relaxed = generate_bet_with_relaxation('Mega-sena', self.user)
-        self.assertEqual(len(nums), 6)
+        self._save('limit_sequence_count', 3, game='Lotofacil')
+        self._save('limit_row_count', 1, game='Lotofacil')
+        nums, clovers, relaxed = generate_bet_with_relaxation('Lotofacil', self.user)
+        self.assertEqual(len(nums), 15)
         self.assertEqual(relaxed, 'limit_row_count')
         self.assertTrue(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').enabled)
-        self.assertEqual(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').numeric_value, 0)
+        self.assertEqual(GenerationRule.objects.get(user=self.user, rule_name='limit_row_count').numeric_value, 1)
 
     def test_relaxation_picks_newest_updated_at_among_violated_rules_only(self):
         from datetime import timedelta
@@ -1016,44 +1041,49 @@ class RelaxationViewsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='relax@example.com', password='SenhaForte123')
         self.client.force_login(self.user)
+        # Lotofacil (grade 5x5, 15 numeros sorteados): 'no maximo 1 por linha' e matematicamente
+        # inatingivel mesmo no minimo valido (1) -- 0 nao e mais aceito (constraint de banco,
+        # feedback do Boss 2026-09-25), entao a regra "impossivel" de teste usa Lotofacil, nao
+        # mais Mega-sena.
         GenerationRule.objects.create(
-            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
+            user=self.user, game='Lotofacil', rule_name='limit_row_count', numeric_value=1, enabled=True,
         )
         self.expected = (
-            "O jogo de Mega-sena foi gerado relaxando a regra "
+            "O jogo de Lotofacil foi gerado relaxando a regra "
             "'Limita quantidade de números na mesma linha do volante'"
         )
 
     def test_create_view_saves_bet_and_names_relaxed_rule(self):
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Lotofacil', 'concurso': '3000'}, follow=True)
         self.assertEqual(GeneratedBet.objects.filter(user=self.user).count(), 1)
         msgs = [(m.level_tag, m.message) for m in response.context['messages']]
         self.assertTrue(any(level == 'success' for level, _ in msgs))
         self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
 
     def test_regenerate_view_replaces_bet_and_names_relaxed_rule(self):
+        original_numbers = list(range(1, 16))
         bet = GeneratedBet.objects.create(
-            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+            user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
         response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
-        self.assertNotEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        self.assertNotEqual(bet.numbers, original_numbers)
         msgs = [(m.level_tag, m.message) for m in response.context['messages']]
         self.assertTrue(any(level == 'warning' and self.expected in text for level, text in msgs), msgs)
 
     def test_api_returns_bet_and_relaxed_rule_label(self):
         response = self.client.post(
-            reverse('api_create_bet'), data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            reverse('api_create_bet'), data=json.dumps({'jogo': 'Lotofacil', 'concurso': '3000'}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(len(body['numeros']), 6)
+        self.assertEqual(len(body['numeros']), 15)
         self.assertEqual(body['regra_relaxada'], 'Limita quantidade de números na mesma linha do volante')
 
     def test_no_relaxation_message_without_conflict(self):
         GenerationRule.objects.filter(user=self.user).delete()
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Lotofacil', 'concurso': '3000'}, follow=True)
         self.assertFalse(any(m.level_tag == 'warning' for m in response.context['messages']))
 
 
@@ -1061,32 +1091,35 @@ class ImpossibleRulesAcrossViewsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='rv@example.com', password='SenhaForte123')
         self.client.force_login(self.user)
+        # Lotofacil (grade 5x5, 15 numeros): linha E coluna com limite 1 sao ambas inatingiveis
+        # sozinhas (casa dos pombos) -- relaxar uma nao basta, a outra continua impossivel.
         GenerationRule.objects.create(
-            user=self.user, game='Mega-sena', rule_name='limit_column_count', numeric_value=0, enabled=True,
+            user=self.user, game='Lotofacil', rule_name='limit_column_count', numeric_value=1, enabled=True,
         )
         GenerationRule.objects.create(
-            user=self.user, game='Mega-sena', rule_name='limit_row_count', numeric_value=0, enabled=True,
+            user=self.user, game='Lotofacil', rule_name='limit_row_count', numeric_value=1, enabled=True,
         )
 
     def test_create_view_warns_and_saves_nothing_when_impossible(self):
-        response = self.client.post(reverse('create_bet'), {'jogo': 'Mega-sena', 'concurso': '3000'}, follow=True)
+        response = self.client.post(reverse('create_bet'), {'jogo': 'Lotofacil', 'concurso': '3000'}, follow=True)
         self.assertEqual(GeneratedBet.objects.count(), 0)
         self.assertContains(response, 'com as suas regras de geracao')
         self.assertNotContains(response, 'apos muitas tentativas')
 
     def test_regenerate_view_keeps_bet_when_impossible(self):
+        original_numbers = list(range(1, 16))
         bet = GeneratedBet.objects.create(
-            user=self.user, game='Mega-sena', contest='3000', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+            user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
         response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
-        self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(bet.numbers, original_numbers)
         self.assertContains(response, 'com as suas regras de geracao')
 
     def test_api_returns_422_when_impossible(self):
         response = self.client.post(
             reverse('api_create_bet'),
-            data=json.dumps({'jogo': 'Mega-sena', 'concurso': '3000'}),
+            data=json.dumps({'jogo': 'Lotofacil', 'concurso': '3000'}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 422)

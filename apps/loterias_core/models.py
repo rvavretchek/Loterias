@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction, IntegrityError
 from django.conf import settings
 
@@ -82,11 +83,13 @@ RULE_DEFINITIONS = {
     },
     'limit_row_count': {
         'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int',
-        'explanation': 'Limita quantos números sorteados podem cair na mesma linha do volante oficial.',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma linha do volante oficial. '
+            'O mínimo é 1: não é possível ligar esta regra proibindo por completo números numa linha.',
     },
     'limit_column_count': {
         'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int',
-        'explanation': 'Limita quantos números sorteados podem cair na mesma coluna do volante oficial.',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma coluna do volante oficial. '
+            'O mínimo é 1: não é possível ligar esta regra proibindo por completo números numa coluna.',
     },
     'distribution_type': {
         'label': 'Tipo de distribuição', 'kind': 'choice',
@@ -391,7 +394,9 @@ class GenerationRule(models.Model):
     game = models.CharField(max_length=20, choices=GeneratedBet.GAME_CHOICES, verbose_name='Jogo')
     rule_name = models.CharField(max_length=40, choices=RULE_NAME_CHOICES, verbose_name='Regra')
     enabled = models.BooleanField(default=False, verbose_name='Ligada')
-    numeric_value = models.IntegerField(null=True, blank=True, verbose_name='Valor numerico')
+    numeric_value = models.IntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)], verbose_name='Valor numerico'
+    )
     choice_value = models.CharField(max_length=30, null=True, blank=True, verbose_name='Valor de escolha')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
 
@@ -404,6 +409,10 @@ class GenerationRule(models.Model):
                 check=~models.Q(numeric_value__isnull=False, choice_value__isnull=False),
                 name='generationrule_not_both_numeric_and_choice_value',
             ),
+            models.CheckConstraint(
+                check=models.Q(numeric_value__isnull=True) | models.Q(numeric_value__gte=1),
+                name='generationrule_numeric_value_at_least_one',
+            ),
         ]
 
     def __str__(self):
@@ -415,3 +424,5 @@ class GenerationRule(models.Model):
             raise ValidationError(f'A regra {self.rule_name} nao existe para o jogo {self.game}.')
         if self.numeric_value is not None and self.choice_value is not None:
             raise ValidationError('Uma regra nao pode ter valor numerico e valor de escolha ao mesmo tempo.')
+        if self.numeric_value is not None and self.numeric_value < 1:
+            raise ValidationError('O valor numerico de uma regra precisa ser pelo menos 1.')
