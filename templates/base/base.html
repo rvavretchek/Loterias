@@ -68,7 +68,7 @@
                     </div>
                 </details>
                 {% else %}
-                <a href="{% url 'account_login' %}" style="font-weight:600;color:var(--teal-700);">Entrar</a>
+                <a href="{% url 'account_login' %}" style="font-weight:600;color:var(--action-primary);">Entrar</a>
                 <a href="{% url 'account_signup' %}" class="lq-btn lq-btn-primary lq-btn-sm">Criar conta grátis</a>
                 {% endif %}
             </div>
@@ -93,11 +93,9 @@
         {% block content %}{% endblock %}
 
         {% block ad_zone %}
-        <div class="lq-container">
-            <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
-                <span class="ms" aria-hidden="true">campaign</span>
-                <span>Espaço reservado</span>
-            </div>
+        <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
+            <span class="ms" aria-hidden="true">campaign</span>
+            <span>Espaço reservado</span>
         </div>
         {% endblock %}
     </main>

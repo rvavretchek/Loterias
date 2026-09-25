@@ -1,4 +1,10 @@
 /* Lottiq Design System -- componentes por classe (prefixo lq-). Tokens em lottiq-tokens.css. */
+/* Nunca existiu um reset de box-sizing -- padding/border eram somados por fora de qualquer
+   height/width declarado (box-sizing padrao do navegador e content-box), causando estouro real
+   de layout em qualquer componente que combine os tres (ex.: .lq-tile, achado na Story 7.4b:
+   grade "Loteria" transbordava por baixo da propria celula da grade CSS, sobrepondo o botao
+   "Editar regras de geracao" logo abaixo). */
+*, *::before, *::after { box-sizing: border-box; }
 body { font-family: var(--font-body); color: var(--text-body-color); background: var(--surface-page); }
 a { color: var(--action-primary); text-decoration: none; }
 a:hover { color: var(--action-primary-hover); }
@@ -30,7 +36,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-nav { display: flex; align-items: center; gap: 4px; }
 .lq-nav a { height: 40px; padding: 0 14px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font: 500 15px var(--font-body); }
 .lq-nav a:hover { background: var(--neutral-50); color: var(--text-heading); }
-.lq-nav a.is-active { background: var(--status-waiting-bg); color: var(--teal-700); font-weight: 600; }
+.lq-nav a.is-active { background: var(--status-waiting-bg); color: var(--status-waiting-fg); font-weight: 600; }
 .lq-nav a .ms { font-size: 20px; }
 .lq-header-right { display: flex; align-items: center; gap: 14px; }
 .lq-bell { position: relative; color: var(--text-muted); display: inline-flex; }
@@ -63,8 +69,8 @@ a:hover { color: var(--action-primary-hover); }
 .lq-btn-sm { height: 36px; padding: 0 14px; font-size: 13px; }
 .lq-btn-primary { background: var(--action-primary); color: var(--action-primary-ink); box-shadow: var(--shadow-button); }
 .lq-btn-primary:hover { background: var(--action-primary-hover); color: var(--action-primary-ink); }
-.lq-btn-secondary { background: var(--surface-card); color: var(--teal-700); border: 1.5px solid var(--action-primary); }
-.lq-btn-secondary:hover { background: var(--status-waiting-bg); color: var(--teal-700); }
+.lq-btn-secondary { background: var(--surface-card); color: var(--action-primary); border: 1.5px solid var(--action-primary); }
+.lq-btn-secondary:hover { background: var(--status-waiting-bg); color: var(--status-waiting-fg); }
 .lq-btn-outline { background: var(--surface-card); color: var(--text-body-color); border-color: var(--border-default); }
 .lq-btn-outline:hover { background: var(--neutral-50); color: var(--text-heading); }
 .lq-btn-danger { background: transparent; color: var(--red-700); }
@@ -94,12 +100,12 @@ a:hover { color: var(--action-primary-hover); }
 .lq-switch input:focus-visible + .lq-switch-track { box-shadow: var(--ring-focus); }
 
 /* Bola de numero */
-.lq-ball { width: 48px; height: 48px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 15px var(--font-mono); font-variant-numeric: tabular-nums; flex: 0 0 auto; background: var(--lq-navy); color: #fff; }
+.lq-ball { width: 48px; height: 48px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 15px var(--font-mono); font-variant-numeric: tabular-nums; flex: 0 0 auto; background: var(--ball-bg); color: var(--ball-fg); }
 .lq-ball-sm { width: 36px; height: 36px; font-size: 13px; }
 .lq-ball-xs { width: 32px; height: 32px; font-size: 11px; }
 .lq-ball-hit { background: var(--lq-amber); color: var(--amber-900); box-shadow: var(--ring-win); }
 .lq-ball-not-hit { background: var(--surface-card); color: var(--text-muted); border: 2px dashed var(--neutral-400); }
-.lq-ball-clover { background: var(--teal-50); color: var(--teal-700); border: 2px solid var(--lq-teal); }
+.lq-ball-clover { background: var(--status-waiting-bg); color: var(--status-waiting-fg); border: 2px solid var(--action-primary); }
 .lq-ball-available { background: var(--surface-sunken); color: var(--neutral-400); border: 1px solid var(--border-default); }
 .lq-balls { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -116,7 +122,7 @@ a:hover { color: var(--action-primary-hover); }
 
 /* Banner / mensagens */
 .lq-banner { display: flex; gap: 12px; align-items: flex-start; background: var(--status-waiting-bg); border: 1px solid transparent; border-radius: var(--radius-md); padding: 14px 16px; font-family: var(--font-body); }
-.lq-banner .ms { font-size: 22px; color: var(--teal-700); flex-shrink: 0; }
+.lq-banner .ms { font-size: 22px; color: var(--status-waiting-fg); flex-shrink: 0; }
 .lq-banner-text { font: 500 14px/1.5 var(--font-body); color: var(--text-heading); flex: 1; }
 .lq-banner-error { background: var(--status-error-bg); } .lq-banner-error .ms { color: var(--red-700); }
 .lq-banner-warn { background: var(--neutral-100); } .lq-banner-warn .ms { color: var(--text-heading); }
@@ -165,8 +171,8 @@ a:hover { color: var(--action-primary-hover); }
 .lq-dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border-default); flex-wrap: wrap; }
 
 /* Chip removivel (filtro ativo) */
-.lq-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--status-waiting-bg); color: var(--teal-700); border: none; border-radius: 999px; padding: 6px 10px 6px 14px; font: 600 13px var(--font-body); text-decoration: none; }
-.lq-chip:hover { background: var(--teal-100); color: var(--teal-700); }
+.lq-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--status-waiting-bg); color: var(--status-waiting-fg); border: none; border-radius: 999px; padding: 6px 10px 6px 14px; font: 600 13px var(--font-body); text-decoration: none; }
+.lq-chip:hover { background: var(--status-waiting-bg); color: var(--status-waiting-fg); filter: brightness(1.08); }
 .lq-chip .ms { font-size: 16px; }
 
 /* Paginacao */
@@ -188,8 +194,11 @@ a:hover { color: var(--action-primary-hover); }
 @keyframes lq-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: lq-fade-in .5s ease; }
 
-/* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real */
-.lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px 0; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
+/* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real.
+   Fora do .lq-container de proposito (Story 7.4b, feedback do Boss): usa a largura cheia da
+   viewport em telas largas, em vez de ficar limitada a --content-width com as laterais vazias. */
+.lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px var(--page-padding-mobile); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
+@media (min-width: 768px) { .lq-ad-zone { margin: 32px var(--page-padding-desktop); } }
 .lq-ad-zone .ms { font-size: 20px; }
 
 /* Banner de consentimento de cookies (Story 7.5) */

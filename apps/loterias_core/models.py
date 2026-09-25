@@ -72,7 +72,8 @@ RULE_DEFINITIONS = {
         'label': 'Limita quantidade de números em sequência', 'kind': 'int',
         'explanation': 'Sequência é quando 2 ou mais números sorteados são seguidos (ex.: 23 e 24). '
             'Esta regra limita o tamanho da maior sequência do jogo — valor 2 permite um par como '
-            '23-24, mas nunca um trio como 23-24-25.',
+            '23-24, mas nunca um trio como 23-24-25. Valor 1 proíbe sequência por completo: nenhum '
+            'par de números seguidos é permitido no jogo.',
     },
     'limit_sequence_pairs': {
         'label': 'Limita quantidade de sequências num jogo', 'kind': 'int',

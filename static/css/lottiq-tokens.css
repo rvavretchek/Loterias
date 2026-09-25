@@ -16,6 +16,7 @@
   --status-win-bg: var(--lq-amber); --status-win-fg: var(--amber-900);
   --status-empty-bg: var(--neutral-100); --status-empty-fg: var(--neutral-600);
   --status-error-bg: var(--red-50); --status-error-fg: var(--red-700);
+  --ball-bg: var(--lq-navy); --ball-fg: #fff;
 
   /* Tipografia */
   --font-display: 'Sora', system-ui, sans-serif;
@@ -48,4 +49,7 @@
   --status-win-bg: var(--dark-celebration-bg); --status-win-fg: var(--dark-celebration-fg);
   --status-empty-bg: var(--dark-surface-2); --status-empty-fg: var(--dark-text-muted);
   --status-error-bg: #2A1410; --status-error-fg: #E5876F;
+  /* Bolinha de numero mais clara que o fundo escuro (achado do Boss, daltonico -- a marca navy
+     original ficava quase invisivel sobre o fundo escuro, muito proximos em luminosidade). */
+  --ball-bg: var(--dark-action); --ball-fg: var(--dark-action-ink);
 }
