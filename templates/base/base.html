@@ -90,12 +90,25 @@
     {% endif %}
 
     <main class="lq-main">
+        <!-- Colunas laterais reservadas (Story 7.3b): so aparecem quando sobra espaco vazio dos
+             dois lados do conteudo central em telas bem largas -- nunca disputam espaco com ele. -->
+        <div class="lq-ad-rail lq-ad-rail-left" aria-hidden="true">
+            <span class="ms" aria-hidden="true">campaign</span>
+            <span>Espaço reservado</span>
+        </div>
+        <div class="lq-ad-rail lq-ad-rail-right" aria-hidden="true">
+            <span class="ms" aria-hidden="true">campaign</span>
+            <span>Espaço reservado</span>
+        </div>
+
         {% block content %}{% endblock %}
 
         {% block ad_zone %}
-        <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
-            <span class="ms" aria-hidden="true">campaign</span>
-            <span>Espaço reservado</span>
+        <div class="lq-container">
+            <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
+                <span class="ms" aria-hidden="true">campaign</span>
+                <span>Espaço reservado</span>
+            </div>
         </div>
         {% endblock %}
     </main>

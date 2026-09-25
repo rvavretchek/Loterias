@@ -213,14 +213,25 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 
-# Email
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Lotérias <noreply@loterias.com>')
+# Email -- BREVO_* e a fonte primaria (mesmo nome usado no .env do host em deploy/lab/docker-compose.yml,
+# que so repassa pros nomes genericos EMAIL_* dentro do container); em dev local (sem Docker) essas vars
+# do .env nunca eram lidas antes, entao o BREVO_SMTP_KEY ficava preenchido mas nunca chegava a valer --
+# o cadastro sempre caia no console.EmailBackend em silencio (achado do Boss, 2026-09-25: fluxo de
+# confirmacao de e-mail parecia travado por nao aparecer em lugar nenhum visivel).
+# EMAIL_* generico continua funcionando como fallback pra quem nao usa Brevo.
+_brevo_key = os.getenv('BREVO_SMTP_KEY', '')
+_using_real_brevo_key = bool(_brevo_key) and _brevo_key != 'your-brevo-smtp-key'
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend' if _using_real_brevo_key
+    else 'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.getenv('BREVO_SMTP_HOST', os.getenv('EMAIL_HOST', 'smtp.gmail.com'))
+EMAIL_PORT = int(os.getenv('BREVO_SMTP_PORT', os.getenv('EMAIL_PORT', 587)))
+EMAIL_USE_TLS = os.getenv('BREVO_SMTP_USE_TLS', os.getenv('EMAIL_USE_TLS', 'True')).lower() == 'true'
+EMAIL_HOST_USER = os.getenv('BREVO_SMTP_USER', os.getenv('EMAIL_HOST_USER', ''))
+EMAIL_HOST_PASSWORD = _brevo_key or os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('BREVO_FROM_EMAIL', os.getenv('DEFAULT_FROM_EMAIL', 'Lotérias <noreply@loterias.com>'))
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 20))
 
 # E-mail do operador (Boss) que recebe alerta de falha de captura de resultado (Story 2.9).

@@ -35,7 +35,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-brand img { width: 28px; height: 28px; }
 .lq-nav { display: flex; align-items: center; gap: 4px; }
 .lq-nav a { height: 40px; padding: 0 14px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font: 500 15px var(--font-body); }
-.lq-nav a:hover { background: var(--neutral-50); color: var(--text-heading); }
+.lq-nav a:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .lq-nav a.is-active { background: var(--status-waiting-bg); color: var(--status-waiting-fg); font-weight: 600; }
 .lq-nav a .ms { font-size: 20px; }
 .lq-header-right { display: flex; align-items: center; gap: 14px; }
@@ -51,7 +51,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-menu > summary::-webkit-details-marker { display: none; }
 .lq-menu-panel { position: absolute; right: 0; top: calc(100% + 8px); min-width: 200px; background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 6px; z-index: 110; }
 .lq-menu-panel a, .lq-menu-panel button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; border-radius: var(--radius-sm); color: var(--text-body-color); font: 500 14px var(--font-body); cursor: pointer; text-align: left; }
-.lq-menu-panel a:hover, .lq-menu-panel button:hover { background: var(--neutral-50); color: var(--text-heading); }
+.lq-menu-panel a:hover, .lq-menu-panel button:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .lq-menu-panel .is-danger { color: var(--red-700); }
 .lq-menu-panel .ms { font-size: 20px; }
 .lq-user-name { display: none; }
@@ -72,12 +72,12 @@ a:hover { color: var(--action-primary-hover); }
 .lq-btn-secondary { background: var(--surface-card); color: var(--action-primary); border: 1.5px solid var(--action-primary); }
 .lq-btn-secondary:hover { background: var(--status-waiting-bg); color: var(--status-waiting-fg); }
 .lq-btn-outline { background: var(--surface-card); color: var(--text-body-color); border-color: var(--border-default); }
-.lq-btn-outline:hover { background: var(--neutral-50); color: var(--text-heading); }
+.lq-btn-outline:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .lq-btn-danger { background: transparent; color: var(--red-700); }
 .lq-btn-danger:hover { background: var(--red-50); color: var(--red-700); }
-.lq-btn:disabled, .lq-btn[aria-disabled="true"] { background: var(--neutral-100); color: var(--neutral-400); box-shadow: none; border-color: transparent; cursor: not-allowed; }
+.lq-btn:disabled, .lq-btn[aria-disabled="true"] { background: var(--status-empty-bg); color: var(--status-empty-fg); box-shadow: none; border-color: transparent; cursor: not-allowed; }
 .lq-icon-btn { width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--surface-card); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-.lq-icon-btn:hover { background: var(--neutral-50); color: var(--text-heading); }
+.lq-icon-btn:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .lq-icon-btn .ms { font-size: 20px; }
 
 /* Campos */
@@ -87,7 +87,7 @@ a:hover { color: var(--action-primary-hover); }
 .lq-input:focus, .lq-select:focus { outline: none; border-color: var(--action-primary); box-shadow: var(--ring-focus); }
 .lq-input.is-mono { font: 700 15px var(--font-mono); }
 .lq-input.is-error { border: 1.5px solid var(--red-500); }
-.lq-input:disabled, .lq-select:disabled { background: var(--neutral-50); color: var(--text-faint); cursor: not-allowed; }
+.lq-input:disabled, .lq-select:disabled { background: var(--surface-sunken); color: var(--text-faint); cursor: not-allowed; }
 .lq-helper { font: 400 12px var(--font-body); color: var(--text-muted); }
 .lq-error { font: 600 12px var(--font-body); color: var(--red-700); }
 
@@ -178,7 +178,7 @@ a:hover { color: var(--action-primary-hover); }
 /* Paginacao */
 .lq-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 0; list-style: none; margin: 24px 0 0; }
 .lq-pagination a, .lq-pagination span { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--surface-card); color: var(--text-body-color); font: 600 13px var(--font-mono); text-decoration: none; }
-.lq-pagination a:hover { background: var(--neutral-50); }
+.lq-pagination a:hover { background: var(--surface-sunken); }
 .lq-pagination .is-active span { background: var(--lq-navy); border-color: var(--text-heading); color: #fff; }
 .lq-pagination .ms { font-size: 18px; }
 
@@ -188,17 +188,23 @@ a:hover { color: var(--action-primary-hover); }
 
 /* Layout base do body: rodape sempre no fim, mesmo com pouco conteudo (Story 5.7). */
 .lq-body { display: flex; flex-direction: column; min-height: 100vh; }
-.lq-main { flex: 1; }
+.lq-main { flex: 1; position: relative; }
 
 /* Transicao de entrada (linhas de lista/cartao aparecendo) */
 @keyframes lq-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: lq-fade-in .5s ease; }
 
-/* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real.
-   Fora do .lq-container de proposito (Story 7.4b, feedback do Boss): usa a largura cheia da
-   viewport em telas largas, em vez de ficar limitada a --content-width com as laterais vazias. */
-.lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px var(--page-padding-mobile); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
-@media (min-width: 768px) { .lq-ad-zone { margin: 32px var(--page-padding-desktop); } }
+/* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real. */
+.lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px 0; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
+
+/* Colunas laterais reservadas (Story 7.3b, feedback do Boss: usar as laterais vazias em tela
+   cheia, sem mexer na zona inferior). Absolutas dentro de .lq-main (que rola normalmente com a
+   pagina, nao fixas) -- so aparecem a partir de 1600px, largura onde sobra espaco real dos dois
+   lados do conteudo central (--content-width 1120px) sem disputar espaco com ele. */
+.lq-ad-rail { display: none; position: absolute; top: 0; width: 160px; min-height: 600px; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); text-align: center; }
+.lq-ad-rail-left { left: 24px; }
+.lq-ad-rail-right { right: 24px; }
+@media (min-width: 1600px) { .lq-ad-rail { display: flex; } }
 .lq-ad-zone .ms { font-size: 20px; }
 
 /* Banner de consentimento de cookies (Story 7.5) */
