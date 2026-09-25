@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import datetime
@@ -513,6 +514,39 @@ def mark_notification_read_view(request, pk):
     ):
         return redirect(next_url)
     return redirect('notifications')
+
+
+COOKIE_CONSENT_MAX_AGE = 60 * 60 * 24 * 365
+
+
+@require_POST
+def save_cookie_consent_view(request):
+    """Grava a decisao de cookies (Story 7.5/FR-33) num cookie proprio de 1a parte, ate pra
+    visitante anonimo -- nao depende de login nem de sessao pra persistir a longo prazo."""
+    choice = request.POST.get('choice')
+    if choice == 'accept_all':
+        consent = {'necessary': True, 'analytics': True, 'marketing': True}
+    elif choice == 'reject_all':
+        consent = {'necessary': True, 'analytics': False, 'marketing': False}
+    else:
+        consent = {
+            'necessary': True,
+            'analytics': request.POST.get('analytics') == 'on',
+            'marketing': request.POST.get('marketing') == 'on',
+        }
+
+    next_url = request.POST.get('next')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        response = redirect(next_url)
+    else:
+        response = redirect('home')
+    response.set_cookie(
+        'lottiq_cookies', json.dumps(consent),
+        max_age=COOKIE_CONSENT_MAX_AGE, samesite='Lax', httponly=True,
+    )
+    return response
 
 
 @login_required

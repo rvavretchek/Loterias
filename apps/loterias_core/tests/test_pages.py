@@ -459,6 +459,79 @@ class LottiqBaseTemplateTests(TestCase):
         self.assertContains(response, 'Usar tema claro')
 
 
+class CookieConsentTests(TestCase):
+    """Story 7.5 (FR-33): banner de consentimento de cookies (LGPD)."""
+
+    def test_banner_shown_when_no_decision_cookie_exists(self):
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, 'id="aviso-cookies"')
+        self.assertContains(response, 'Aceitar tudo')
+        self.assertContains(response, 'Recusar tudo')
+
+    def test_banner_hidden_once_decision_cookie_exists(self):
+        self.client.cookies['lottiq_cookies'] = json.dumps({'necessary': True, 'analytics': True, 'marketing': False})
+        response = self.client.get(reverse('account_login'))
+        self.assertNotContains(response, 'id="aviso-cookies"')
+
+    def test_corrupted_cookie_is_treated_as_no_decision(self):
+        self.client.cookies['lottiq_cookies'] = 'nao-e-json-valido'
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, 'id="aviso-cookies"')
+
+    def test_accept_all_sets_all_categories_true(self):
+        response = self.client.post(reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')})
+        consent = json.loads(response.cookies['lottiq_cookies'].value)
+        self.assertEqual(consent, {'necessary': True, 'analytics': True, 'marketing': True})
+
+    def test_reject_all_sets_optional_categories_false(self):
+        response = self.client.post(reverse('save_cookie_consent'), {'choice': 'reject_all', 'next': reverse('home')})
+        consent = json.loads(response.cookies['lottiq_cookies'].value)
+        self.assertEqual(consent, {'necessary': True, 'analytics': False, 'marketing': False})
+
+    def test_custom_choice_reflects_selected_categories_only(self):
+        response = self.client.post(reverse('save_cookie_consent'), {
+            'choice': 'custom', 'analytics': 'on', 'next': reverse('home'),
+        })
+        consent = json.loads(response.cookies['lottiq_cookies'].value)
+        self.assertEqual(consent, {'necessary': True, 'analytics': True, 'marketing': False})
+
+    def test_custom_choice_with_no_boxes_checked_rejects_optional_categories(self):
+        response = self.client.post(reverse('save_cookie_consent'), {'choice': 'custom', 'next': reverse('home')})
+        consent = json.loads(response.cookies['lottiq_cookies'].value)
+        self.assertEqual(consent, {'necessary': True, 'analytics': False, 'marketing': False})
+
+    def test_get_is_not_allowed(self):
+        response = self.client.get(reverse('save_cookie_consent'))
+        self.assertEqual(response.status_code, 405)
+
+    def test_exempt_from_incomplete_profile_gate(self):
+        user = User.objects.create_user(email='cookiegate@example.com', password='SenhaForte123')
+        user.profile_completed = False
+        user.save(update_fields=['profile_completed'])
+        self.client.force_login(user)
+        response = self.client.post(reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+        consent = json.loads(response.cookies['lottiq_cookies'].value)
+        self.assertTrue(consent['analytics'])
+
+    def test_footer_link_reopens_banner_even_with_existing_decision(self):
+        self.client.cookies['lottiq_cookies'] = json.dumps({'necessary': True, 'analytics': True, 'marketing': False})
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, '?revisar_cookies=1#aviso-cookies')
+        response = self.client.get(reverse('account_login') + '?revisar_cookies=1')
+        self.assertContains(response, 'id="aviso-cookies"')
+
+    def test_reopened_banner_prefills_categories_from_existing_decision(self):
+        self.client.cookies['lottiq_cookies'] = json.dumps({'necessary': True, 'analytics': True, 'marketing': False})
+        response = self.client.get(reverse('account_login') + '?revisar_cookies=1')
+        html = response.content.decode()
+        analytics_input = re.search(r'<input type="checkbox" name="analytics"[^>]*>', html).group(0)
+        marketing_input = re.search(r'<input type="checkbox" name="marketing"[^>]*>', html).group(0)
+        self.assertIn('checked', analytics_input)
+        self.assertNotIn('checked', marketing_input)
+
+
 class CalculateStatisticsTests(TestCase):
     def test_no_bets_returns_none(self):
         user = User.objects.create_user(email='stats1@example.com', password='SenhaForte123')

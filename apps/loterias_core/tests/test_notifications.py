@@ -882,9 +882,14 @@ class NotificationPreferencesViewTests(TestCase):
         self.assertFalse(NotificationPreference.objects.filter(user=self.user).exists())
 
     def test_default_checkboxes_rendered_correctly_in_html(self):
+        """A pagina tambem tem o banner global de consentimento de cookies (Story 7.5), com suas
+        proprias checkboxes -- a contagem aqui e restrita ao form de preferencia de notificacao."""
         response = self.client.get(reverse('notification_preferences'))
         html = response.content.decode()
-        self.assertContains(response, 'type="checkbox"', count=2)
+        form_start = html.index('<form method="post">')
+        form_end = html.index('</form>', form_start) + len('</form>')
+        form_html = html[form_start:form_end]
+        self.assertEqual(form_html.count('type="checkbox"'), 2)
         site_input = re.search(r'<input[^>]*name="site_enabled"[^>]*>', html).group()
         email_input = re.search(r'<input[^>]*name="email_enabled"[^>]*>', html).group()
         self.assertIn('checked', site_input)

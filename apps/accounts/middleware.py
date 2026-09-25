@@ -17,7 +17,7 @@ class RequireCompleteAccountMiddleware:
     complete_profile, sem alternar o tema e sem nenhum sinal de erro."""
 
     EXEMPT_PATH_PREFIXES = ('/admin/', '/static/', '/media/')
-    EXEMPT_URL_NAMES = ('complete_profile', 'account_logout', 'toggle_theme')
+    EXEMPT_URL_NAMES = ('complete_profile', 'account_logout', 'toggle_theme', 'save_cookie_consent')
 
     def __init__(self, get_response):
         self.get_response = get_response

@@ -191,3 +191,13 @@ a:hover { color: var(--action-primary-hover); }
 /* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real */
 .lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px 0; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
 .lq-ad-zone .ms { font-size: 20px; }
+
+/* Banner de consentimento de cookies (Story 7.5) */
+.lq-cookie-banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 200; background: var(--surface-card); border-top: 1px solid var(--border-default); box-shadow: var(--shadow-lg); padding: 16px 0; }
+.lq-cookie-banner-inner { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.lq-cookie-banner-text { flex: 1 1 320px; min-width: 0; }
+.lq-cookie-banner-text strong { font: 700 15px var(--font-display); color: var(--text-heading); }
+.lq-cookie-banner-text p { margin: 4px 0 0; }
+.lq-cookie-banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lq-cookie-details { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border-default); }
+.lq-cookie-category { display: flex; align-items: center; gap: 8px; font: 400 14px var(--font-body); color: var(--text-body-color); }
