@@ -570,11 +570,16 @@ def _build_rule_rows(game, saved_by_name, posted=None):
         stored_value = None
         if saved is not None:
             stored_value = saved.numeric_value if kind == 'int' else saved.choice_value
+        grid_help = _GRID_HELP[rule_name].format(
+            game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1],
+        ) if rule_name in _GRID_HELP else ''
         row = {
             'rule_name': rule_name,
             'label': definition['label'],
             'kind': kind,
-            'help': _GRID_HELP[rule_name].format(game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1]) if rule_name in _GRID_HELP else '',
+            # Story 7.2 (FR-30): explicação em linguagem comum sempre presente; o detalhe do
+            # volante (linha/coluna) se soma a ela, não a substitui.
+            'help': f"{definition['explanation']} {grid_help}".strip() if grid_help else definition['explanation'],
             'enabled': bool(saved and saved.enabled),
             'value': stored_value,
             'error': '',

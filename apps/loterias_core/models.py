@@ -68,15 +68,41 @@ DISTRIBUTION_CHOICES = [
     ('totalmente_aleatoria', 'Totalmente Aleatória'),
 ]
 RULE_DEFINITIONS = {
-    'limit_sequence_count': {'label': 'Limita quantidade de números em sequência', 'kind': 'int'},
-    'limit_sequence_pairs': {'label': 'Limita quantidade de sequências num jogo', 'kind': 'int'},
-    'limit_row_count': {'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int'},
-    'limit_column_count': {'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int'},
-    'distribution_type': {'label': 'Tipo de distribuição', 'kind': 'choice'},
+    'limit_sequence_count': {
+        'label': 'Limita quantidade de números em sequência', 'kind': 'int',
+        'explanation': 'Sequência é quando 2 ou mais números sorteados são seguidos (ex.: 23 e 24). '
+            'Esta regra limita o tamanho da maior sequência do jogo — valor 2 permite um par como '
+            '23-24, mas nunca um trio como 23-24-25.',
+    },
+    'limit_sequence_pairs': {
+        'label': 'Limita quantidade de sequências num jogo', 'kind': 'int',
+        'explanation': 'Controla quantos blocos de números seguidos podem existir no mesmo jogo — '
+            'não o tamanho de cada bloco, e sim quantos blocos ao todo.',
+    },
+    'limit_row_count': {
+        'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma linha do volante oficial.',
+    },
+    'limit_column_count': {
+        'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma coluna do volante oficial.',
+    },
+    'distribution_type': {
+        'label': 'Tipo de distribuição', 'kind': 'choice',
+        'explanation': 'Homogênea espalha os números por igual entre as faixas do volante, em vez '
+            'de deixar concentrar tudo numa região. Totalmente Aleatória sorteia sem nenhuma '
+            'preferência de distribuição.',
+    },
     'limit_min_gap_between_sequences': {
         'label': 'Distância mínima entre sequências', 'kind': 'int',
+        'explanation': 'Quando o jogo tem mais de uma sequência, exige pelo menos essa quantidade de '
+            'números não sorteados entre uma sequência e a próxima.',
     },
-    'limit_min_sequences': {'label': 'Quantidade mínima de sequências', 'kind': 'int'},
+    'limit_min_sequences': {
+        'label': 'Quantidade mínima de sequências', 'kind': 'int',
+        'explanation': 'Exige que o jogo tenha pelo menos essa quantidade de sequências (blocos de '
+            'números seguidos) — o oposto de limitar um máximo.',
+    },
 }
 RULE_NAMES_BY_GAME = {
     'Mega-sena': [

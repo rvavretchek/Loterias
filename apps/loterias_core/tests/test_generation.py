@@ -638,6 +638,17 @@ class GenerationRulesEditScreenTests(TestCase):
         response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'xpto'}))
         self.assertEqual(response.status_code, 404)
 
+    def test_every_rule_has_an_explanation_associated_via_aria_describedby(self):
+        """Story 7.2 (FR-30/UX-DR11): as 7 regras possiveis tem explicacao em linguagem comum,
+        nao so o rotulo curto -- Lotofacil tem o conjunto completo das 7."""
+        url = reverse('generation_rules', kwargs={'jogo': 'lotofacil'})
+        response = self.client.get(url)
+        html = response.content.decode()
+        for name in RULE_NAMES_BY_GAME['Lotofacil']:
+            self.assertIn(f'aria-describedby="help-{name}"', html)
+            explanation = RULE_DEFINITIONS[name]['explanation']
+            self.assertContains(response, explanation)
+
     def test_first_visit_shows_default_with_disabled_value_fields(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
