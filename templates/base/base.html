@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,6 +38,10 @@
             {% endif %}
 
             <div class="lq-header-right">
+                <a class="lq-icon-btn" href="{% url 'toggle_theme' %}" title="{% if is_dark %}Usar tema claro{% else %}Usar tema escuro{% endif %}"
+                   aria-label="{% if is_dark %}Mudar para tema claro{% else %}Mudar para tema escuro{% endif %}">
+                    <span class="ms" aria-hidden="true">{% if is_dark %}light_mode{% else %}dark_mode{% endif %}</span>
+                </a>
                 {% if user.is_authenticated %}
                 {% if unread_notifications_count > 0 %}
                 <a class="lq-bell" href="{% url 'notifications' %}" title="Avisos de acerto"

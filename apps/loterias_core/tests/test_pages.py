@@ -435,6 +435,29 @@ class LottiqBaseTemplateTests(TestCase):
                 form_end = html.index('</form>')
                 self.assertGreater(html.index('id="zona-anuncio"'), form_end)
 
+    def test_html_tag_carries_data_theme_from_context(self):
+        """Story 7.4 (FR-32/UX-DR13): data-theme no <html> reflete theme_context, sem FOUC."""
+        user = User.objects.create_user(email='themehtml@example.com', password='SenhaForte123')
+        user.preferred_theme = 'dark'
+        user.save(update_fields=['preferred_theme'])
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, '<html lang="pt-BR" data-theme="dark">')
+
+    def test_theme_toggle_is_present_in_header_and_points_to_toggle_theme(self):
+        response = self.client.get(reverse('account_login'))
+        self.assertContains(response, reverse('toggle_theme'))
+        self.assertContains(response, 'dark_mode')
+
+    def test_theme_toggle_icon_reflects_dark_mode_when_active(self):
+        user = User.objects.create_user(email='themeicon@example.com', password='SenhaForte123')
+        user.preferred_theme = 'dark'
+        user.save(update_fields=['preferred_theme'])
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'light_mode')
+        self.assertContains(response, 'Usar tema claro')
+
 
 class CalculateStatisticsTests(TestCase):
     def test_no_bets_returns_none(self):

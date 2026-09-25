@@ -7,7 +7,7 @@
 <style>
     .notif-page { padding: 28px 0 60px; }
     .notif-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-    .notif-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .notif-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--text-heading); margin: 0; }
     .notif-list { display: flex; flex-direction: column; gap: 12px; }
     .notif-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
     .notif-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -31,7 +31,7 @@
             <div class="notif-card-head">
                 <div class="notif-meta">
                     <span class="lq-status lq-status-waiting">{{ notificacao.bet.game }}</span>
-                    <span style="font:700 14px var(--font-mono); color:var(--lq-navy);">Concurso {{ notificacao.bet.contest }}</span>
+                    <span style="font:700 14px var(--font-mono); color:var(--text-heading);">Concurso {{ notificacao.bet.contest }}</span>
                     <span class="lq-small">{{ notificacao.created_at|date:"d/m/Y H:i" }}</span>
                 </div>
                 {% if notificacao.won %}

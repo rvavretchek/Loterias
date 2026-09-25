@@ -32,3 +32,20 @@
   --ring-focus: 0 0 0 4px rgba(15,122,124,.18); --ring-win: 0 0 0 4px var(--amber-50);
   --ease-standard: cubic-bezier(.2,.7,.2,1); --duration-fast: 150ms; --duration-base: 200ms; --duration-celebration: 500ms;
 }
+
+/* Tema escuro -- paleta bruta + remapeamento dos tokens semanticos (fonte: tokens/colors.css). */
+:root[data-theme="dark"] {
+  --dark-bg: #071A29; --dark-surface: #0D2637; --dark-surface-2: #0A2233; --dark-border: #1E4159; --dark-border-soft: #16344A;
+  --dark-action: #2FA9A6; --dark-action-ink: #052B2C; --dark-text: #E8F0F4; --dark-text-muted: #8FA8B7;
+  --dark-teal-soft-bg: #123C43; --dark-teal-soft-fg: #7FD3CF;
+  --dark-celebration-bg: #1E1408; --dark-celebration-border: #6A4A16; --dark-celebration-fg: #D9A85C; --dark-celebration-muted: #A98A55;
+
+  --text-heading: var(--dark-text); --text-body-color: var(--dark-text); --text-muted: var(--dark-text-muted); --text-faint: var(--dark-text-muted); --text-inverse: var(--dark-bg);
+  --surface-page: var(--dark-bg); --surface-card: var(--dark-surface); --surface-sunken: var(--dark-surface-2);
+  --border-default: var(--dark-border-soft); --border-strong: var(--dark-border);
+  --action-primary: var(--dark-action); --action-primary-hover: var(--dark-action); --action-primary-ink: var(--dark-action-ink);
+  --status-waiting-bg: var(--dark-teal-soft-bg); --status-waiting-fg: var(--dark-teal-soft-fg);
+  --status-win-bg: var(--dark-celebration-bg); --status-win-fg: var(--dark-celebration-fg);
+  --status-empty-bg: var(--dark-surface-2); --status-empty-fg: var(--dark-text-muted);
+  --status-error-bg: #2A1410; --status-error-fg: #E5876F;
+}
