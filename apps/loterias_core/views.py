@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import datetime
@@ -285,18 +286,7 @@ def save_manual_bet_view(request):
 
     result = fetch_cef_result(selected_game, contest)
     if result:
-        LotteryResult.objects.update_or_create(
-            game=selected_game,
-            contest=contest,
-            defaults={
-                'numbers': result.get('numbers', []),
-                'clovers': result.get('clovers', []),
-                'prizes': result.get('prizes', {}),
-                'numbers_second_draw': result.get('numbers_second_draw', []),
-                'prizes_second_draw': result.get('prizes_second_draw', {}),
-                'source': 'CEF',
-            }
-        )
+        LotteryResult.objects.save_official_result(selected_game, contest, result)
         prize = calculate_bet_prize(selected_game, bet.numbers, bet.clovers, result)
         apply_prize_to_bet(bet, prize)
         if prize['won']:
@@ -319,18 +309,7 @@ def check_bet_result_view(request, pk):
         messages.warning(request, 'Nao foi possivel consultar o resultado oficial da CEF neste momento.')
         return redirect('bet_detail', pk=pk)
 
-    LotteryResult.objects.update_or_create(
-        game=bet.game,
-        contest=bet.contest,
-        defaults={
-            'numbers': result.get('numbers', []),
-            'clovers': result.get('clovers', []),
-            'prizes': result.get('prizes', {}),
-            'numbers_second_draw': result.get('numbers_second_draw', []),
-            'prizes_second_draw': result.get('prizes_second_draw', {}),
-            'source': 'CEF',
-        }
-    )
+    LotteryResult.objects.save_official_result(bet.game, bet.contest, result)
 
     prize = calculate_bet_prize(bet.game, bet.numbers, bet.clovers, result)
     apply_prize_to_bet(bet, prize)
@@ -537,6 +516,39 @@ def mark_notification_read_view(request, pk):
     return redirect('notifications')
 
 
+COOKIE_CONSENT_MAX_AGE = 60 * 60 * 24 * 365
+
+
+@require_POST
+def save_cookie_consent_view(request):
+    """Grava a decisao de cookies (Story 7.5/FR-33) num cookie proprio de 1a parte, ate pra
+    visitante anonimo -- nao depende de login nem de sessao pra persistir a longo prazo."""
+    choice = request.POST.get('choice')
+    if choice == 'accept_all':
+        consent = {'necessary': True, 'analytics': True, 'marketing': True}
+    elif choice == 'reject_all':
+        consent = {'necessary': True, 'analytics': False, 'marketing': False}
+    else:
+        consent = {
+            'necessary': True,
+            'analytics': request.POST.get('analytics') == 'on',
+            'marketing': request.POST.get('marketing') == 'on',
+        }
+
+    next_url = request.POST.get('next')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        response = redirect(next_url)
+    else:
+        response = redirect('home')
+    response.set_cookie(
+        'lottiq_cookies', json.dumps(consent),
+        max_age=COOKIE_CONSENT_MAX_AGE, samesite='Lax', httponly=True,
+    )
+    return response
+
+
 @login_required
 @require_http_methods(['GET', 'POST'])
 def notification_preferences_view(request):
@@ -592,11 +604,16 @@ def _build_rule_rows(game, saved_by_name, posted=None):
         stored_value = None
         if saved is not None:
             stored_value = saved.numeric_value if kind == 'int' else saved.choice_value
+        grid_help = _GRID_HELP[rule_name].format(
+            game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1],
+        ) if rule_name in _GRID_HELP else ''
         row = {
             'rule_name': rule_name,
             'label': definition['label'],
             'kind': kind,
-            'help': _GRID_HELP[rule_name].format(game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1]) if rule_name in _GRID_HELP else '',
+            # Story 7.2 (FR-30): explicação em linguagem comum sempre presente; o detalhe do
+            # volante (linha/coluna) se soma a ela, não a substitui.
+            'help': f"{definition['explanation']} {grid_help}".strip() if grid_help else definition['explanation'],
             'enabled': bool(saved and saved.enabled),
             'value': stored_value,
             'error': '',

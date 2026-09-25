@@ -7,14 +7,14 @@
 <style>
     .stats-page { padding: 28px 0 60px; }
     .stats-head { margin-bottom: 20px; }
-    .stats-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .stats-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--text-heading); margin: 0; }
     .stats-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
     @media (min-width: 640px) { .stats-summary { grid-template-columns: repeat(4, 1fr); } }
-    .stats-summary .home-stat-value { font: 700 24px var(--font-mono); color: var(--lq-navy); }
+    .stats-summary .home-stat-value { font: 700 24px var(--font-mono); color: var(--text-heading); }
     .stats-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
     @media (min-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
     .stats-game-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .stats-game-head h2 { font: 700 18px var(--font-display); color: var(--lq-navy); margin: 0; }
+    .stats-game-head h2 { font: 700 18px var(--font-display); color: var(--text-heading); margin: 0; }
     .progress-row { margin-bottom: 16px; }
     .progress-row .lq-row-between { margin-bottom: 6px; font-size: 13px; color: var(--text-muted); }
     .frequent-list { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -31,10 +31,10 @@
 
     {% if estatisticas %}
     <div class="stats-summary">
-        <div class="home-stat"><div class="home-stat-label">Total de jogos</div><div class="home-stat-value">{{ total_geral }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Tipos de jogo</div><div class="home-stat-value">{{ estatisticas|length }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Com sequência</div><div class="home-stat-value">{{ total_com_sequencia }}</div></div>
-        <div class="home-stat"><div class="home-stat-label">Sem sequência</div><div class="home-stat-value">{{ total_sem_sequencia }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Total de jogos</div><div class="home-stat-value">{{ total_geral }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Tipos de jogo</div><div class="home-stat-value">{{ estatisticas|length }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Com sequência</div><div class="home-stat-value">{{ total_com_sequencia }}</div></div>
+        <div class="home-stat"><div class="lq-eyebrow">Sem sequência</div><div class="home-stat-value">{{ total_sem_sequencia }}</div></div>
     </div>
 
     <div class="stats-grid">
@@ -54,7 +54,7 @@
                 <div class="lq-progress"><div class="lq-progress-bar" style="width: {{ stats.without_sequence_percentage }}%;"></div></div>
             </div>
 
-            <div class="detail-section-title" style="font:700 11px/1 var(--font-body); letter-spacing:.09em; text-transform:uppercase; color:var(--text-muted); margin-bottom:12px;">Números mais frequentes</div>
+            <div class="lq-eyebrow" style="margin-bottom:12px;">Números mais frequentes</div>
             <div class="frequent-list">
                 {% for num, freq in stats.most_frequent %}
                 <div class="frequent-item">

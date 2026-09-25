@@ -1,0 +1,314 @@
+<title>Diário da Sessão — Story 1.1</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,500..600&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#F2EDE0;
+    --surface:#FBF8F0;
+    --surface-2:#EFE8D6;
+    --ink:#241F1A;
+    --ink-muted:#6B6252;
+    --line:#DCD2B8;
+    --gold:#9C6B15;
+    --gold-soft:#EEDBAA;
+    --red:#9A2436;
+    --red-soft:#F0D3D3;
+    --green:#2E6B4F;
+    --green-soft:#D8E7D9;
+    --shadow: 0 1px 2px rgba(36,31,26,.06), 0 8px 24px -12px rgba(36,31,26,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141F1A;
+      --surface:#1A2621;
+      --surface-2:#213028;
+      --ink:#EEE7D6;
+      --ink-muted:#9FAB9C;
+      --line:#2E3E35;
+      --gold:#E4B94A;
+      --gold-soft:#3A331A;
+      --red:#E1707E;
+      --red-soft:#3B2226;
+      --green:#6FC79A;
+      --green-soft:#1F332A;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141F1A;
+    --surface:#1A2621;
+    --surface-2:#213028;
+    --ink:#EEE7D6;
+    --ink-muted:#9FAB9C;
+    --line:#2E3E35;
+    --gold:#E4B94A;
+    --gold-soft:#3A331A;
+    --red:#E1707E;
+    --red-soft:#3B2226;
+    --green:#6FC79A;
+    --green-soft:#1F332A;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Source Serif 4', Georgia, 'Times New Roman', serif;
+    line-height:1.55;
+  }
+  ::selection{ background:var(--gold-soft); }
+
+  .wrap{ max-width:760px; margin:0 auto; padding:56px 24px 96px; }
+
+  h1,h2,h3{ font-family:'Fraunces', Georgia, serif; text-wrap:balance; margin:0; }
+  .mono{ font-family:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace; }
+
+  /* ---------- masthead ---------- */
+  .masthead{ position:relative; margin-bottom:40px; }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:.72rem; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-muted); display:flex; gap:10px; align-items:center;
+    margin-bottom:14px;
+  }
+  .eyebrow::after{ content:""; flex:1; height:1px; background:var(--line); }
+  h1.title{ font-size:2.5rem; font-weight:600; font-style:italic; line-height:1.08; letter-spacing:-.01em; }
+  .subtitle{ margin-top:10px; color:var(--ink-muted); font-size:1.02rem; max-width:34ch; }
+
+  .stamp{
+    position:absolute; top:-6px; right:0; width:118px; height:118px;
+    border:2.5px solid var(--red); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(-11deg);
+    color:var(--red); font-family:'IBM Plex Mono', monospace;
+    font-weight:600; font-size:.68rem; letter-spacing:.06em; text-transform:uppercase;
+    text-align:center; line-height:1.35; padding:10px;
+    opacity:.92;
+  }
+  .stamp::before{
+    content:""; position:absolute; inset:6px; border:1px solid var(--red); border-radius:50%; opacity:.55;
+  }
+  @media (max-width:560px){ .stamp{ display:none; } }
+
+  /* ---------- ledger card ---------- */
+  .ledger{
+    background:var(--surface); border:1px solid var(--line); border-radius:4px;
+    box-shadow:var(--shadow); padding:28px 28px 8px; margin-bottom:44px;
+  }
+  .ledger h2{ font-size:1.05rem; font-style:italic; font-weight:600; margin-bottom:4px; }
+  .ledger .kicker{ font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-muted); margin-bottom:2px; }
+  .rule-row{
+    display:flex; gap:16px; align-items:flex-start; padding:16px 0; border-top:1px solid var(--line);
+  }
+  .rule-row:first-of-type{ border-top:none; margin-top:14px; }
+  .rule-tag{
+    flex:0 0 auto; font-family:'IBM Plex Mono',monospace; font-size:.66rem; font-weight:600;
+    letter-spacing:.08em; text-transform:uppercase; padding:4px 9px; border-radius:3px;
+    white-space:nowrap; margin-top:2px;
+  }
+  .rule-tag.always{ background:var(--green-soft); color:var(--green); }
+  .rule-tag.never{ background:var(--red-soft); color:var(--red); }
+  .rule-row p{ margin:0; font-size:.94rem; }
+  .rule-row .note{ display:block; color:var(--ink-muted); font-size:.84rem; margin-top:3px; }
+
+  /* ---------- timeline ---------- */
+  .rounds{ position:relative; }
+  .round{ position:relative; padding-left:44px; margin-bottom:52px; }
+  .round::before{
+    content:""; position:absolute; left:15px; top:34px; bottom:-52px; width:1px; background:var(--line);
+  }
+  .round:last-child::before{ display:none; }
+  .round-num{
+    position:absolute; left:0; top:0; width:31px; height:31px; border-radius:50%;
+    background:var(--surface-2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:.78rem; font-weight:600; color:var(--gold);
+  }
+  .round h3{ font-size:1.15rem; margin-bottom:4px; }
+  .round .when{ font-family:'IBM Plex Mono',monospace; font-size:.7rem; color:var(--ink-muted);
+    text-transform:uppercase; letter-spacing:.08em; margin-bottom:14px; display:block; }
+
+  .turn{ display:flex; gap:12px; margin-bottom:14px; align-items:flex-start; }
+  .avatar{
+    flex:0 0 auto; width:30px; height:30px; border-radius:50%; background:var(--surface);
+    border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-size:.95rem; margin-top:2px;
+  }
+  .bubble{ flex:1; min-width:0; }
+  .who{ font-family:'IBM Plex Mono',monospace; font-size:.72rem; font-weight:600; color:var(--ink);
+    margin-bottom:2px; }
+  .who .role{ color:var(--ink-muted); font-weight:400; text-transform:none; }
+  .turn p{ margin:0; font-size:.95rem; }
+  .turn p em{ font-style:italic; color:var(--ink-muted); }
+
+  .rename{
+    display:inline-flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace;
+    font-size:.78rem; background:var(--surface-2); border:1px solid var(--line); border-radius:3px;
+    padding:2px 8px; margin:1px 2px; white-space:nowrap;
+  }
+  .rename .arrow{ color:var(--gold); }
+
+  .callout{
+    background:var(--surface-2); border-left:3px solid var(--gold); border-radius:0 4px 4px 0;
+    padding:12px 16px; margin:14px 0 0 42px; font-size:.9rem; color:var(--ink-muted);
+  }
+  .callout strong{ color:var(--ink); font-weight:600; }
+
+  /* ---------- roster / footer ---------- */
+  .footer{
+    margin-top:8px; padding-top:36px; border-top:1px solid var(--line);
+  }
+  .footer h2{ font-size:1.05rem; font-style:italic; margin-bottom:18px; }
+  .roster{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:36px; }
+  @media (max-width:520px){ .roster{ grid-template-columns:repeat(2,1fr); } }
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:12px 13px;
+  }
+  .card .name{ font-family:'IBM Plex Mono',monospace; font-size:.82rem; font-weight:600; display:flex; gap:6px; align-items:center; }
+  .card .role{ font-size:.76rem; color:var(--ink-muted); margin-top:2px; }
+
+  .handoff{
+    background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:22px 24px;
+    display:flex; gap:16px; align-items:flex-start; box-shadow:var(--shadow);
+  }
+  .handoff .dot{ width:11px; height:11px; border-radius:50%; background:var(--green); margin-top:6px; flex:0 0 auto;
+    box-shadow:0 0 0 3px var(--green-soft); }
+  .handoff h3{ font-size:1rem; margin-bottom:6px; }
+  .handoff p{ margin:0 0 8px; font-size:.92rem; }
+  .handoff .commit{ font-family:'IBM Plex Mono',monospace; font-size:.78rem; color:var(--ink-muted); }
+
+  .colophon{ text-align:center; margin-top:44px; font-family:'IBM Plex Mono',monospace;
+    font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-muted); }
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="eyebrow">Loterias · Epic 1, Story 1.1</div>
+    <h1 class="title">O carimbo saiu depois<br>que o "Nunca" foi apagado</h1>
+    <p class="subtitle">Registro da sessão de party-mode que revisou a spec de rename pt-BR→inglês antes da aprovação — 08 de setembro de 2026.</p>
+    <div class="stamp">Story 1.1<br>em revisão</div>
+  </div>
+
+  <div class="ledger">
+    <div class="kicker">Placar final</div>
+    <h2>O que ficou decidido sobre Sempre / Nunca</h2>
+
+    <div class="rule-row">
+      <span class="rule-tag never">Apagado</span>
+      <p>"Nunca tocar <span class="mono">utils.py</span>/<span class="mono">views.py</span>/<span class="mono">admin.py</span>" — não era intenção do Boss, era interpretação de quem lavrou a spec.
+        <span class="note">Ele só disse "renomear tudo"; o escopo restrito de 1.1 continua, mas agora como sequenciamento entre stories, não como proibição atribuída a ele.</span></p>
+    </div>
+    <div class="rule-row">
+      <span class="rule-tag never">Apagado</span>
+      <p><span class="mono">RenameModel</span>/<span class="mono">RenameField</span> apenas, nunca dropar+recriar.
+        <span class="note">Sem produção real ainda, o banco de dev pode ser destruído e recriado sempre que isso deixar o código mais correto.</span></p>
+    </div>
+    <div class="rule-row">
+      <span class="rule-tag always">Fixado</span>
+      <p>Verificação e commit de 1.1 só rodam depois de 1.2 e 1.3 aplicadas junto.
+        <span class="note"><span class="mono">ImportError</span> isolado em <span class="mono">admin.py</span> é esperado até lá — não é regressão.</span></p>
+    </div>
+    <div class="rule-row">
+      <span class="rule-tag always">Fixado</span>
+      <p>Documentação 100% em português do Brasil, sem exceção — inclusive rótulos de estrutura e reviews técnicos.
+        <span class="note">Código continua em inglês: o projeto é MIT, feito pra qualquer dev do mundo ler.</span></p>
+    </div>
+  </div>
+
+  <div class="rounds">
+
+    <div class="round">
+      <div class="round-num">1</div>
+      <span class="when">Antes da aprovação</span>
+      <h3>Nove vozes acham a contradição escondida na spec</h3>
+
+      <div class="turn"><div class="avatar">😤</div><div class="bubble">
+        <div class="who">Grumbal <span class="role">— The Adversary</span></div>
+        <p>Achei o corpo antes de sentar: a AC promete "100% passando" e o "Never" proíbe tocar em três arquivos que a própria suíte importa.</p>
+      </div></div>
+      <div class="turn"><div class="avatar">🔒</div><div class="bubble">
+        <div class="who">Vex <span class="role">— Security Engineer</span></div>
+        <p><span class="mono">admin.py</span> importa <span class="mono">JogoGerado</span> direto de <span class="mono">models.py</span>. Depois do rename, isso é <span class="mono">ImportError</span> na inicialização — não teste falhando, o processo inteiro não sobe.</p>
+      </div></div>
+      <div class="turn"><div class="avatar">🌶️</div><div class="bubble">
+        <div class="who">Boundary <span class="role">— Edge-Case Hunter</span></div>
+        <p><span class="mono">utils.py</span>, <span class="mono">views.py</span> e mais dois templates fazem o mesmo — o mesmo bug de "zera silenciosamente" que já tinha sido pego no <span class="mono">profile.html</span>.</p>
+      </div></div>
+
+      <div class="callout"><strong>O que resolveu:</strong> o <span class="mono">epic-1-context.md</span> já previa isso — as 4 stories do Epic 1 mergeiam como um único commit, nunca isoladas.</div>
+    </div>
+
+    <div class="round">
+      <div class="round-num">2</div>
+      <span class="when">O Boss corrige a premissa</span>
+      <h3>"Grumbal, não sei quem interpretou isso, mas apague"</h3>
+      <div class="turn"><div class="avatar">🎯</div><div class="bubble">
+        <div class="who">Yui <span class="role">— The Craftsman</span></div>
+        <p>Duas coisas nunca foram dele: o "Never" estava em inglês, e ele só pediu pra renomear tudo — até o banco, que pode ser destruído porque ainda está em dev.</p>
+      </div></div>
+      <div class="turn"><div class="avatar">📏</div><div class="bubble">
+        <div class="who">Level <span class="role">— Claim Checker</span></div>
+        <p>E "toda a documentação em português" não é uma preferência caso a caso — é regra sem exceção, incluindo os quatro reviews de arquitetura que estavam inteiros em inglês.</p>
+      </div></div>
+      <div class="rename"><span class="mono">Sempre/Never</span><span class="arrow">→</span><span class="mono">Sempre/Nunca</span></div>
+      <div class="rename"><span class="mono">Given/When/Then</span><span class="arrow">→</span><span class="mono">Dado/Quando/Então</span></div>
+      <div class="rename"><span class="mono">Acceptance Criteria</span><span class="arrow">→</span><span class="mono">Critérios de Aceite</span></div>
+    </div>
+
+    <div class="round">
+      <div class="round-num">3</div>
+      <span class="when">Encaixando na spec e na memória</span>
+      <h3>O Code Map, intocado — o resto, reescrito</h3>
+      <p style="margin:0 0 14px;font-size:.95rem;">Nenhum nome do mapeamento mudou. <span class="rename"><span class="mono">JogoGerado</span><span class="arrow">→</span><span class="mono">GeneratedBet</span></span> <span class="rename"><span class="mono">ResultadoLoteria</span><span class="arrow">→</span><span class="mono">LotteryResult</span></span> <span class="rename"><span class="mono">'jogos'</span><span class="arrow">→</span><span class="mono">'bets'</span></span> seguem exatamente o Code Map original — o que mudou foi só a moldura em volta dele.</p>
+      <div class="turn"><div class="avatar">🚢</div><div class="bubble">
+        <div class="who">Dana <span class="role">— The Pragmatist</span></div>
+        <p>Com isso, a spec-1-1 tá tecnicamente consistente com o que ele quer — pt-BR de ponta a ponta, sem trava de preservação de dado que não existe.</p>
+      </div></div>
+    </div>
+
+    <div class="round">
+      <div class="round-num">4</div>
+      <span class="when">A ponte pra outra sessão</span>
+      <h3>Uma sessão de dispatch esperava do outro lado</h3>
+      <div class="turn"><div class="avatar">🛑</div><div class="bubble">
+        <div class="who">Killjoy <span class="role">— Loop Stopper</span></div>
+        <p><span class="mono">loterias-02</span> tinha o dispatch em espera. Não feche — ela é quem executa; só precisa reler os arquivos antes de aprovar.</p>
+      </div></div>
+      <div class="turn"><div class="avatar">🃏</div><div class="bubble">
+        <div class="who">Wildcard <span class="role">— Option Generator</span></div>
+        <p>Mandei o recado pra ela mesmo, com o resumo de tudo que mudou nos dois arquivos.</p>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <h2>O que aconteceu do outro lado</h2>
+    <div class="handoff">
+      <div class="dot"></div>
+      <div>
+        <h3>Story 1.1 — <span class="mono">in-review</span></h3>
+        <p>As 4 tarefas do Code Map saíram marcadas: <span class="mono">models.py</span> renomeado, migration <span class="mono">0001_initial</span> regenerada direto com os nomes novos (sem banco de dev a preservar), <span class="mono">tests.py</span> e <span class="mono">profile.html</span> atualizados. <span class="mono">admin.py</span>/<span class="mono">views.py</span>/<span class="mono">utils.py</span> continuam apontando pros nomes antigos até 1.2/1.3 — exatamente como a nota de sequenciamento previa.</p>
+        <p class="commit">baseline_commit 50ab905c…</p>
+      </div>
+    </div>
+
+    <h2 style="margin-top:36px;">Quem estava na sala</h2>
+    <div class="roster">
+      <div class="card"><div class="name">🔒 Vex</div><div class="role">Security Engineer</div></div>
+      <div class="card"><div class="name">😤 Grumbal</div><div class="role">The Adversary</div></div>
+      <div class="card"><div class="name">🌶️ Boundary</div><div class="role">Edge-Case Hunter</div></div>
+      <div class="card"><div class="name">🎯 Yui</div><div class="role">The Craftsman</div></div>
+      <div class="card"><div class="name">🚢 Dana</div><div class="role">The Pragmatist</div></div>
+      <div class="card"><div class="name">🃏 Wildcard</div><div class="role">Option Generator</div></div>
+      <div class="card"><div class="name">📏 Level</div><div class="role">Claim Checker</div></div>
+      <div class="card"><div class="name">🛑 Killjoy</div><div class="role">Loop Stopper</div></div>
+      <div class="card"><div class="name">🪵 Splinter</div><div class="role">Consensus Challenger</div></div>
+    </div>
+  </div>
+
+  <div class="colophon">Loterias · Epic 1 · registrado em 08/09/2026</div>
+
+</div>

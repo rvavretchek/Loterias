@@ -15,5 +15,6 @@ urlpatterns = [
     path('notificacoes/<int:pk>/lida/', views.mark_notification_read_view, name='mark_notification_read'),
     path('notificacoes/preferencias/', views.notification_preferences_view, name='notification_preferences'),
     path('regras/<slug:jogo>/', views.regras_geracao_view, name='generation_rules'),
+    path('cookies/preferencias/', views.save_cookie_consent_view, name='save_cookie_consent'),
     path('api/gerar/', views.api_create_bet_view, name='api_create_bet'),
 ]

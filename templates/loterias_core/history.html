@@ -7,7 +7,7 @@
 <style>
     .history-page { padding: 28px 0 60px; }
     .history-head { margin-bottom: 20px; }
-    .history-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .history-head h1 { font: 700 26px/1.25 var(--font-display); color: var(--text-heading); margin: 0; }
     .filter-form { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
     .filter-form .lq-field { width: 170px; max-width: 100%; }
     .filter-check { display: flex; flex-direction: column; gap: 10px; }
@@ -88,7 +88,7 @@
             <div class="game-card-head">
                 <div class="game-meta">
                     <span class="lq-status lq-status-waiting">{{ jogo.game }}</span>
-                    <span style="font:700 14px var(--font-mono); color:var(--lq-navy);">Concurso {{ jogo.contest }}</span>
+                    <span style="font:700 14px var(--font-mono); color:var(--text-heading);">Concurso {{ jogo.contest }}</span>
                     <span class="lq-small">{{ jogo.created_at|date:"d/m/Y H:i" }}</span>
                     {% if jogo.prize > 0 %}<span class="lq-status lq-status-win"><span class="ms" style="font-size:14px;" aria-hidden="true">emoji_events</span> Premiado</span>{% endif %}
                     {% if jogo.sequential_pairs > 0 %}<span class="lq-status lq-status-empty">Seq.: {{ jogo.sequential_pairs }}</span>{% endif %}

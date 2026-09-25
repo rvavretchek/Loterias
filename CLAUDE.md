@@ -31,7 +31,7 @@ python manage.py runserver
 # Testes (test runner padrao do Django, sem config de pytest no repo)
 python manage.py test
 python manage.py test apps.loterias_core
-python manage.py test apps.loterias_core.tests.SomeTestCase.test_something
+python manage.py test apps.loterias_core.tests.test_generation.SomeTestCase.test_something
 
 # Shell do Django / coleta de estaticos
 python manage.py shell
@@ -40,11 +40,40 @@ python manage.py collectstatic
 
 `apps/__init__.py` precisa existir (vazio) pra `manage.py test` descobrir os testes — sem ele, `apps` vira um pacote de namespace PEP 420 e o test loader do Django trava/não acha nada.
 
+`apps/loterias_core/tests/` é um pacote (Story 6.7, 2026-09-23), dividido por área — o `DiscoverRunner` padrão do Django já acha qualquer `test*.py` dentro dele sozinho, sem precisar reexportar nada no `__init__.py`:
+- `test_generation.py` — geração de jogo, Regras de Geração, `create`/`regenerate`/`save_manual_bet_view`
+- `test_results_and_prizes.py` — concurso, captura de resultado da CEF, cálculo de prêmio, `PrizeTier`, purga
+- `test_notifications.py` — `HitNotification`, e-mail de acerto, preferência de canal
+- `test_pages.py` — home, histórico, estatísticas, detalhe do jogo
+- `test_admin.py` — smoke tests do Django admin
+- `test_integration.py` — fluxos de ponta a ponta cruzando mais de uma área
+
+Ao adicionar teste novo, coloque no módulo da área certa; só crie um módulo novo se a área realmente não couber em nenhum dos acima.
+
+## Convenção de testes
+
+Decidida numa rodada de `bmad-party-mode` de pré-homologação (2026-09-23, Epic 6): **toda cobertura de teste NOVA** cobre 4 categorias — não é retroativo, não exige reescrever teste que já existe:
+
+1. **Caminho feliz** — a entrada válida esperada, comportamento correto.
+2. **Entrada inválida** — formato errado ou fora do intervalo aceito (ex.: `normalize_contest('abc')`, valor de Regra de Geração fora de `1..numbers_count`).
+3. **Entrada vazia/ausente** — string vazia, `None`, campo não enviado no POST (ex.: `normalize_contest('')`, `bet_satisfies_rules(numbers, clovers, game, [])`).
+4. **Fronteira/concorrência** — duplicata, corrida entre dois processos, estado que já existe (ex.: concurso que já tem `LotteryResult` quando o usuário tenta gerar outro jogo pra ele; `LotteryResult.objects.save_official_result()` chamado duas vezes em corrida pro mesmo Jogo+Concurso).
+
+Ao adicionar cobertura pra uma função/fluxo que ainda não tem as 4, adicionar as que faltam nessa mesma story — não abrir story separada só pra "completar teste".
+
 ## Arquitetura
 
 ### Interface (Lottiq Design System)
 
-Toda a UI usa o **Lottiq Design System** — CSS próprio em `static/css/` (`lottiq-tokens.css` cor/tipografia/espaço/raio/sombra, `lottiq.css` componentes por classe `lq-*`, `legacy.css` residual de antes do Epic 5), fontes Sora/Figtree/JetBrains Mono e ícones Material Symbols Rounded (classe `.ms`, via Google Fonts). **Sem framework de UI**: Bootstrap, Bootstrap Icons e django-crispy-forms foram removidos por completo no Epic 5 (Story 5.7, 2026-09-22) — não reintroduza classes `btn`/`card`/`bi-*`/`data-bs-*` nem `{% load crispy_forms_tags %}`. Formulários Django genéricos (login, cadastro, perfil, preferências) renderizam via `{% load lottiq_ui %}{% lq_form form %}` ([apps/loterias_core/templatetags/lottiq_ui.py](apps/loterias_core/templatetags/lottiq_ui.py) + [templates/components/form.html](templates/components/form.html)), que aplica a classe certa por tipo de widget e liga `aria-describedby`/`aria-invalid`. Modais usam `<dialog>` nativo (`showModal()`/`close()`, ver `regras_geracao.html`), não JS de terceiros. Tema escuro do design system ainda não foi aplicado à interface (ficou pra uma rodada futura); o botão de alternar tema foi removido do cabeçalho nessa migração.
+Toda a UI usa o **Lottiq Design System** — CSS próprio em `static/css/` (`lottiq-tokens.css` cor/tipografia/espaço/raio/sombra, `lottiq.css` componentes por classe `lq-*`, `legacy.css` residual de antes do Epic 5), fontes Sora/Figtree/JetBrains Mono e ícones Material Symbols Rounded (classe `.ms`, via Google Fonts). **Sem framework de UI**: Bootstrap, Bootstrap Icons e django-crispy-forms foram removidos por completo no Epic 5 (Story 5.7, 2026-09-22) — não reintroduza classes `btn`/`card`/`bi-*`/`data-bs-*` nem `{% load crispy_forms_tags %}`. Formulários Django genéricos (login, cadastro, perfil, preferências) renderizam via `{% load lottiq_ui %}{% lq_form form %}` ([apps/loterias_core/templatetags/lottiq_ui.py](apps/loterias_core/templatetags/lottiq_ui.py) + [templates/components/form.html](templates/components/form.html)), que aplica a classe certa por tipo de widget e liga `aria-describedby`/`aria-invalid`. Modais usam `<dialog>` nativo (`showModal()`/`close()`, ver `regras_geracao.html`), não JS de terceiros.
+
+`lottiq.css` abre com um reset global `*, *::before, *::after { box-sizing: border-box; }` (adicionado na rodada de feedback pós-Epic 7, 2026-09-25) — sem ele, qualquer componente que combine `height`/`width` fixo com `padding`+`border` (ex.: `.lq-tile`) renderiza maior do que o declarado (padding/border somados por fora), o que já causou um bug real de sobreposição visual (grade "Loteria" invadindo o botão abaixo dela). Ao criar componente novo que mistura os três, não presuma `content-box` — o reset já cobre isso globalmente, não redeclare `box-sizing` por componente.
+
+Tema escuro aplicado desde o Epic 7 (Story 7.4, 2026-09-24): tokens `--dark-*` em `lottiq-tokens.css` sob `:root[data-theme="dark"]`, remapeando os semânticos (`--surface-*`, `--text-*`, `--border-*`, `--action-*`, `--status-*`, `--ball-*`). `base.html` aplica `data-theme="{{ theme }}"` no `<html>` via `theme_context` (`apps/loterias_core/context_processors.py`) — `User.preferred_theme` pro autenticado, sessão pro anônimo; alternador de volta no cabeçalho (`toggle_theme`, `apps/accounts/views.py`). **Ao criar cor nova, sempre use o token semântico (`var(--text-heading)`, `var(--action-primary)`, `var(--status-waiting-fg)`, `var(--surface-sunken)`, ...), nunca a paleta bruta (`var(--teal-700)`, `var(--lq-navy)`, `var(--neutral-50)`, ...) direto num componente de UI** — a paleta bruta não muda com o tema; só os semânticos têm par claro/escuro. Essa confusão (bruta em vez de semântica) foi a causa de vários bugs reais numa rodada de QA pós-Epic 7 (2026-09-25): nav ativo ilegível, bolinhas de número quase invisíveis, botões secundários com cor de texto fixa, e — o mais sutil — `:hover` de vários componentes (`.lq-nav a`, `.lq-btn-outline`, `.lq-icon-btn`, `.lq-menu-panel a`, `.lq-pagination a`) usando `var(--neutral-50)` (quase branco fixo) como fundo do hover: no tema escuro isso deixava o texto (corretamente claro) ilegível sobre um fundo de hover que continuava claro. Todos trocados pro token semântico equivalente (`--status-waiting-fg`/`--surface-sunken`).
+
+Duas colunas laterais reservadas (`.lq-ad-rail-left`/`.lq-ad-rail-right`, Story 7.3b) além da zona inferior (`.lq-ad-zone`, Story 7.3): só aparecem a partir de 1600px de largura, absolutas dentro de `.lq-main` (rolam com a página, não fixas), preenchendo o espaço lateral vazio que sobra ao redor de `--content-width` em telas bem largas — a zona inferior continua limitada ao `.lq-container`, sem mudança.
+
+Zona reservada pro AdSense (`{% block ad_zone %}`, Story 7.3) e banner de consentimento de cookies LGPD (Story 7.5) ficam fora do `.lq-container` de propósito — usam a largura cheia da viewport, não limitada a `--content-width`.
 
 ### Autenticação
 
@@ -65,7 +94,7 @@ Models: `GenerationRule` (uma linha por usuário+Jogo+regra: `enabled`, `numeric
 
 ### Settings
 
-`loterias/settings/__init__.py` só reexporta `base.py` — hoje não há separação dev/prod de settings; o comportamento por ambiente é todo controlado por variáveis de ambiente (via `python-dotenv` lendo `.env`), ex.: `DEBUG`, `EMAIL_BACKEND`/vars SMTP do Brevo, `SECRET_KEY`, `PASSWORD_PEPPER`. `requirements.txt` fixa Django 5.0.6/django-allauth 0.63.3; sempre confira se as versões instaladas no interpretador ativo realmente batem antes de debugar comportamento estranho de auth — um desalinhamento de ambiente anterior (Django 6.0.5/allauth 65.19.2 instalados contra código escrito pra 5.0.6/0.63.3) causou warnings de settings depreciados e foi um suspeito na investigação do bug de multitenancy. `django-crontab` (adicionado na Story 2.1, 2026-09-08) agenda `CRONJOBS` — hoje só a rotina diária `fetch_daily_results` (3h, horário de Brasília); note que o comando `python manage.py crontab` depende do módulo `fcntl` (POSIX-only) e não roda no Windows, só dentro do container Linux.
+`loterias/settings/__init__.py` só reexporta `base.py` — hoje não há separação dev/prod de settings; o comportamento por ambiente é todo controlado por variáveis de ambiente (via `python-dotenv` lendo `.env`), ex.: `DEBUG`, `SECRET_KEY`, `PASSWORD_PEPPER`. E-mail: `BREVO_SMTP_HOST/PORT/USE_TLS/USER/KEY`/`BREVO_FROM_EMAIL` (fonte primária, mesmo nome usado em `deploy/lab/docker-compose.yml`) alimentam `EMAIL_HOST`/`EMAIL_HOST_USER`/etc. em `settings/base.py`, com fallback pros nomes genéricos `EMAIL_*` quando `BREVO_*` não está setado — corrigido em 2026-09-25 (achado numa rodada de QA: em dev local, sem Docker, `BREVO_*` do `.env` nunca era lido, o cadastro sempre caía em silêncio no `console.EmailBackend`). `EMAIL_BACKEND` troca sozinho pra SMTP quando `BREVO_SMTP_KEY` tem um valor real (não é o placeholder `your-brevo-smtp-key`); sem isso, cai no console (e-mail só aparece no terminal do `runserver`). `requirements.txt` fixa Django 5.0.6/django-allauth 0.63.3; sempre confira se as versões instaladas no interpretador ativo realmente batem antes de debugar comportamento estranho de auth — um desalinhamento de ambiente anterior (Django 6.0.5/allauth 65.19.2 instalados contra código escrito pra 5.0.6/0.63.3) causou warnings de settings depreciados e foi um suspeito na investigação do bug de multitenancy. `django-crontab` (adicionado na Story 2.1, 2026-09-08) agenda `CRONJOBS` — hoje só a rotina diária `fetch_daily_results` (3h, horário de Brasília); note que o comando `python manage.py crontab` depende do módulo `fcntl` (POSIX-only) e não roda no Windows, só dentro do container Linux.
 
 ### Deploy
 

@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,6 +38,10 @@
             {% endif %}
 
             <div class="lq-header-right">
+                <a class="lq-icon-btn" href="{% url 'toggle_theme' %}" title="{% if is_dark %}Usar tema claro{% else %}Usar tema escuro{% endif %}"
+                   aria-label="{% if is_dark %}Mudar para tema claro{% else %}Mudar para tema escuro{% endif %}">
+                    <span class="ms" aria-hidden="true">{% if is_dark %}light_mode{% else %}dark_mode{% endif %}</span>
+                </a>
                 {% if user.is_authenticated %}
                 {% if unread_notifications_count > 0 %}
                 <a class="lq-bell" href="{% url 'notifications' %}" title="Avisos de acerto"
@@ -64,7 +68,7 @@
                     </div>
                 </details>
                 {% else %}
-                <a href="{% url 'account_login' %}" style="font-weight:600;color:var(--teal-700);">Entrar</a>
+                <a href="{% url 'account_login' %}" style="font-weight:600;color:var(--action-primary);">Entrar</a>
                 <a href="{% url 'account_signup' %}" class="lq-btn lq-btn-primary lq-btn-sm">Criar conta grátis</a>
                 {% endif %}
             </div>
@@ -86,15 +90,77 @@
     {% endif %}
 
     <main class="lq-main">
+        <!-- Colunas laterais reservadas (Story 7.3b): so aparecem quando sobra espaco vazio dos
+             dois lados do conteudo central em telas bem largas -- nunca disputam espaco com ele. -->
+        <div class="lq-ad-rail lq-ad-rail-left" aria-hidden="true">
+            <span class="ms" aria-hidden="true">campaign</span>
+            <span>Espaço reservado</span>
+        </div>
+        <div class="lq-ad-rail lq-ad-rail-right" aria-hidden="true">
+            <span class="ms" aria-hidden="true">campaign</span>
+            <span>Espaço reservado</span>
+        </div>
+
         {% block content %}{% endblock %}
+
+        {% block ad_zone %}
+        <div class="lq-container">
+            <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
+                <span class="ms" aria-hidden="true">campaign</span>
+                <span>Espaço reservado</span>
+            </div>
+        </div>
+        {% endblock %}
     </main>
 
     <footer class="lq-footer">
         <div class="lq-container">
             <span>Lottiq &copy; {% now "Y" %} &middot; Não somos a Caixa Econômica Federal.</span>
             <span>Organizamos e conferimos seus jogos. Quem paga o prêmio é a Caixa.</span>
+            <a href="?revisar_cookies=1#aviso-cookies">Preferências de cookies</a>
         </div>
     </footer>
+
+    {% if not cookie_consent or request.GET.revisar_cookies %}
+    <div class="lq-cookie-banner" id="aviso-cookies" role="region" aria-labelledby="aviso-cookies-titulo">
+        <div class="lq-container lq-cookie-banner-inner">
+            <div class="lq-cookie-banner-text">
+                <strong id="aviso-cookies-titulo">Usamos cookies</strong>
+                <p class="lq-small">Usamos cookies necessários pro funcionamento do site. Cookies de estatística e de anúncio só são ativados com sua permissão.</p>
+            </div>
+            <div class="lq-cookie-banner-actions">
+                <button type="button" class="lq-btn lq-btn-outline lq-btn-sm" id="btn-configurar-cookies" aria-expanded="false" aria-controls="detalhes-cookies">Configurar</button>
+                <form method="post" action="{% url 'save_cookie_consent' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <input type="hidden" name="choice" value="reject_all">
+                    <button type="submit" class="lq-btn lq-btn-outline lq-btn-sm">Recusar tudo</button>
+                </form>
+                <form method="post" action="{% url 'save_cookie_consent' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <input type="hidden" name="choice" value="accept_all">
+                    <button type="submit" class="lq-btn lq-btn-primary lq-btn-sm">Aceitar tudo</button>
+                </form>
+            </div>
+            <form method="post" action="{% url 'save_cookie_consent' %}" class="lq-cookie-details" id="detalhes-cookies" hidden>
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <input type="hidden" name="choice" value="custom">
+                <label class="lq-cookie-category">
+                    <input type="checkbox" checked disabled> Necessários — sempre ativos, exigidos pro site funcionar
+                </label>
+                <label class="lq-cookie-category">
+                    <input type="checkbox" name="analytics" {% if cookie_consent.analytics %}checked{% endif %}> Estatística — nos ajuda a entender o uso do site
+                </label>
+                <label class="lq-cookie-category">
+                    <input type="checkbox" name="marketing" {% if cookie_consent.marketing %}checked{% endif %}> Anúncios — personaliza anúncios exibidos (ainda não ativo no Lottiq)
+                </label>
+                <button type="submit" class="lq-btn lq-btn-primary lq-btn-sm" style="align-self:flex-start;">Salvar preferências</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     <script>
         document.querySelectorAll('[data-dismiss-banner]').forEach(btn => {
@@ -112,6 +178,16 @@
                 }
             });
         });
+
+        const btnConfigurarCookies = document.getElementById('btn-configurar-cookies');
+        if (btnConfigurarCookies) {
+            btnConfigurarCookies.addEventListener('click', () => {
+                const detalhes = document.getElementById('detalhes-cookies');
+                const expanded = !detalhes.hidden;
+                detalhes.hidden = expanded;
+                btnConfigurarCookies.setAttribute('aria-expanded', String(!expanded));
+            });
+        }
     </script>
 
     {% block extra_js %}{% endblock %}

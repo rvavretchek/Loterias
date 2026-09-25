@@ -7,15 +7,14 @@
 <style>
     .detail-page { padding: 28px 0 60px; max-width: 720px; margin: 0 auto; }
     .detail-crumbs { font: 500 13px var(--font-body); color: var(--text-muted); margin-bottom: 16px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .detail-crumbs a:hover { color: var(--teal-700); }
+    .detail-crumbs a:hover { color: var(--action-primary); }
     .detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-    .detail-head h1 { font: 700 24px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
-    .detail-section-title { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .detail-head h1 { font: 700 24px/1.25 var(--font-display); color: var(--text-heading); margin: 0; }
     .detail-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
     .prize-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
     @media (min-width: 480px) { .prize-grid { grid-template-columns: repeat(4, 1fr); } }
     .prize-item-label { font: 400 12px var(--font-body); color: var(--text-muted); }
-    .prize-item-value { font: 700 16px var(--font-mono); color: var(--lq-navy); margin-top: 2px; }
+    .prize-item-value { font: 700 16px var(--font-mono); color: var(--text-heading); margin-top: 2px; }
     .prev-list { display: flex; flex-direction: column; }
     .prev-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 12px 0; border-top: 1px solid var(--border-default); }
     .prev-item:first-child { border-top: 0; }
@@ -39,15 +38,18 @@
         <p class="lq-small">Guardado em {{ jogo.created_at|date:"d/m/Y H:i" }}</p>
 
         <div style="margin-top:20px;">
-            <div class="detail-section-title">Números sorteados</div>
-            <div class="lq-balls" role="list" aria-label="Números do jogo">
-                {% for num in jogo.numbers %}<span class="lq-ball" role="listitem">{{ num|stringformat:"02d" }}</span>{% endfor %}
+            <div class="lq-eyebrow" style="margin-bottom:12px;">Números sorteados</div>
+            <div class="lq-balls" role="list" aria-label="Números do jogo{% if premio_info %}, acertos em destaque{% endif %}">
+                {% for num in jogo.numbers %}
+                <span class="lq-ball{% if premio_info %}{% if num in premio_info.matched_numbers %} lq-ball-hit{% else %} lq-ball-not-hit{% endif %}{% endif %}" role="listitem">{{ num|stringformat:"02d" }}</span>
+                {% endfor %}
             </div>
+            {% if premio_info and premio_info.draw == 2 %}<p class="lq-small" style="margin-top:8px;">Considerando o 2º sorteio.</p>{% endif %}
         </div>
 
         {% if jogo.clovers %}
         <div style="margin-top:20px;">
-            <div class="detail-section-title">Trevos</div>
+            <div class="lq-eyebrow" style="margin-bottom:12px;">Trevos</div>
             <div class="lq-balls" role="list" aria-label="Trevos">
                 {% for trevo in jogo.clovers %}<span class="lq-ball lq-ball-clover" role="listitem">{{ trevo|stringformat:"02d" }}</span>{% endfor %}
             </div>
@@ -76,7 +78,7 @@
 
     {% if resultado_oficial or premio_info %}
     <div class="lq-card" style="margin-bottom:16px;">
-        <div class="detail-section-title">Resultado e premiação</div>
+        <div class="lq-eyebrow" style="margin-bottom:12px;">Resultado e premiação</div>
         {% if resultado_oficial %}
         {% if resultado_oficial.numbers_second_draw %}
         <p class="lq-small"><strong>1º sorteio:</strong> {% for num in resultado_oficial.numbers %}{{ num|stringformat:"02d" }} {% endfor %}</p>
@@ -103,12 +105,12 @@
 
     {% if jogos_anteriores %}
     <div class="lq-card">
-        <div class="detail-section-title">Jogos anteriores de {{ jogo.game }}</div>
+        <div class="lq-eyebrow" style="margin-bottom:12px;">Jogos anteriores de {{ jogo.game }}</div>
         <div class="prev-list">
             {% for j in jogos_anteriores %}
             <div class="prev-item">
                 <div class="prev-meta">
-                    <span style="font:700 13px var(--font-mono); color:var(--lq-navy);">{{ j.contest }}</span>
+                    <span style="font:700 13px var(--font-mono); color:var(--text-heading);">{{ j.contest }}</span>
                     <span class="lq-small">{{ j.created_at|date:"d/m/Y" }}</span>
                 </div>
                 <div class="lq-balls" role="list" aria-label="Números do jogo" style="flex:1;">

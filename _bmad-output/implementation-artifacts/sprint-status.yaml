@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-22-2026 19:44
+last_updated: 09-22-2026 20:43
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -132,21 +132,21 @@ action_items:
     action: "Reforcar asserção de mensagem em test_blocks_even_when_user_also_has_duplicate_bet
       e adicionar teste combinado equivalente pra save_manual_bet_view (F4)"
     owner: "proxima sessao de dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-5-convencao-compartilhada-concorrencia"
     epic: 2
     action: "Definir convencao/helper compartilhado de concorrencia (select_for_update/UniqueConstraint)
       em vez de redecidir por story"
     owner: "proxima revisao de arquitetura"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-6-mover-regras-concurso-pro-model"
     epic: 2
     action: "Mover regras de integridade de Concurso (ja-sorteado, duplicata, normalizacao)
       da camada de view pro model/manager"
     owner: "proxima revisao de arquitetura"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-2-retro-item-7-avaliar-split-tests-py"
     epic: 2
@@ -160,7 +160,7 @@ action_items:
     action: "Considerar smoke-test de ambiente na Definition of Done de stories que
       tocam deploy/cron"
     owner: "proxima retro/PRD"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
   - id: "epic-4-retro-item-11-corrigir-os-itens-fix-now-ainda-abertos"
     epic: 4
@@ -195,26 +195,26 @@ action_items:
     action: "Validar no navegador relaxamento, regras Lotofacil/Lotomania e historico
       filtrado"
     owner: "Boss"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
   - id: "epic-5-retro-item-16-consolidar-rotulos-de-secao-duplicados-b"
     epic: 5
     action: "Consolidar rotulos de secao duplicados (bet_detail/home/statistics) num
       unico componente .lq-eyebrow reusado"
     owner: "proxima sessao que tocar essas telas"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"
   - id: "epic-5-retro-item-17-renomear-generationrulesviewtests-genera"
     epic: 5
     action: "Renomear GenerationRulesViewTests/GenerationRulesViewsTests para nomes
       distintos"
     owner: "proxima sessao que tocar tests.py"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"
   - id: "epic-5-retro-item-18-avaliar-marcar-numero-a-numero-acerto-er"
     epic: 5
     action: "Avaliar marcar numero a numero (acerto/erro) no detalhe do jogo, reusando
       lq-ball-hit/lq-ball-not-hit"
     owner: "Boss (ideia de produto)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"

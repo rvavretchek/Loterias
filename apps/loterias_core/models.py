@@ -1,6 +1,41 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import MinValueValidator
+from django.db import models, transaction, IntegrityError
 from django.conf import settings
+
+
+def normalize_contest(raw):
+    """Normaliza um numero de concurso digitado pelo usuario pra uma forma canonica (Story 2.12):
+    remove zeros a esquerda convertendo pra inteiro e re-serializando, garantindo que duas grafias
+    do mesmo concurso real (ex. '2500' e '02500') nunca sejam tratadas como concursos distintos em
+    nenhum ponto que compara/grava `contest` (bloqueio de concurso ja sorteado, duplicata,
+    LotteryResult, purga manual). Levanta ValueError pra qualquer valor vazio ou nao numerico --
+    nunca grava/compara um concurso invalido silenciosamente."""
+    stripped = raw.strip()
+    if not stripped.isdecimal():
+        raise ValueError(f'Numero de concurso invalido: {raw!r}')
+    return str(int(stripped))
+
+
+class NormalizesContestOnSave(models.Model):
+    """Mixin abstrato (retro do Epic 2, item 7): normaliza `contest` (melhor esforco) em QUALQUER
+    caminho de escrita -- admin, views, shell, futuros entry points -- sem depender de cada um
+    lembrar de chamar normalize_contest() antes de salvar. Antes desta mixin, a Story 2.16 precisou
+    duplicar essa mesma normalizacao manualmente no form do admin (`_NormalizedContestFormMixin`)
+    porque o model nao garantia isso sozinho; o form do admin continua existindo pra dar um erro de
+    validacao amigavel a quem digita algo invalido. Este save() nunca rejeita: um `contest` legado
+    nao-numerico (ex. edicao especial antiga) e mantido como esta -- rejeitar entrada e trabalho da
+    camada de formulario/view (que ve o usuario digitando), nao do model (que precisa continuar
+    aceitando dado historico ja gravado antes da Story 2.12)."""
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        try:
+            self.contest = normalize_contest(self.contest)
+        except (ValueError, AttributeError):
+            pass
+        super().save(*args, **kwargs)
 
 
 # Configuracoes dos jogos. 'clovers': quantos trevos o jogo exige escolher (0 se o jogo nao usa
@@ -34,15 +69,44 @@ DISTRIBUTION_CHOICES = [
     ('totalmente_aleatoria', 'Totalmente Aleatória'),
 ]
 RULE_DEFINITIONS = {
-    'limit_sequence_count': {'label': 'Limita quantidade de números em sequência', 'kind': 'int'},
-    'limit_sequence_pairs': {'label': 'Limita quantidade de sequências num jogo', 'kind': 'int'},
-    'limit_row_count': {'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int'},
-    'limit_column_count': {'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int'},
-    'distribution_type': {'label': 'Tipo de distribuição', 'kind': 'choice'},
+    'limit_sequence_count': {
+        'label': 'Limita quantidade de números em sequência', 'kind': 'int',
+        'explanation': 'Sequência é quando 2 ou mais números sorteados são seguidos (ex.: 23 e 24). '
+            'Esta regra limita o tamanho da maior sequência do jogo — valor 2 permite um par como '
+            '23-24, mas nunca um trio como 23-24-25. Valor 1 proíbe sequência por completo: nenhum '
+            'par de números seguidos é permitido no jogo.',
+    },
+    'limit_sequence_pairs': {
+        'label': 'Limita quantidade de sequências num jogo', 'kind': 'int',
+        'explanation': 'Controla quantos blocos de números seguidos podem existir no mesmo jogo — '
+            'não o tamanho de cada bloco, e sim quantos blocos ao todo.',
+    },
+    'limit_row_count': {
+        'label': 'Limita quantidade de números na mesma linha do volante', 'kind': 'int',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma linha do volante oficial. '
+            'O mínimo é 1: não é possível ligar esta regra proibindo por completo números numa linha.',
+    },
+    'limit_column_count': {
+        'label': 'Limita quantidade de números na mesma coluna do volante', 'kind': 'int',
+        'explanation': 'Limita quantos números sorteados podem cair na mesma coluna do volante oficial. '
+            'O mínimo é 1: não é possível ligar esta regra proibindo por completo números numa coluna.',
+    },
+    'distribution_type': {
+        'label': 'Tipo de distribuição', 'kind': 'choice',
+        'explanation': 'Homogênea espalha os números por igual entre as faixas do volante, em vez '
+            'de deixar concentrar tudo numa região. Totalmente Aleatória sorteia sem nenhuma '
+            'preferência de distribuição.',
+    },
     'limit_min_gap_between_sequences': {
         'label': 'Distância mínima entre sequências', 'kind': 'int',
+        'explanation': 'Quando o jogo tem mais de uma sequência, exige pelo menos essa quantidade de '
+            'números não sorteados entre uma sequência e a próxima.',
     },
-    'limit_min_sequences': {'label': 'Quantidade mínima de sequências', 'kind': 'int'},
+    'limit_min_sequences': {
+        'label': 'Quantidade mínima de sequências', 'kind': 'int',
+        'explanation': 'Exige que o jogo tenha pelo menos essa quantidade de sequências (blocos de '
+            'números seguidos) — o oposto de limitar um máximo.',
+    },
 }
 RULE_NAMES_BY_GAME = {
     'Mega-sena': [
@@ -87,7 +151,7 @@ RULE_NAME_CHOICES = [
 ]
 
 
-class GeneratedBet(models.Model):
+class GeneratedBet(NormalizesContestOnSave):
     """Modelo para armazenar jogos gerados por usuario."""
     GAME_CHOICES = [
         ('Mega-sena', 'Mega-sena'),
@@ -145,9 +209,36 @@ class GeneratedBet(models.Model):
         return self.sequential_pairs > 0
 
 
-class LotteryResult(models.Model):
+class LotteryResultManager(models.Manager):
+    def save_official_result(self, game, contest, result):
+        """Grava/atualiza o resultado oficial de um Jogo+Concurso (retro do Epic 2, itens 1 e 7):
+        fonte unica do mapeamento resultado->defaults e da protecao de corrida via
+        `unique_together (game, contest)`, usada pelo cron diario e pelas duas telas de conferencia
+        manual -- antes, as 3 chamadas duplicavam a mesma logica sem nenhuma das 3 tratar a corrida
+        entre elas (cron + verificacao manual do mesmo par podem rodar ao mesmo tempo). Segue a
+        receita da propria documentacao do Django pra `update_or_create` sob corrida: tenta de novo
+        dentro de um `atomic()` novo se a 1a tentativa esbarrar no `unique_together`."""
+        defaults = {
+            'numbers': result.get('numbers', []),
+            'clovers': result.get('clovers', []),
+            'prizes': result.get('prizes', {}),
+            'numbers_second_draw': result.get('numbers_second_draw', []),
+            'prizes_second_draw': result.get('prizes_second_draw', {}),
+            'source': 'CEF',
+        }
+        try:
+            with transaction.atomic():
+                return self.update_or_create(game=game, contest=contest, defaults=defaults)
+        except IntegrityError:
+            with transaction.atomic():
+                return self.update_or_create(game=game, contest=contest, defaults=defaults)
+
+
+class LotteryResult(NormalizesContestOnSave):
     """Resultado oficial capturado da CEF para validacao do jogo do usuario."""
     GAME_CHOICES = GeneratedBet.GAME_CHOICES
+
+    objects = LotteryResultManager()
 
     game = models.CharField(max_length=20, choices=GAME_CHOICES, verbose_name='Jogo')
     contest = models.CharField(max_length=20, verbose_name='Concurso')
@@ -273,7 +364,7 @@ class PrizeTier(models.Model):
 CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS = 8
 
 
-class CaptureFailureAlert(models.Model):
+class CaptureFailureAlert(NormalizesContestOnSave):
     """Registra que o operador ja foi avisado da falha de captura de um par Jogo/Concurso
     (Story 2.9) -- garante exatamente 1 e-mail de alerta por par, mesmo que a falha persista por
     varias execucoes --final."""
@@ -303,7 +394,9 @@ class GenerationRule(models.Model):
     game = models.CharField(max_length=20, choices=GeneratedBet.GAME_CHOICES, verbose_name='Jogo')
     rule_name = models.CharField(max_length=40, choices=RULE_NAME_CHOICES, verbose_name='Regra')
     enabled = models.BooleanField(default=False, verbose_name='Ligada')
-    numeric_value = models.IntegerField(null=True, blank=True, verbose_name='Valor numerico')
+    numeric_value = models.IntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)], verbose_name='Valor numerico'
+    )
     choice_value = models.CharField(max_length=30, null=True, blank=True, verbose_name='Valor de escolha')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
 
@@ -316,6 +409,10 @@ class GenerationRule(models.Model):
                 check=~models.Q(numeric_value__isnull=False, choice_value__isnull=False),
                 name='generationrule_not_both_numeric_and_choice_value',
             ),
+            models.CheckConstraint(
+                check=models.Q(numeric_value__isnull=True) | models.Q(numeric_value__gte=1),
+                name='generationrule_numeric_value_at_least_one',
+            ),
         ]
 
     def __str__(self):
@@ -327,3 +424,5 @@ class GenerationRule(models.Model):
             raise ValidationError(f'A regra {self.rule_name} nao existe para o jogo {self.game}.')
         if self.numeric_value is not None and self.choice_value is not None:
             raise ValidationError('Uma regra nao pode ter valor numerico e valor de escolha ao mesmo tempo.')
+        if self.numeric_value is not None and self.numeric_value < 1:
+            raise ValidationError('O valor numerico de uma regra precisa ser pelo menos 1.')

@@ -74,26 +74,71 @@ curl -I -H 'Host: www.loterias.internal' http://127.0.0.1/
 dig +short @192.168.50.71 www.loterias.internal
 ```
 
-## Backup e validacao de migration antes de aplicar em producao
+### Smoke-test de ambiente para stories que tocam deploy/cron
 
-**Nota (2026-09-08):** enquanto este ambiente for um lab/staging de teste (sem dados reais de usuario), este procedimento nao precisa ser seguido — o volume `loterias_data` pode ser recriado livremente. Ele passa a ser obrigatorio **a partir do dia em que o Boss declarar este ambiente como producao**.
+**Retro do Epic 2, item 8:** o container `loterias-cron` rodou sem sucesso por 5 dias (2026-09-08 a 2026-09-11) sem nenhum log de erro -- o cron nao herda o ambiente do container pro processo do job (`printenv > /etc/environment`, ver comentario no `docker-compose.yml`), entao os jobs caiam silenciosamente no `DATABASE_NAME` default do Django (banco vazio) em vez do volume real. O código ficou "pronto" bem antes do critério de aceite (cron rodando de verdade) ser satisfeito, e ninguém percebeu porque validar só o container `loterias-web` (`curl`/`docker ps` acima) não prova nada sobre o `loterias-cron`.
 
-Antes de aplicar qualquer `migrate` que altere schema (rename de model/campo, etc.) num ambiente de producao:
+**Sempre que uma story tocar `Dockerfile`, `deploy/lab/docker-compose.yml`, `CRONJOBS`/`apps/loterias_core/jobs.py`, ou qualquer variável de ambiente usada dentro do container**, rodar isto **dentro do próprio container** (não no host, não em `manage.py shell` local) antes de marcar a story como pronta:
 
 ```bash
-# 1. Copiar o volume real antes de qualquer migrate
+# 1. O container do cron enxerga o MESMO banco real que o loterias-web (nao um arquivo vazio)
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron python manage.py shell -c "
+from django.conf import settings
+print('DATABASE_NAME visto pelo Django:', settings.DATABASES['default']['NAME'])
+from apps.loterias_core.models import GeneratedBet
+print('linhas em GeneratedBet:', GeneratedBet.objects.count())"
+
+# 2. O cron do sistema (no PATH/env do cron, nao do shell interativo) enxerga as mesmas variaveis
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron sh -c "cat /etc/environment | grep -c DATABASE_NAME"
+
+# 3. O job agendado roda de verdade (nao so "existe no crontab")
+docker compose -f deploy/lab/docker-compose.yml exec loterias-cron python manage.py shell -c "
+from apps.loterias_core.jobs import fetch_daily_results
+fetch_daily_results()"
+```
+
+Se o passo 1 mostrar uma contagem de linhas muito menor que a esperada, ou um `DATABASE_NAME` diferente de `/app/data/db.sqlite3`, é o mesmo bug de novo -- não seguir em frente até corrigir.
+
+## Backup e validacao de migration antes de aplicar em producao
+
+**Postura de dados (atualizada 2026-09-23, Story 6.8):** o Boss trata a homologacao como producao pra fins de preservacao de dado — mesmo sem usuario real ainda, o volume `loterias_data` **nao deve mais ser tratado como descartavel** a partir de agora. A nota antiga ("enquanto lab de teste, pode ser recriado livremente") nao vale mais; o procedimento abaixo passa a ser seguido sempre que uma migration alterar schema, nao so quando o Boss declarar producao formalmente.
+
+**Drill real (2026-09-23):** o procedimento abaixo foi exercitado de ponta a ponta pela primeira vez contra o volume real do lab (sem nenhuma migration pendente pra aplicar de verdade — so validou o mecanismo). Achados que corrigiram o procedimento original:
+
+- `/opt/integrit/apps/Loterias/deploy/lab/.env` e `-rw-------` (só root le) — `docker compose run`/`exec` (passos 2 e 3 abaixo) **falham com "permission denied"** rodando como `operador01`, porque o Compose precisa ler o `.env` do diretorio mesmo só pra validar/rodar. Use `docker exec <container>` (contra um container já rodando, não `docker compose exec`) quando só precisar confirmar algo no volume real (não precisa do `.env`); pro passo 2 (validação contra a cópia), use `docker run` direto com a imagem (`docker images | grep loterias-web`) e `-e` explícito pras variáveis que o Django precisa pra só rodar `shell`/`migrate` — `SECRET_KEY`/`PASSWORD_PEPPER` podem ser qualquer valor nesse passo (só assinam sessão/senha, não afetam leitura/migration de dado; nunca use isso pra nada que grave senha de verdade).
+- `/opt/loterias-backups` não existia — o `docker run` do passo 1 cria o diretório sozinho (o daemon do Docker roda como root), sem precisar de `sudo` do `operador01`.
+- Backup real gerado e mantido: `/opt/loterias-backups/db.sqlite3.20260923-164700` (29 linhas em `GeneratedBet`, conferido antes/depois da validação e contra o volume real — bateram os 3).
+
+```bash
+# 1. Copiar o volume real antes de qualquer migrate (cria /opt/loterias-backups sozinho)
 docker run --rm -v loterias_data:/data -v /opt/loterias-backups:/backup \
   alpine cp /data/db.sqlite3 /backup/db.sqlite3.$(date +%Y%m%d-%H%M%S)
 
-# 2. Validar a migration contra uma COPIA do backup (nunca contra o arquivo real em uso)
+# 2. Validar a migration contra uma COPIA do backup (nunca contra o arquivo real em uso) --
+#    docker run direto (nao docker compose), .env root-only bloqueia o compose pro operador01
 cp /opt/loterias-backups/db.sqlite3.<timestamp> /tmp/db-validacao.sqlite3
-sqlite3 /tmp/db-validacao.sqlite3 "SELECT COUNT(*) FROM loterias_core_generatedbet;"   # contagem ANTES
-DATABASE_NAME=/tmp/db-validacao.sqlite3 docker compose -f /opt/integrit/apps/Loterias/deploy/lab/docker-compose.yml run --rm loterias-web python manage.py migrate
-sqlite3 /tmp/db-validacao.sqlite3 "SELECT COUNT(*) FROM loterias_core_generatedbet;"   # contagem DEPOIS -- deve bater
-sqlite3 /tmp/db-validacao.sqlite3 "SELECT * FROM loterias_core_generatedbet LIMIT 5;"  # amostra manual
+docker run --rm -v /tmp:/hosttmp \
+  -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+  -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
+  -e DATABASE_NAME=/hosttmp/db-validacao.sqlite3 \
+  loterias-loterias-web:latest python manage.py shell -c "
+from apps.loterias_core.models import GeneratedBet
+print('contagem ANTES:', GeneratedBet.objects.count())"
+docker run --rm -v /tmp:/hosttmp -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+  -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
+  -e DATABASE_NAME=/hosttmp/db-validacao.sqlite3 \
+  loterias-loterias-web:latest python manage.py migrate
+docker run --rm -v /tmp:/hosttmp -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+  -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
+  -e DATABASE_NAME=/hosttmp/db-validacao.sqlite3 \
+  loterias-loterias-web:latest python manage.py shell -c "
+from apps.loterias_core.models import GeneratedBet
+print('contagem DEPOIS:', GeneratedBet.objects.count())  # deve bater com ANTES
+for b in GeneratedBet.objects.all()[:5]: print(b.pk, b.game, b.contest, b.numbers)  # amostra manual"
+rm /tmp/db-validacao.sqlite3  # limpeza -- so o backup em /opt/loterias-backups fica
 
-# 3. Só depois de validar na copia, aplicar o migrate no volume real
-docker compose -f /opt/integrit/apps/Loterias/deploy/lab/docker-compose.yml exec loterias-web python manage.py migrate
+# 3. Só depois de validar na cópia, aplicar o migrate no volume real (container já rodando)
+docker exec loterias-web python manage.py migrate
 ```
 
 `DATABASE_NAME` e a variavel de ambiente que `loterias/settings/base.py` le pra `DATABASES['default']['NAME']` -- apontando ela pra copia temporaria, o passo 2 nunca escreve no arquivo de producao real.

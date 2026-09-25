@@ -17,17 +17,23 @@
         .home-sidebar { width: 240px; flex-shrink: 0; grid-template-columns: 1fr; position: sticky; top: 88px; }
     }
     .home-head p { margin: 6px 0 0; }
-    .home-stat { background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 16px; }
-    .home-stat-label { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
-    .home-stat-value { font: 700 22px var(--font-mono); color: var(--lq-navy); margin-top: 6px; font-variant-numeric: tabular-nums; }
-    .home-eyebrow { font: 700 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+
+    /* Guia de primeiros passos (Story 7.1) -- so pra quem ainda nao gerou nenhum jogo */
+    .onboarding-guide { display: flex; flex-direction: column; gap: 12px; }
+    .onboarding-steps { display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; list-style: none; }
+    @media (min-width: 768px) { .onboarding-steps { flex-direction: row; } }
+    .onboarding-step { display: flex; align-items: flex-start; gap: 10px; flex: 1; }
+    .onboarding-step-number { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--status-waiting-bg); color: var(--status-waiting-fg); font: 700 13px var(--font-body); display: flex; align-items: center; justify-content: center; }
+    .onboarding-step-text { font: 400 14px/1.4 var(--font-body); color: var(--text-body-color); }
+    .home-stat { background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 16px; }
+    .home-stat-value { font: 700 22px var(--font-mono); color: var(--text-heading); margin-top: 6px; font-variant-numeric: tabular-nums; }
     [hidden] { display: none !important; }
 
     /* Jogo selecionado (regiao aria-live) */
     .selected-game-head { display: flex; align-items: center; gap: 14px; }
-    .selected-game-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--status-waiting-bg); color: var(--teal-700); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .selected-game-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--status-waiting-bg); color: var(--status-waiting-fg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .selected-game-icon .ms { font-size: 28px; }
-    .selected-game-name { font: 700 20px/1.25 var(--font-display); color: var(--lq-navy); margin: 0; }
+    .selected-game-name { font: 700 20px/1.25 var(--font-display); color: var(--text-heading); margin: 0; }
     .selected-game-hint { font: 400 15px/1.5 var(--font-body); color: var(--text-muted); margin: 0; }
     .selected-game-summary { font: 400 14px/1.5 var(--font-body); color: var(--text-muted); margin: 0; }
     .generate-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
@@ -39,13 +45,13 @@
     @media (min-width: 1100px) { .game-grid { grid-template-columns: repeat(6, 1fr); } }
     .game-tile { position: relative; }
     .lq-tile-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-    .lq-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; height: 100%; margin: 0; padding: 16px 10px 20px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: #fff; cursor: pointer; transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard); }
+    .lq-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; height: 100%; margin: 0; padding: 16px 10px 20px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-card); cursor: pointer; transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard); }
     .lq-tile:hover { border-color: var(--border-strong); background: var(--surface-sunken); }
     .lq-tile .game-icon { font-size: 28px; color: var(--lq-teal); }
-    .lq-tile .tile-name { font: 700 15px/1.3 var(--font-display); color: var(--lq-navy); }
+    .lq-tile .tile-name { font: 700 15px/1.3 var(--font-display); color: var(--text-heading); }
     .lq-tile .tile-meta { font: 400 13px/1.4 var(--font-mono); color: var(--text-muted); }
-    .game-selector-check { display: none; position: absolute; top: 8px; right: 8px; color: var(--lq-navy); font-size: 20px; }
-    .lq-tile-input:checked + .lq-tile { border: 2px solid var(--lq-navy); padding: 15px 9px 19px; background: var(--surface-sunken); }
+    .game-selector-check { display: none; position: absolute; top: 8px; right: 8px; color: var(--text-heading); font-size: 20px; }
+    .lq-tile-input:checked + .lq-tile { border: 2px solid var(--text-heading); padding: 15px 9px 19px; background: var(--surface-sunken); }
     .lq-tile-input:checked + .lq-tile .game-selector-check { display: block; }
     .lq-tile-input:focus-visible + .lq-tile { box-shadow: var(--ring-focus); border-color: var(--action-primary); }
     .game-edit-link { align-self: flex-start; margin-top: 4px; }
@@ -59,7 +65,7 @@
     .recent-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 0; border-top: 1px solid var(--border-default); }
     .recent-item:first-child { border-top: 0; }
     .recent-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-    .recent-contest { font: 700 14px var(--font-mono); color: var(--lq-navy); }
+    .recent-contest { font: 700 14px var(--font-mono); color: var(--text-heading); }
     .recent-date { font: 400 13px var(--font-mono); color: var(--text-muted); }
     .recent-balls { flex: 1 1 260px; min-width: 0; }
 </style>
@@ -74,11 +80,31 @@
         <p class="lq-small">Escolha a loteria e o concurso. As regras já vêm das suas configurações.</p>
     </div>
 
+    {% if total_jogos == 0 %}
+    <div class="lq-card onboarding-guide" id="guia-primeiros-passos" aria-labelledby="guia-primeiros-passos-titulo">
+        <div class="lq-eyebrow" id="guia-primeiros-passos-titulo">Como funciona</div>
+        <ol class="onboarding-steps">
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">1</span>
+                <span class="onboarding-step-text">Role até <strong>Loteria</strong>, logo abaixo, e clique numa das seis opções (Mega-Sena, Lotofácil...).</span>
+            </li>
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">2</span>
+                <span class="onboarding-step-text">Confira o número do <strong>Concurso</strong> que já vem sugerido — ou digite outro.</span>
+            </li>
+            <li class="onboarding-step">
+                <span class="onboarding-step-number" aria-hidden="true">3</span>
+                <span class="onboarding-step-text">Clique em <strong>Gerar jogo</strong>. O Lottiq guarda o jogo e avisa quando sair o resultado.</span>
+            </li>
+        </ol>
+    </div>
+    {% endif %}
+
     <form method="post" action="{% url 'create_bet' %}" class="home-main">
         {% csrf_token %}
 
         <div class="lq-card" id="jogo-selecionado" style="display:flex; flex-direction:column; gap:18px;">
-            <div class="home-eyebrow">Jogo selecionado</div>
+            <div class="lq-eyebrow">Jogo selecionado</div>
             <!-- Região aria-live: o conteúdo sempre existe (nunca alterna display), só o texto/ícone mudam,
                  pra leitores de tela anunciarem a troca de jogo de forma confiável. -->
             <div id="jogo-selecionado-info" aria-live="polite" aria-atomic="true">
@@ -101,7 +127,7 @@
         </div>
 
         <div class="lq-card" style="display:flex; flex-direction:column; gap:16px;">
-            <div class="home-eyebrow">Loteria</div>
+            <div class="lq-eyebrow">Loteria</div>
             <div id="seletor-de-jogos" class="game-grid">
                 {% for key, config in jogos_disponiveis.items %}
                 <div class="game-tile">
@@ -131,7 +157,7 @@
     </form>
 
     <div class="lq-card">
-        <div class="home-eyebrow" style="margin-bottom:14px;">Guardar palpite manual</div>
+        <div class="lq-eyebrow" style="margin-bottom:14px;">Guardar palpite manual</div>
         <form method="post" action="{% url 'save_manual_bet' %}">
             {% csrf_token %}
             <div class="manual-grid">
@@ -159,7 +185,7 @@
     {% if ultimos_jogos %}
     <div class="lq-card">
         <div class="lq-row-between" style="margin-bottom:6px;">
-            <div class="home-eyebrow">Últimos jogos</div>
+            <div class="lq-eyebrow">Últimos jogos</div>
             <a href="{% url 'history' %}" class="lq-btn lq-btn-outline lq-btn-sm">Ver todos</a>
         </div>
         <div class="recent-list">
@@ -185,15 +211,15 @@
     <!-- Resumo de atividade: sidebar (>=1280px) / abaixo da coluna principal (<1280px) -->
     <aside class="home-sidebar" id="resumo-lateral" aria-label="Resumo de atividade">
         <div class="home-stat">
-            <div class="home-stat-label">Jogos guardados</div>
+            <div class="lq-eyebrow">Jogos guardados</div>
             <div class="home-stat-value">{{ total_jogos }}</div>
         </div>
         <div class="home-stat">
-            <div class="home-stat-label">Tipos de jogo</div>
+            <div class="lq-eyebrow">Tipos de jogo</div>
             <div class="home-stat-value">{{ jogos_por_tipo|length }}</div>
         </div>
         <div class="home-stat">
-            <div class="home-stat-label">Jogos recentes</div>
+            <div class="lq-eyebrow">Jogos recentes</div>
             <div class="home-stat-value">{{ ultimos_jogos|length }}</div>
         </div>
     </aside>
