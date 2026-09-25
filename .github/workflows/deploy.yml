@@ -20,6 +20,14 @@ jobs:
         run: |
           sudo salt '*' state.apply deploy pillar="{\"project_name\": \"${{ github.event.repository.name }}\", \"git_url\": \"${{ github.server_url }}/${{ github.repository }}.git\", \"git_branch\": \"${{ github.ref_name }}\", \"compose_dir\": \"/opt/integrit/apps/${{ github.event.repository.name }}/deploy/lab\"}"
 
+      # if: always() -- achado em 2026-09-25: 'salt *' aplica o state em TODOS os minions
+      # (inclui ubt-host02, o salt-master/ambiente espelhado), e se QUALQUER host falhar o
+      # step inteiro sai com exit 1, mesmo que o ubt-host01 (quem realmente serve
+      # loterias.internal) tenha subido com sucesso. Sem always() aqui, esse cenario pulava
+      # silenciosamente o reload do nginx-proxy, que ficava preso no IP do container antigo
+      # (destruido pelo --remove-orphans) -- Bad Gateway ate alguem recarregar na mao. O
+      # reload em si e idempotente/inofensivo mesmo quando o host01 realmente falhou.
       - name: Recarregar nginx-proxy (pega o IP novo do container recriado)
+        if: always()
         run: |
           sudo salt 'ubt-host01' cmd.run 'docker exec nginx-proxy nginx -s reload'
