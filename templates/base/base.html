@@ -87,6 +87,15 @@
 
     <main class="lq-main">
         {% block content %}{% endblock %}
+
+        {% block ad_zone %}
+        <div class="lq-container">
+            <div class="lq-ad-zone" id="zona-anuncio" role="complementary" aria-label="Espaço reservado para conteúdo patrocinado">
+                <span class="ms" aria-hidden="true">campaign</span>
+                <span>Espaço reservado</span>
+            </div>
+        </div>
+        {% endblock %}
     </main>
 
     <footer class="lq-footer">

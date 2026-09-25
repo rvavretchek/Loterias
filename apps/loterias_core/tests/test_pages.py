@@ -419,6 +419,22 @@ class LottiqBaseTemplateTests(TestCase):
         for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
             self.assertIsNotNone(finders.find(path), path)
 
+    def test_ad_zone_is_reserved_on_every_page_outside_the_game_flow(self):
+        """Story 7.3 (FR-31/UX-DR12): zona reservada presente, sem integracao real do AdSense."""
+        user = User.objects.create_user(email='adzone@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        for url_name in ('home', 'history', 'statistics'):
+            response = self.client.get(reverse(url_name))
+            html = response.content.decode()
+            self.assertIn('id="zona-anuncio"', html, url_name)
+            self.assertIn('Espaço reservado', html, url_name)
+            self.assertNotIn('googlesyndication', html, url_name)
+            self.assertNotIn('adsbygoogle', html, url_name)
+            # nunca dentro do form de gerar jogo / dos filtros
+            if url_name == 'home':
+                form_end = html.index('</form>')
+                self.assertGreater(html.index('id="zona-anuncio"'), form_end)
+
 
 class CalculateStatisticsTests(TestCase):
     def test_no_bets_returns_none(self):

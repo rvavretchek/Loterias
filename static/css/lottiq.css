@@ -187,3 +187,7 @@ a:hover { color: var(--action-primary-hover); }
 /* Transicao de entrada (linhas de lista/cartao aparecendo) */
 @keyframes lq-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: lq-fade-in .5s ease; }
+
+/* Zona reservada pra conteudo patrocinado futuro (Story 7.3) -- so o espaco, sem integracao real */
+.lq-ad-zone { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; margin: 32px 0; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); }
+.lq-ad-zone .ms { font-size: 20px; }
