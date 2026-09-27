@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-22-2026 20:43
+last_updated: 09-27-2026 13:55
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -92,6 +92,14 @@ development_status:
   5-6-histórico-detalhe-notificações-estatísticas-preferências: done
   5-7-remover-o-bootstrap-e-fechar-a-migração: done
   epic-5-retrospective: done
+
+  # Epic 6 e 7 nao usaram o fluxo de stories/sprint-status (rota leve, specs diretos em
+  # _bmad-output/implementation-artifacts/spec-6-*.md e spec-7-*.md, sem PRD) -- por isso sem
+  # chaves de story individuais aqui, so o epic e o retro (retros de 2026-09-27).
+  epic-6: done
+  epic-6-retrospective: done
+  epic-7: done
+  epic-7-retrospective: done
 action_items:
   - id: "epic-1-retro-item-1-adicionar-comentario-em-games_config-mod"
     epic: 1
@@ -153,8 +161,11 @@ action_items:
     action: "Avaliar dividir apps/loterias_core/tests.py (3196 linhas) por area antes
       do proximo epico adicionar mais cobertura"
     owner: "proxima sessao que tocar tests.py"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-16.md"
+    resolution: "Feito na Story 6.7 (2026-09-23) -- apps/loterias_core/tests.py dividido
+      em pacote tests/ por area funcional (test_generation.py, test_results_and_prizes.py,
+      test_notifications.py, test_pages.py, test_admin.py, test_integration.py)."
   - id: "epic-2-retro-item-8-smoke-test-infra-deploy"
     epic: 2
     action: "Considerar smoke-test de ambiente na Definition of Done de stories que
@@ -181,8 +192,10 @@ action_items:
     action: "Dividir tests.py por area e renomear classe homonima GenerationRulesViewTests/ViewsTests
       antes da migracao pro design system"
     owner: "proxima sessao que tocar tests.py"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-09-21.md"
+    resolution: "Feito na Story 6.7 (2026-09-23) -- split de tests.py em pacote tests/;
+      nao ha mais colisao de nome (so GenerationRulesEditScreenTests em test_generation.py)."
   - id: "epic-4-retro-item-14-reduzir-custo-do-laco-de-duplicata-relax"
     epic: 4
     action: "Reduzir custo do laco de duplicata/relaxamento (regras carregadas uma
@@ -218,3 +231,96 @@ action_items:
     owner: "Boss (ideia de produto)"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-09-22.md"
+  - id: "epic-6-retro-item-19-documentar-procedimento-de-restore-no-de"
+    epic: 6
+    action: "Documentar procedimento de restore no deploy/lab/README.md (comandos
+      concretos pra restaurar db.sqlite3.<timestamp> no volume loterias_data)"
+    owner: "proxima sessao que tocar o runbook"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-27.md"
+  - id: "epic-6-retro-item-20-adicionar-gate-de-ci-github-workflows-de"
+    epic: 6
+    action: "Adicionar gate de CI (.github/workflows/deploy.yml) que roda python manage.py
+      test e bloqueia o deploy Salt se falhar"
+    owner: "proxima sessao de infra"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-27.md"
+  - id: "epic-6-retro-item-21-reforcar-runbook-checagem-de-falha-expli"
+    epic: 6
+    action: "Reforcar runbook: checagem de falha explicita no passo 2, parar loterias-cron/backup
+      fresco antes do passo 3, ressalva sobre segredos dummy em migrations de hash
+      de senha"
+    owner: "junto com o item de restore"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-27.md"
+  - id: "epic-6-retro-item-22-estender-allpossiblerulecombinationstest"
+    epic: 6
+    action: "Estender AllPossibleRuleCombinationsTests pra exercitar distribution_type=homogenea
+      de verdade; corrigir a alegacao de cobertura em epic-6-context.md"
+    owner: "proxima sessao que tocar Regras de Geracao"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-27.md"
+  - id: "epic-6-retro-item-23-completar-test_manual_bet_shows_prize_im"
+    epic: 6
+    action: "Completar test_manual_bet_shows_prize_immediately_but_notification_waits_for_the_scan
+      com a chamada a fetch_daily_results() + assert da notificacao"
+    owner: "proxima sessao de teste"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-24-env-example-ainda-tinha-email_backend-fi"
+    epic: 7
+    action: ".env.example ainda tinha EMAIL_BACKEND fixo em console, contradizendo
+      a logica de auto-deteccao -- ja corrigido nesta retro"
+    owner: "aplicado 2026-09-27"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-25-adicionar-runpython-de-backfill-numeric_"
+    epic: 7
+    action: "Adicionar RunPython de backfill (numeric_value<1 -> 1) na migration 0008
+      antes do AddConstraint, ou migration corretiva"
+    owner: "proxima sessao que tocar Regras de Geracao/migrations"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-26-trocar-as-regras-de-css-restantes-com-co"
+    epic: 7
+    action: "Trocar as regras de CSS restantes com cor bruta (lq-ball-hit, lq-banner-win,
+      lq-pagination is-active, lq-btn-danger, lq-error, lq-ball-not-hit) pelos tokens
+      semanticos equivalentes"
+    owner: "proxima sessao de UI/tema escuro"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-27-validar-choice-contra-os-3-valores-conhe"
+    epic: 7
+    action: "Validar choice contra os 3 valores conhecidos em save_cookie_consent_view
+      (400 em vez de tratar como custom silenciosamente) + teste de open-redirect
+      + secure=request.is_secure() no cookie"
+    owner: "proxima sessao que tocar cookies/LGPD"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-28-corrigir-overflow-de-lq-ad-rail-banner-d"
+    epic: 7
+    action: "Corrigir overflow de .lq-ad-rail/banner de cookies em paginas curtas
+      (min-height do container pai ou position sticky)"
+    owner: "proxima sessao de layout"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-29-adicionar-a-variante-lotofacil-3-por-lin"
+    epic: 7
+    action: "Adicionar a variante Lotofacil (3 por linha) na explicacao de distribution_type"
+    owner: "proxima sessao de conteudo/regras"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-30-teste-pras-colunas-de-anuncio-laterais-l"
+    epic: 7
+    action: "Teste pras colunas de anuncio laterais (lq-ad-rail), espelhando o teste
+      ja existente da faixa inferior"
+    owner: "proxima sessao de teste"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
+  - id: "epic-7-retro-item-31-reavaliar-se-vale-manter-um-cenario-de-r"
+    epic: 7
+    action: "Reavaliar se vale manter um cenario de regra impossivel num jogo de GAMES_WITH_SEQUENCE_RULE,
+      nao so Lotofacil"
+    owner: "proxima sessao de teste"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
