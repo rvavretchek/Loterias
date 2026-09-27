@@ -92,6 +92,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-epic-3-novo-fluxo-de-cadastro.md`
   summary: "`createcachetable` não está documentado nos comandos de setup local do `CLAUDE.md` (só `migrate`/`runserver`), nem no runbook do lab (`deploy/lab/README.md`) -- o novo `CACHES` (`DatabaseCache`, Epic 3) exige essa tabela; um dev novo seguindo exatamente o CLAUDE.md quebra no primeiro uso de cache (ex. `ResendConfirmationEmailView`)."
   evidence: Achado pelo Blind Hunter e Edge Case Hunter, independentemente, na revisão de código do Epic 3 (2026-09-11, pedida pelo Boss antes da retrospectiva). O `Dockerfile`/deploy do lab já rodam `createcachetable` corretamente -- só o fluxo de dev local documentado no CLAUDE.md está desatualizado. Deferido porque a correção edita um arquivo de contexto de agente (CLAUDE.md), fora do escopo de patch automático desta revisão.
+  status: resolved
+  resolution: "CLAUDE.md já documenta `python manage.py createcachetable` no bloco de comandos de setup local (linha 26) -- confirmado na retrospectiva dos Epics 6/7, 2026-09-27. O runbook do lab não precisa mencionar, já que o `Dockerfile`/deploy rodam automaticamente."
 
 ## Deferred from: code review of spec-2-12-normalizacao-de-concurso (2026-09-14)
 
@@ -194,3 +196,5 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-4-regras-de-geracao-mega-milionaria-quina-dupla.md`
   summary: "`CLAUDE.md` (seção 'Lógica de domínio das loterias') ainda descreve `generate_bet()` só com a Regra de Sequência adaptativa; deve mencionar `GenerationRule`/`bet_satisfies_rules` (modo personalizado) — atualizar quando o Epic 4 fechar."
   evidence: Achado pelo Blind Hunter na revisão da Story 4.4; adiado porque o conserto edita um arquivo de contexto de agente.
+  status: resolved
+  resolution: "CLAUDE.md já documenta `GenerationRule`/`bet_satisfies_rules` e o modo personalizado por completo na seção 'Lógica de domínio das loterias' (linhas 88/93) -- confirmado na retrospectiva dos Epics 6/7, 2026-09-27."
