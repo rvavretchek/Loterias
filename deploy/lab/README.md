@@ -105,7 +105,9 @@ Se o passo 1 mostrar uma contagem de linhas muito menor que a esperada, ou um `D
 
 ## Backup e validacao de migration antes de aplicar em producao
 
-**Postura de dados (atualizada 2026-09-23, Story 6.8):** o Boss trata a homologacao como producao pra fins de preservacao de dado — mesmo sem usuario real ainda, o volume `loterias_data` **nao deve mais ser tratado como descartavel** a partir de agora. A nota antiga ("enquanto lab de teste, pode ser recriado livremente") nao vale mais; o procedimento abaixo passa a ser seguido sempre que uma migration alterar schema, nao so quando o Boss declarar producao formalmente.
+**Postura de dados (atualizada 2026-09-23, Story 6.8; declaracao formal em 2026-09-27):** o Boss trata a homologacao como producao pra fins de preservacao de dado — mesmo sem usuario real ainda, o volume `loterias_data` **nao deve mais ser tratado como descartavel**. Em 2026-09-27, apos o deploy real do PR #12 confirmado funcionando nos dois hosts, o Boss declarou formalmente: **este ambiente (`ubt-host01`, e por extensao o `ubt-host02` provisionado em 2026-09-27) e homologacao de verdade, tratado como producao daqui pra frente, sem excecao**. A nota antiga ("enquanto lab de teste, pode ser recriado livremente") nunca mais vale; o procedimento abaixo e obrigatorio sempre que uma migration alterar schema, em qualquer merge futuro pra `main`.
+
+**Pendencia conhecida (achado na retrospectiva do Epic 6, 2026-09-27):** o procedimento abaixo documenta backup (passo 1) e validacao contra uma copia (passo 2), mas **nunca documentou o restore de verdade** -- como usar o backup do passo 1 se o `migrate` real (passo 3) falhar ou corromper dado. Com a declaracao formal acima, fechar essa lacuna passa a ser prioridade antes do proximo merge que altere schema.
 
 **Drill real (2026-09-23):** o procedimento abaixo foi exercitado de ponta a ponta pela primeira vez contra o volume real do lab (sem nenhuma migration pendente pra aplicar de verdade — so validou o mecanismo). Achados que corrigiram o procedimento original:
 
