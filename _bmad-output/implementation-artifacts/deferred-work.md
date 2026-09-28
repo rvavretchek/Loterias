@@ -38,6 +38,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "O contador do badge não tem teto visual (ex. '99+') -- um usuário com centenas de notificações não lidas acumuladas veria um número de 3+ dígitos dentro do pill circular, arriscando quebrar o layout do cabeçalho."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.4. Baixo risco prático hoje (poucos usuários, e a Story 2.5 vai permitir marcar como lida, reduzindo o acúmulo) -- revisitar se o volume real se mostrar um problema.
+  status: resolved
+  resolution: "templates/base/base.html: o badge agora mostra '99+' quando `unread_notifications_count > 99`, sem alterar o `aria-label` (que continua com a contagem exata pra leitor de tela) -- fechado na remediação pós-Epic 7, 2026-09-28, com 2 testes novos (`test_badge_shows_exact_count_at_99`/`test_badge_caps_display_at_99_plus`)."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "Sem índice composto cobrindo a consulta real do badge/lista (`bet__user` + `is_read` juntos) -- só `is_read` tem índice próprio (Story 2.3)."
@@ -188,6 +190,8 @@ Achados da revisão de fronteira entre stories (não de uma story isolada) -- ve
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-1-reorganizacao-da-area-util-da-home.md`
   summary: "Os cards do `game-selector` são `div onclick` com radio `d-none required` — inacessíveis por teclado e, sem jogo selecionado, o submit falha com 'invalid form control is not focusable' sem nenhum aviso visível (agora mais exposto, já que o botão Gerar Jogo fica acima do seletor)."
   evidence: Achado pelo Blind Hunter na revisão da Story 4.1. Pré-existente (a mecânica de seleção não mudou); a Story 4.2 (UX-DR7) e o padrão `.btn-check` da EXPERIENCE.md já preveem reescrever o seletor de forma acessível — resolver lá.
+  status: resolved
+  resolution: "Confirmado lendo templates/loterias_core/home.html (remediação pós-Epic 7, 2026-09-28): o seletor de jogos hoje é `<input type=\"radio\" class=\"lq-tile-input\">` real com `<label for=\"jogo-{{ key }}\">`, não mais `div onclick` com radio oculto -- acessível por teclado nativamente (Tab entra/sai do grupo, setas navegam). Resolvido pela migração pro Lottiq Design System no Epic 5, não por uma story específica desta epic."
 
 ## Deferred from: build da Story 4.2 (2026-09-18)
 

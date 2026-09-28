@@ -47,7 +47,7 @@
                 <a class="lq-bell" href="{% url 'notifications' %}" title="Avisos de acerto"
                    aria-label="{{ unread_notifications_count }} aviso(s) de acerto não lido(s)">
                     <span class="ms msf" aria-hidden="true">notifications</span>
-                    <span class="lq-bell-count{% if has_unread_won_notification %} is-win{% endif %}" aria-hidden="true">{{ unread_notifications_count }}</span>
+                    <span class="lq-bell-count{% if has_unread_won_notification %} is-win{% endif %}" aria-hidden="true">{% if unread_notifications_count > 99 %}99+{% else %}{{ unread_notifications_count }}{% endif %}</span>
                 </a>
                 {% endif %}
                 <details class="lq-menu">

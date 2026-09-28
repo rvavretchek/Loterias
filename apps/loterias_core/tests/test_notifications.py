@@ -457,6 +457,25 @@ class NotificationsContextProcessorTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.context['unread_notifications_count'], 1)
 
+    def test_badge_shows_exact_count_at_99(self):
+        """Deferred-work item: badge sem teto visual -- confirma que ate 99 mostra o numero exato."""
+        for contest in range(1, 100):
+            HitNotification.objects.create(bet=self._bet(str(contest)), won=False)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 99)
+        match = re.search(r'lq-bell-count[^>]*>([^<]+)<', response.content.decode())
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), '99')
+
+    def test_badge_caps_display_at_99_plus(self):
+        for contest in range(1, 101):
+            HitNotification.objects.create(bet=self._bet(str(contest)), won=False)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.context['unread_notifications_count'], 100)
+        match = re.search(r'lq-bell-count[^>]*>([^<]+)<', response.content.decode())
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), '99+')
+
 
 class NotificationBadgeTemplateTests(TestCase):
     def setUp(self):
