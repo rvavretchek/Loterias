@@ -10,8 +10,9 @@ from django.conf import settings
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -638,6 +639,55 @@ class GenerationRuleModelTests(TestCase):
         rule = GenerationRule(user=self.user, game='Quina', rule_name='limit_row_count', numeric_value=0)
         with self.assertRaises(ValidationError):
             rule.clean()
+
+
+class Migration0008BackfillTests(TransactionTestCase):
+    """Fronteira (achado na retrospectiva do Epic 6/7, 2026-09-27, item 25): a CheckConstraint
+    da migration 0008 bloquearia aplicar em qualquer base com dado legado numeric_value<=0 --
+    prova que o RunPython de backfill normaliza esse dado ANTES da constraint entrar em vigor,
+    migrando de verdade pra tras (schema 0007, sem a constraint) e pra frente (0008). So dá pra
+    testar isso migrando de verdade -- com a constraint ja aplicada no banco de teste normal,
+    nao existe nenhum jeito (nem via ORM, nem via SQL cru) de inserir a linha invalida primeiro."""
+
+    def tearDown(self):
+        # Garante que o banco de teste volta pro estado final (todas as migrations aplicadas)
+        # antes do proximo teste, mesmo que este teste falhe no meio do caminho.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_backfill_normalizes_legacy_value_before_constraint_applies(self):
+        # 'accounts' precisa ficar no seu estado mais recente aqui -- sem isso, project_state()
+        # so inclui as migrations de accounts que sao dependencia ancestral direta de
+        # loterias_core.0007 (o initial), sem profile_completed (adicionado depois).
+        targets = [
+            ('loterias_core', '0007_generationrule'),
+            ('accounts', '0003_alter_user_profile_completed'),
+        ]
+        executor = MigrationExecutor(connection)
+        executor.migrate(targets)
+        old_state = executor.loader.project_state(targets)
+        OldUser = old_state.apps.get_model('accounts', 'User')
+        OldGenerationRule = old_state.apps.get_model('loterias_core', 'GenerationRule')
+
+        legacy_user = OldUser.objects.create(
+            email='legado-migration@example.com', password='x', profile_completed=True,
+        )
+        legacy_rule = OldGenerationRule.objects.create(
+            user=legacy_user, game='Quina', rule_name='limit_row_count',
+            enabled=True, numeric_value=0,
+        )
+        self.assertEqual(legacy_rule.numeric_value, 0)  # valido no schema 0007 -- sem constraint ainda
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([('loterias_core', '0008_alter_generationrule_numeric_value_and_more')])
+
+        new_state = executor.loader.project_state(
+            [('loterias_core', '0008_alter_generationrule_numeric_value_and_more')]
+        )
+        NewGenerationRule = new_state.apps.get_model('loterias_core', 'GenerationRule')
+        migrated_rule = NewGenerationRule.objects.get(pk=legacy_rule.pk)
+        self.assertEqual(migrated_rule.numeric_value, 1)
 
 
 class GenerationRulesEditScreenTests(TestCase):
