@@ -721,6 +721,16 @@ class GenerationRulesEditScreenTests(TestCase):
             explanation = RULE_DEFINITIONS[name]['explanation']
             self.assertContains(response, explanation)
 
+    def test_distribution_type_explanation_mentions_lotofacil_variant(self):
+        """Item 29 da retrospectiva do Epic 6/7 (2026-09-27): a explicacao generica de
+        distribution_type nunca mencionava que a Lotofacil busca 3 por linha, nao 1 por faixa."""
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'lotofacil'}))
+        self.assertContains(response, '3 números por linha do volante')
+
+    def test_distribution_type_explanation_has_no_extra_detail_for_other_games(self):
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'mega-sena'}))
+        self.assertNotContains(response, '3 números por linha do volante')
+
     def test_first_visit_shows_default_with_disabled_value_fields(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
@@ -1044,6 +1054,27 @@ class GenerateBetWithRulesTests(TestCase):
         self._save('limit_row_count', 1, game='Lotofacil')
         self.assertEqual(generate_bet('Lotofacil', self.user), (None, None))
         self.assertEqual(generate_bet_with_relaxation('Lotofacil', self.user), (None, None, None))
+
+    def test_impossible_rules_return_none_on_a_sequence_adaptive_game(self):
+        """Item 31 da retrospectiva do Epic 6/7 (2026-09-27): os testes de 'regra impossivel'
+        migraram inteiramente pra Lotofacil apos o valor minimo virar 1 (0 nao e mais aceito) --
+        perdendo a cobertura de 'duas regras inatingiveis, nunca relaxa uma segunda' num jogo
+        COM a regra adaptativa de sequencia (GAMES_WITH_SEQUENCE_RULE). Mega-sena nao tem
+        combinacao matematicamente impossivel com valores >=1 (a folga do grid 6x10 pra so 6
+        numeros sorteados torna quase qualquer combinacao tecnicamente alcancavel) -- usa o
+        mesmo padrao de mock ja estabelecido em test_relaxation_picks_newest_updated_at_among_violated_rules_only
+        pra simular determinsticamente 'nunca sai, nem relaxando' sem depender de impossibilidade
+        matematica genuina."""
+        from unittest.mock import patch
+        self._save('limit_sequence_count', 1)
+        self._save('limit_row_count', 3)
+
+        def fake_draw_always_fails(config, game, rules, attempts=10000):
+            return None, [rule.rule_name for rule in rules]
+
+        with patch('apps.loterias_core.utils._draw_with_rules', side_effect=fake_draw_always_fails):
+            self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
+            self.assertEqual(generate_bet_with_relaxation('Mega-sena', self.user), (None, None, None))
 
     def test_relaxes_the_only_impossible_rule_in_memory(self):
         """Story 4.5 (FR-22): uma regra inatingivel e relaxada, o jogo sai e o banco nao muda."""

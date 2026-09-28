@@ -582,6 +582,14 @@ _GRID_HELP = {
     'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
 }
 
+# Detalhe extra pra distribution_type quando o comportamento de 'Homogênea' difere do padrão
+# genérico (1 número por faixa) -- achado na retrospectiva do Epic 6/7 (2026-09-27, item 29):
+# a Lotofácil busca 3 números por linha do volante, não 1 por faixa, e a explicação genérica
+# nunca mencionava isso.
+_DISTRIBUTION_TYPE_GAME_DETAIL = {
+    'Lotofacil': 'Na Lotofácil especificamente, Homogênea busca 3 números por linha do volante oficial, não 1 por faixa como nos demais jogos.',
+}
+
 
 def _relaxed_rule_message(game, rule_name):
     """Aviso da regra relaxada (Story 4.5, FR-22) -- nomeia a regra e o Jogo, nunca generico."""
@@ -615,12 +623,15 @@ def _build_rule_rows(game, saved_by_name, posted=None):
         grid_help = _GRID_HELP[rule_name].format(
             game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1],
         ) if rule_name in _GRID_HELP else ''
+        if rule_name == 'distribution_type':
+            grid_help = _DISTRIBUTION_TYPE_GAME_DETAIL.get(game, '')
         row = {
             'rule_name': rule_name,
             'label': definition['label'],
             'kind': kind,
             # Story 7.2 (FR-30): explicação em linguagem comum sempre presente; o detalhe do
-            # volante (linha/coluna) se soma a ela, não a substitui.
+            # volante (linha/coluna) ou da variante por Jogo (distribution_type) se soma a
+            # ela, não a substitui.
             'help': f"{definition['explanation']} {grid_help}".strip() if grid_help else definition['explanation'],
             'enabled': bool(saved and saved.enabled),
             'value': stored_value,

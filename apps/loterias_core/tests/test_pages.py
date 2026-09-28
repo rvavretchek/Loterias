@@ -435,6 +435,19 @@ class LottiqBaseTemplateTests(TestCase):
                 form_end = html.index('</form>')
                 self.assertGreater(html.index('id="zona-anuncio"'), form_end)
 
+    def test_ad_rails_are_reserved_on_every_page(self):
+        """Story 7.3b (item 30 da retrospectiva do Epic 6/7, 2026-09-27): as duas colunas
+        laterais espelham o mesmo contrato da zona inferior -- reservadas, sem integracao real."""
+        user = User.objects.create_user(email='adrails@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        for url_name in ('home', 'history', 'statistics'):
+            response = self.client.get(reverse(url_name))
+            html = response.content.decode()
+            self.assertIn('class="lq-ad-rail lq-ad-rail-left"', html, url_name)
+            self.assertIn('class="lq-ad-rail lq-ad-rail-right"', html, url_name)
+            self.assertNotIn('googlesyndication', html, url_name)
+            self.assertNotIn('adsbygoogle', html, url_name)
+
     def test_html_tag_carries_data_theme_from_context(self):
         """Story 7.4 (FR-32/UX-DR13): data-theme no <html> reflete theme_context, sem FOUC."""
         user = User.objects.create_user(email='themehtml@example.com', password='SenhaForte123')
