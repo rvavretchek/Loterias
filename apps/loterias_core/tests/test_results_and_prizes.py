@@ -39,6 +39,8 @@ from apps.loterias_core.utils import (
     apply_prize_to_bet,
     normalize_contest,
     bet_satisfies_rules,
+    get_prize_category_label,
+    GAME_PRIZE_CATEGORY,
 )
 
 
@@ -823,6 +825,26 @@ class ApplyPrizeToBetTests(TestCase):
         self.assertEqual(bet.hits, 3)
         self.assertEqual(bet.prize, Decimal('50.00'))
         self.assertEqual(bet.prize_description, '3')
+
+
+class GetPrizeCategoryLabelTests(TestCase):
+    """Deferred-work item #17: bet.prize_description expunha a chave crua de
+    GAME_PRIZE_CATEGORY (ex. 'dupla_sena') direto no e-mail de acerto -- get_prize_category_label
+    traduz pro rotulo de exibicao."""
+
+    def test_known_category_returns_friendly_label(self):
+        self.assertEqual(get_prize_category_label('dupla_sena'), 'Dupla-Sena')
+        self.assertEqual(get_prize_category_label('milionaria'), '+Milionária')
+
+    def test_unknown_category_falls_back_to_itself(self):
+        self.assertEqual(get_prize_category_label('categoria_inexistente'), 'categoria_inexistente')
+
+    def test_empty_string_falls_back_to_itself(self):
+        self.assertEqual(get_prize_category_label(''), '')
+
+    def test_all_game_prize_categories_have_a_label(self):
+        for category in GAME_PRIZE_CATEGORY.values():
+            self.assertNotEqual(get_prize_category_label(category), category)
 
 
 class UpdateMonthlyPrizeValuesTests(TestCase):

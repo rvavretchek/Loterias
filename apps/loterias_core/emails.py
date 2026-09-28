@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 from django.utils.formats import number_format
 
 from .models import CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS
+from .utils import get_prize_category_label
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def send_hit_notification_email(notification):
             f"Olá {user.first_name or user.email},\n\n"
             f"Seu jogo de {bet.game} (concurso {bet.contest}) foi premiado!\n\n"
             f"Acertos: {bet.hits}\n"
-            f"Categoria: {bet.prize_description}\n"
+            f"Categoria: {get_prize_category_label(bet.prize_description)}\n"
             f"Valor do prêmio: R$ {prize_value}\n\n"
             f"Acesse o site para ver os detalhes completos.\n\n"
             f"Atenciosamente,\n"

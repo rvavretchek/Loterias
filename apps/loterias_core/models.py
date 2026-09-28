@@ -14,7 +14,13 @@ def normalize_contest(raw):
     stripped = raw.strip()
     if not stripped.isdecimal():
         raise ValueError(f'Numero de concurso invalido: {raw!r}')
-    return str(int(stripped))
+    value = int(stripped)
+    # Item 25 do deferred-work.md (achado na Story 2.12, corrigido 2026-09-28): '0'/'00' passavam
+    # no formato mas nenhum concurso real da CEF e numerado 0 -- so faixa/plausibilidade contra o
+    # calendario real de sorteios continua fora de escopo (item 21, decisao de produto).
+    if value < 1:
+        raise ValueError(f'Numero de concurso invalido: {raw!r}')
+    return str(value)
 
 
 class NormalizesContestOnSave(models.Model):

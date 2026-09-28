@@ -410,9 +410,21 @@ def api_create_bet_view(request):
         return JsonResponse({'error': 'Metodo nao permitido'}, status=405)
 
     import json
-    data = json.loads(request.body)
+    # Item 26 do deferred-work.md (achado na Story 2.13, corrigido 2026-09-28): payload JSON
+    # malformado ou com 'concurso' num tipo inesperado (numero/objeto em vez de string) devolvia
+    # 500 nao tratado -- json.loads/`.strip()` levantam JSONDecodeError/AttributeError direto.
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Corpo da requisicao nao e um JSON valido'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'Corpo da requisicao precisa ser um objeto JSON'}, status=400)
+
     selected_game = data.get('jogo')
-    contest = data.get('concurso', '').strip()
+    contest = data.get('concurso', '')
+    if not isinstance(contest, str):
+        return JsonResponse({'error': 'Numero de concurso invalido'}, status=400)
+    contest = contest.strip()
 
     if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)

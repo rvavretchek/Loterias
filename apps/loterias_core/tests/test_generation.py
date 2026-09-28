@@ -292,6 +292,29 @@ class CreateBetViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error'], 'Numero de concurso invalido: ESPECIAL-2026')
 
+    def test_api_create_bet_rejects_malformed_json_body(self):
+        """Item 26 do deferred-work.md (achado na Story 2.13, corrigido 2026-09-28): corpo que
+        nao e JSON valido devolvia 500 nao tratado (JSONDecodeError)."""
+        response = self.client.post(
+            reverse('api_create_bet'), data='isso nao e json{{{', content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_create_bet_rejects_non_object_json_body(self):
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps(['nao', 'e', 'um', 'objeto']),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_create_bet_rejects_non_string_contest_type(self):
+        """Item 26: concurso como numero/objeto quebrava com AttributeError em .strip()."""
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps({'jogo': 'Quina', 'concurso': 2500}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_api_generate_bet_returns_json(self):
         response = self.client.post(
             reverse('api_create_bet'),

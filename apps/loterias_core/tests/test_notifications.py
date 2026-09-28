@@ -360,7 +360,7 @@ class HitNotificationEmailTests(TestCase):
         self.assertIn('Quina', sent.body)
         self.assertIn('concurso 47', sent.body)
         self.assertIn('Acertos: 5', sent.body)
-        self.assertIn('Categoria: quina', sent.body)
+        self.assertIn('Categoria: Quina', sent.body)
         self.assertIn('5000,00', sent.body)
 
     def test_multiple_winners_in_the_same_run_each_get_their_own_email(self):

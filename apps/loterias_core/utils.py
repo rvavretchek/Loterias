@@ -354,6 +354,24 @@ GAME_PRIZE_CATEGORY = {
     'Dupla-Sena': 'dupla_sena',
 }
 
+# Rotulo de exibicao por chave de GAME_PRIZE_CATEGORY -- usado sempre que a categoria aparece pro
+# usuario (ex. corpo do e-mail de acerto). GeneratedBet.prize_description continua guardando a
+# chave crua (nao afeta dado ja persistido); so a exibicao passa por aqui.
+PRIZE_CATEGORY_LABELS = {
+    'sena': 'Sena',
+    'quina': 'Quina',
+    'lotofacil': 'Lotofácil',
+    'lotomania': 'Lotomania',
+    'milionaria': '+Milionária',
+    'dupla_sena': 'Dupla-Sena',
+}
+
+
+def get_prize_category_label(category):
+    """Traduz a chave crua de categoria (GAME_PRIZE_CATEGORY) pro rotulo de exibicao. Categoria
+    desconhecida cai de volta pra ela mesma, sem quebrar a exibicao."""
+    return PRIZE_CATEGORY_LABELS.get(category, category)
+
 LEGACY_MIN_HITS = {
     'Mega-sena': 4,
     'Quina': 3,

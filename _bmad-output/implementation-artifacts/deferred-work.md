@@ -42,6 +42,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "Sem índice composto cobrindo a consulta real do badge/lista (`bet__user` + `is_read` juntos) -- só `is_read` tem índice próprio (Story 2.3)."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.4. Baixo impacto no volume atual; revisitar se o número de `GeneratedBet`/`HitNotification` por usuário crescer o suficiente pra tornar essa junção uma consulta lenta.
+  status: accepted
+  resolution: "Reavaliado na remediação pós-Epic 7, 2026-09-28: `HitNotification.bet` é `OneToOneField` pra `GeneratedBet`, sem campo `user` direto -- um índice composto real (`bet__user`, `is_read`) exigiria denormalizar um `user` redundante em `HitNotification` só pra viabilizar o índice, mudança de schema desproporcional ao ganho no volume atual. Aceito como está; revisitar só se o volume crescer o suficiente pra justificar a denormalização."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-detalhe-e-leitura-da-notificacao.md`
   summary: "A busca em lote de `LotteryResult` em `notifications_view` (e também em `jobs._notify_covered_bets`, Story 2.3) usa `game__in=[...], contest__in=[...]` separados -- um produto cartesiano que pode trazer registros 'cruzados' que não correspondem a nenhum par real da página, sem causar dado errado (a chave do dict vem do próprio registro retornado), só desperdiçando linhas buscadas."
@@ -66,6 +68,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-envio-de-email-de-acerto-premiado.md`
   summary: "`bet.prize_description` expõe a chave interna de `calculate_bet_prize` (ex. `'dupla_sena'`, `'milionaria'` sem acento/formatação) diretamente no corpo do e-mail, como 'Categoria: dupla_sena' -- destoa da linha 'Jogo:' logo acima, que usa `bet.game` com capitalização/acentuação de exibição."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.7. Mesma causa raiz já registrada como rótulo pouco preciso na Story 2.1 (`category` colapsado numa faixa ampla) -- agora também visível no e-mail, não só na tela. Resolver exigiria uma tabela de rótulos amigáveis por categoria, fora do escopo de uma story de envio de e-mail.
+  status: resolved
+  resolution: "`PRIZE_CATEGORY_LABELS`/`get_prize_category_label()` (apps/loterias_core/utils.py) traduz a chave crua (`dupla_sena`, `milionaria`, ...) pro rótulo de exibição (`Dupla-Sena`, `+Milionária`, ...); `emails.py` usa a função em vez de `bet.prize_description` cru -- fechado na remediação pós-Epic 7, 2026-09-28. `GeneratedBet.prize_description` continua guardando a chave crua no banco (não é um dado incorreto, só de exibição). O rótulo continua colapsado por faixa ampla (item da Story 2.1, logo acima) -- não resolvido por este fix, só o formato de exibição."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-envio-de-email-de-acerto-premiado.md`
   summary: "O corpo do e-mail não inclui os números da aposta nem um link/URL clicável pro detalhe do jogo -- só um texto genérico 'Acesse o site para ver os detalhes completos', sem endereço (diferente do welcome e-mail, que tem uma URL fixa pro localhost)."
@@ -100,16 +104,22 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-normalizacao-de-concurso.md`
   summary: "`contest` continua editável como texto livre no Django admin (`GeneratedBetAdmin`/`LotteryResultAdmin`, não está em `readonly_fields`) -- um operador digitando `'02500'` direto no admin recria exatamente o bug que a Story 2.12 corrigiu nos 3 pontos de entrada via views, porque o admin nunca passa por `normalize_contest`."
   evidence: Achado pelo Edge Case Hunter (confirmado lendo `apps/loterias_core/admin.py`, `contest` ausente de `readonly_fields` nas duas classes) na revisão da Story 2.12. Pré-existente (o campo sempre foi editável, não é uma regressão desta story) e fora do Given/When/Then literal da AC (que só lista `create_bet_view`/`save_manual_bet_view`/`api_create_bet_view`), mas contradiz o objetivo declarado da story ("normalizado de forma consistente em todos os pontos que o recebem"). Corrigir exigiria `save_model`/validação customizada no `ModelAdmin`, fora do escopo de patch trivial desta revisão -- decisão de produto sobre se vale a pena travar edição manual de `contest` no admin.
+  status: resolved
+  resolution: "Já resolvido desde a Story 2.16 (2026-09-14), não pela 2.12: `_NormalizedContestFormMixin.clean_contest()` (apps/loterias_core/admin.py) chama `normalize_contest()` no save do admin, aplicado via `form = GeneratedBetAdminForm`/etc. em `GeneratedBetAdmin`, `LotteryResultAdmin` e `CaptureFailureAlertAdmin`. Confirmado lendo admin.py na remediação pós-Epic 7, 2026-09-28 -- este item ficou órfão na lista, nunca reconciliado."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-normalizacao-de-concurso.md`
   summary: "`normalize_contest('0')`/`('00')` são aceitos e normalizados pra `'0'`, mas nenhum concurso real da CEF é numerado 0 -- não há validação de faixa mínima, só de formato."
   evidence: Achado independentemente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.12. Mesma categoria de lacuna já registrada como deferida na Story 2.9 (nenhuma validação de teto superior pro concurso digitado manualmente) -- a AC desta story pede só normalização de formato (zeros à esquerda) e rejeição de não numérico, nunca validação de faixa/plausibilidade contra o calendário real de sorteios. Revisitar junto com o item já deferido da Story 2.9 se isso se mostrar um problema prático.
+  status: resolved
+  resolution: "`normalize_contest` (apps/loterias_core/models.py) agora rejeita valores < 1 com `ValueError` -- fechado na remediação pós-Epic 7, 2026-09-28. Não afeta o item irmão da Story 2.9 (teto superior/plausibilidade contra calendário de sorteio), que continua em aberto."
 
 ## Deferred from: code review of spec-2-13-validacao-de-jogo-em-api-create-bet-view (2026-09-14)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-13-validacao-de-jogo-em-api-create-bet-view.md`
   summary: "`api_create_bet_view` ainda pode devolver 500 não tratado pra payload JSON malformado -- `json.loads(request.body)` levanta `JSONDecodeError` sem corpo não-JSON, e `data.get('concurso', '').strip()` levanta `AttributeError` se `concurso` vier como número/objeto em vez de string."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.13. Pré-existente (linhas anteriores a esta story, não tocadas pelo diff) -- o escopo desta story era especificamente a checagem de `jogo` ausente de `GAMES_CONFIG` (já corrigida, incluindo o caso de tipo não-hasheável). Corrigir de verdade exigiria um `try/except` mais amplo envolvendo todo o parse do payload, fora do escopo de patch trivial desta revisão.
+  status: resolved
+  resolution: "`api_create_bet_view` (apps/loterias_core/views.py) agora envolve `json.loads` em try/except (400 em `JSONDecodeError`), valida `isinstance(data, dict)` e `isinstance(concurso, str)` antes de `.strip()` -- fechado na remediação pós-Epic 7, 2026-09-28, com 3 testes novos (`test_api_create_bet_rejects_malformed_json_body` e variantes)."
 
 ## Deferred from: code review of spec-2-14-bloqueio-real-de-concurso-duplicado (2026-09-14)
 
