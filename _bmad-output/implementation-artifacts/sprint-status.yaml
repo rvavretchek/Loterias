@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-08-2026 10:45
-last_updated: 09-27-2026 13:55
+last_updated: 09-28-2026 11:45
 project: Loterias
 project_key: NOKEY
 tracking_system: file-system
@@ -272,7 +272,7 @@ action_items:
     action: ".env.example ainda tinha EMAIL_BACKEND fixo em console, contradizendo
       a logica de auto-deteccao -- ja corrigido nesta retro"
     owner: "aplicado 2026-09-27"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-09-27.md"
   - id: "epic-7-retro-item-25-adicionar-runpython-de-backfill-numeric_"
     epic: 7
