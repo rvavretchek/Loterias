@@ -34,6 +34,9 @@
                 <a href="{% url 'statistics' %}" class="{% if request.resolver_match.url_name == 'statistics' %}is-active{% endif %}" {% if request.resolver_match.url_name == 'statistics' %}aria-current="page"{% endif %}>
                     <span class="ms{% if request.resolver_match.url_name == 'statistics' %} msf{% endif %}" aria-hidden="true">bar_chart</span><span class="lq-nav-label">Estatísticas</span>
                 </a>
+                <a href="{% url 'notifications' %}" class="{% if request.resolver_match.url_name == 'notifications' %}is-active{% endif %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %}>
+                    <span class="ms{% if request.resolver_match.url_name == 'notifications' %} msf{% endif %}" aria-hidden="true">notifications</span><span class="lq-nav-label">Notificações</span>
+                </a>
             </nav>
             {% endif %}
 
@@ -174,6 +177,14 @@
         document.querySelectorAll('.btn-delete').forEach(btn => {
             btn.addEventListener('click', function(e) {
                 if (!confirm('Tem certeza que deseja excluir este item?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-regenerate').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                if (!confirm('Gerar novamente vai substituir os números deste jogo -- os atuais serão perdidos. Continuar?')) {
                     e.preventDefault();
                 }
             });

@@ -17,6 +17,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-bloqueio-de-concurso-ja-sorteado.md`
   summary: "`save_manual_bet_view` grava seu próprio `LotteryResult` (via `fetch_cef_result`+`update_or_create`) logo depois de passar pelo bloqueio que acabou de checar a ausência desse mesmo `LotteryResult` -- em caso de 2 submissões quase simultâneas pro mesmo Jogo+Concurso ainda sem resultado, a primeira a terminar 'fecha a porta' pra segunda, que passa a ser bloqueada mesmo sendo o mesmo caso de uso legítimo (registro retroativo)."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.2. Não é uma condição de corrida que quebra (o `unique_together` + o `get_or_create` interno do Django já resolvem colisão sem `IntegrityError` não tratado), só um comportamento dependente de quem submete primeiro -- decisão de produto sobre se isso é aceitável ou se merece um tratamento diferente (ex. avisar em vez de bloquear quando o próprio usuário acabou de gerar aquele resultado).
+  status: accepted
+  resolution: "Risco aceito pelo Boss (2026-09-28) junto com os demais itens de concorrência check-then-write (Stories 2.6/2.14/2.17) -- baixo volume de uso concorrente não justifica lock/tratamento diferenciado hoje."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-bloqueio-de-concurso-ja-sorteado.md`
   summary: "`home` view chama `suggest_next_contest(game_name)` uma vez por Jogo em `GAMES_CONFIG` (6 queries) a cada carregamento da home por usuário autenticado -- N+1 numa página de alto tráfego, sem cache."
@@ -34,6 +36,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "O badge de notificação some completamente quando a contagem chega a 0 (por design, AC explícito) -- mas isso significa que, depois da Story 2.5 permitir marcar como lida, não sobra nenhum link permanente na navbar pra revisitar notificações já lidas/histórico."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.4. Não é um bug desta story (o AC pede exatamente esse comportamento -- "sem sino vazio, sem contador zerado"), mas fica sem solução até a Story 2.5 decidir se um link permanente de histórico faz sentido (ex. um item fixo "Notificações" na navbar, distinto do badge, ou uma seção na tela de perfil).
+  status: resolved
+  resolution: "Adicionado item fixo 'Notificações' em `lq-nav` (templates/base/base.html), ao lado de Gerar/Meus jogos/Estatísticas -- independente da contagem de não lidas, distinto do sino/badge (que continua condicional, sinalizando algo novo). A pedido explícito do Boss, 2026-09-28. Teste novo `test_notifications_nav_link_is_permanent_even_with_zero_unread`."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-exibicao-da-notificacao-ao-logar.md`
   summary: "O contador do badge não tem teto visual (ex. '99+') -- um usuário com centenas de notificações não lidas acumuladas veria um número de 3+ dígitos dentro do pill circular, arriscando quebrar o layout do cabeçalho."
@@ -58,6 +62,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-6-preferencia-de-canal-de-notificacao.md`
   summary: "Duas abas do mesmo usuário salvando `NotificationPreference` diferentes quase ao mesmo tempo -- 'last write wins' silencioso, sem aviso pra aba que 'perdeu'."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.6. Mesmo padrão de concorrência já adiado nas Stories 2.2 (bloqueio de concurso) e 2.5 (marcar como lida) -- resolver exigiria `select_for_update`/versionamento otimista, fora do escopo de uma tela de preferências simples com baixo volume de uso concorrente esperado.
+  status: accepted
+  resolution: "Risco aceito pelo Boss (2026-09-28) junto com os demais itens de concorrência check-then-write (Stories 2.2/2.14/2.17)."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-6-preferencia-de-canal-de-notificacao.md`
   summary: "Uma linha de `NotificationPreference` materializada por um GET incidental (visita à tela sem nunca clicar em salvar) não se distingue, olhando só a tabela, de uma escolha real e consciente do usuário -- não há `created_at`/`updated_at` nem flag de origem."
@@ -128,6 +134,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`
   summary: "`_block_if_duplicate_bet` (check-then-create) não tem `UniqueConstraint(user, game, contest)` no banco nem `transaction.atomic()`/`select_for_update` -- duas submissões quase simultâneas do mesmo usuário pro mesmo Jogo+Concurso ainda podem passar as duas pelo `.exists()` antes de qualquer uma criar, gerando 2 registros duplicados apesar da mensagem agora dizer 'não é possível'."
   evidence: Achado convergente pelo Blind Hunter e Edge Case Hunter na revisão da Story 2.14. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6 (mesmo padrão check-then-create, mesmo racional de baixo volume de uso concorrente esperado). Corrigir de verdade exigiria uma `UniqueConstraint`+migration e tratamento de `IntegrityError` nos 2 pontos de entrada -- mudança de schema, fora do escopo de patch trivial desta revisão.
+  status: accepted
+  resolution: "Risco aceito pelo Boss (2026-09-28), junto dos itens irmãos de concorrência já deferidos nas Stories 2.2/2.6/2.17 (check-then-write sem lock em `_block_if_duplicate_bet`, `NotificationPreference`, `regenerate_bet_view`) -- baixo volume de uso concorrente por usuário individual não justifica hoje a mudança de schema (`UniqueConstraint`+migration+tratamento de `IntegrityError`)."
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-bloqueio-real-de-concurso-duplicado.md`
   summary: "**RESOLVIDO pela Story 2.17 (2026-09-14).** `regenerate_bet_view` continua criando sem checagem um segundo `GeneratedBet` pro mesmo usuário+Jogo+Concurso do jogo original (pinado pelo teste existente `test_regenerating_bet_creates_new_record_and_redirects`, que espera `count() == 2`) -- inconsistente com a garantia nova de `create_bet_view`/`save_manual_bet_view` ('não é possível gerar outro pro mesmo Jogo+Concurso')."
@@ -153,9 +161,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-17-refazer-segue-regra-duplicata.md`
   summary: "`regenerate_bet_view` continua sendo um endpoint GET simples (sem `@require_POST`/CSRF form, sem confirmação client-side) -- antes da Story 2.17 um disparo acidental (duplo clique, replay de GET do histórico do navegador) só criava uma linha extra inofensiva; agora sobrescreve silenciosamente e sem chance de recuperação os números que o usuário tinha."
   evidence: Achado pelo Blind Hunter na revisão da Story 2.17. Pré-existente (o endpoint já era GET sem proteção antes desta story) -- a mudança desta story aumenta a gravidade da consequência de um disparo acidental, mas corrigir exigiria mudar o método HTTP/formulário no template e adicionar confirmação, fora do escopo de patch trivial (e fora do Given/When/Then da AC, que é só sobre não duplicar).
+  status: resolved
+  resolution: "`regenerate_bet_view` (apps/loterias_core/views.py) agora exige `@require_POST`; os 2 pontos de entrada (bet_detail.html, history.html) viraram `<form method=\"post\">` com CSRF, e um `confirm()` de navegador (mesmo padrão já usado por `.btn-delete`) avisa antes de submeter -- fechado a pedido explícito do Boss, 2026-09-28. Teste novo `test_regenerating_via_get_is_rejected` confirma 405 em GET sem tocar no jogo."
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-17-refazer-segue-regra-duplicata.md`
   summary: "Sem `transaction.atomic()`/`select_for_update` -- duas requisições `regenerate_bet` quase simultâneas pro mesmo bet podem ambas ler o registro antes de qualquer uma salvar, e o segundo `save()` sobrescreve silenciosamente o primeiro (um dos 2 conjuntos de números gerados se perde)."
   evidence: Achado pelo Edge Case Hunter na revisão da Story 2.17. Mesma categoria de risco de concorrência já deferida nas Stories 2.2/2.6/2.14 (check-then-write sem lock, baixo volume de uso concorrente esperado por usuário individual).
+  status: accepted
+  resolution: "Risco aceito pelo Boss (2026-09-28) junto com os demais itens de concorrência check-then-write (Stories 2.2/2.6/2.14). A confirmação client-side adicionada no item irmão acima (GET->POST) reduz bastante a chance prática de 2 disparos quase simultâneos, mas não elimina o risco de fato -- aceito assim mesmo."
 
 ## Deferred from: code review of spec-2-16-travar-concurso-admin (2026-09-14)
 

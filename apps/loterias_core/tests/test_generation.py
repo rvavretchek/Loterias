@@ -504,7 +504,7 @@ class RegenerateBetViewTests(TestCase):
         """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
         GeneratedBet pro mesmo Jogo+Concurso ("Refazer" troca os numeros do jogo)."""
         original_numbers = list(self.bet.numbers)
-        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        response = self.client.post(reverse('regenerate_bet', args=[self.bet.pk]))
         self.assertEqual(
             GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1
         )
@@ -512,6 +512,16 @@ class RegenerateBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
         self.assertNotEqual(self.bet.numbers, original_numbers)
         self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
+
+    def test_regenerating_via_get_is_rejected(self):
+        """Deferred-work item: endpoint era GET simples sem confirmacao/CSRF -- duplo clique ou
+        replay de GET do historico do navegador sobrescrevia o jogo sem chance de recuperacao.
+        Agora so aceita POST; GET deve devolver 405, nunca executar a regeneracao."""
+        original_numbers = list(self.bet.numbers)
+        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        self.assertEqual(response.status_code, 405)
+        self.bet.refresh_from_db()
+        self.assertEqual(self.bet.numbers, original_numbers)
 
     @patch('apps.loterias_core.views.generate_bet_with_relaxation')
     def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
@@ -524,7 +534,7 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
         )
         mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4], None)
-        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.clovers, [3, 4])
 
@@ -536,7 +546,7 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
             manual=True, result_checked=True, hits=3, prize=50, prize_description='quadra',
         )
-        self.client.get(reverse('regenerate_bet', args=[checked_bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[checked_bet.pk]))
         checked_bet.refresh_from_db()
         self.assertFalse(checked_bet.manual)
         self.assertFalse(checked_bet.result_checked)
@@ -549,7 +559,7 @@ class RegenerateBetViewTests(TestCase):
         contagem igual sozinha nao provaria que 'Refazer' nao trocou os numeros da mesma linha."""
         LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
         original_numbers = list(self.bet.numbers)
-        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[self.bet.pk]), follow=True)
         self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1)
         self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]), target_status_code=200)
         self.bet.refresh_from_db()
@@ -1169,7 +1179,7 @@ class RelaxationViewsTests(TestCase):
         bet = GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
-        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
         self.assertNotEqual(bet.numbers, original_numbers)
         msgs = [(m.level_tag, m.message) for m in response.context['messages']]
@@ -1215,7 +1225,7 @@ class ImpossibleRulesAcrossViewsTests(TestCase):
         bet = GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
-        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
         self.assertEqual(bet.numbers, original_numbers)
         self.assertContains(response, 'com as suas regras de geracao')
@@ -1248,7 +1258,7 @@ class RepeatedBetsAllowedTests(TestCase):
         GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='1', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
         bet = GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='2', numbers=[7, 8, 9, 10, 11, 12], clovers=[])
         with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=([1, 2, 3, 4, 5, 6], [], None)):
-            self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+            self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
 
@@ -1258,7 +1268,7 @@ class RepeatedBetsAllowedTests(TestCase):
             result_checked=True, hits=5, prize=Decimal('100'),
         )
         HitNotification.objects.create(bet=bet, won=True)
-        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
 
 

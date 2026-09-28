@@ -323,9 +323,12 @@ def check_bet_result_view(request, pk):
 
 
 @login_required
+@require_POST
 def regenerate_bet_view(request, pk):
     """Refaz um jogo existente gerando novos numeros -- substitui o GeneratedBet original in-place
-    (Story 2.17), nunca cria um segundo registro pro mesmo Jogo+Concurso."""
+    (Story 2.17), nunca cria um segundo registro pro mesmo Jogo+Concurso. So aceita POST (deferred-
+    work: antes era GET simples, sem CSRF nem confirmacao -- um duplo clique ou replay de GET do
+    historico do navegador sobrescrevia o jogo sem chance de recuperacao)."""
     original_bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
 
     blocked = _block_if_contest_already_drawn(request, original_bet.game, original_bet.contest, redirect_to='bet_detail', pk=pk)

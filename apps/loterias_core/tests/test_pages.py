@@ -414,6 +414,16 @@ class LottiqBaseTemplateTests(TestCase):
         self.assertContains(response, 'aria-current="page"')
         self.assertNotContains(response, 'navbar-brand')
 
+    def test_notifications_nav_link_is_permanent_even_with_zero_unread(self):
+        """Deferred-work item: o sino/badge some com 0 nao lidas (por design); sem cobertura
+        antes, nao sobrava link nenhum pra revisitar notificacoes ja lidas/historico -- agora
+        existe um item fixo 'Notificações' na navbar, independente da contagem."""
+        user = User.objects.create_user(email='navnotif@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, reverse('notifications'))
+        self.assertContains(response, 'Notificações')
+
     def test_static_files_exist(self):
         from django.contrib.staticfiles import finders
         for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
