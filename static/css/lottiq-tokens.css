@@ -13,7 +13,11 @@
   --border-default: var(--neutral-200); --border-strong: var(--neutral-300);
   --action-primary: var(--lq-teal); --action-primary-hover: var(--teal-700); --action-primary-ink: #fff;
   --status-waiting-bg: var(--teal-50); --status-waiting-fg: var(--teal-700);
-  --status-win-bg: var(--lq-amber); --status-win-fg: var(--amber-900);
+  --status-win-bg: var(--lq-amber); --status-win-fg: var(--amber-900); --status-win-border: var(--amber-200);
+  /* Superficie sutil de celebracao (card/banner inteiro) -- distinta de --status-win-bg (pro
+     badge/bolinha pequena, vibrante de proposito). Usar --status-win-bg num card inteiro fica
+     amarelo-vibrante demais no tema claro; esta variante fica sutil nos dois temas. */
+  --status-win-surface: #FFFDF8;
   --status-empty-bg: var(--neutral-100); --status-empty-fg: var(--neutral-600);
   --status-error-bg: var(--red-50); --status-error-fg: var(--red-700);
   --ball-bg: var(--lq-navy); --ball-fg: #fff;
@@ -46,7 +50,8 @@
   --border-default: var(--dark-border-soft); --border-strong: var(--dark-border);
   --action-primary: var(--dark-action); --action-primary-hover: var(--dark-action); --action-primary-ink: var(--dark-action-ink);
   --status-waiting-bg: var(--dark-teal-soft-bg); --status-waiting-fg: var(--dark-teal-soft-fg);
-  --status-win-bg: var(--dark-celebration-bg); --status-win-fg: var(--dark-celebration-fg);
+  --status-win-bg: var(--dark-celebration-bg); --status-win-fg: var(--dark-celebration-fg); --status-win-border: var(--dark-celebration-border);
+  --status-win-surface: var(--dark-celebration-bg);
   --status-empty-bg: var(--dark-surface-2); --status-empty-fg: var(--dark-text-muted);
   --status-error-bg: #2A1410; --status-error-fg: #E5876F;
   /* Bolinha de numero mais clara que o fundo escuro (achado do Boss, daltonico -- a marca navy
