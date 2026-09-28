@@ -188,6 +188,24 @@
                 btnConfigurarCookies.setAttribute('aria-expanded', String(!expanded));
             });
         }
+
+        // Achado na retrospectiva do Epic 6/7 (2026-09-27, item 28): o banner e position:fixed
+        // no rodape da viewport -- sem isso, ele sobrepoe o conteudo real do rodape (inclusive
+        // o proprio link "Preferencias de cookies") em qualquer pagina curta. Reage tanto ao
+        // "Configurar" abrindo/fechando (muda a altura do banner) quanto a mudanca de viewport
+        // (o texto quebra linha diferente em telas estreitas).
+        const cookieBanner = document.getElementById('aviso-cookies');
+        if (cookieBanner) {
+            const ajustarEspacoDoRodape = () => {
+                document.body.style.paddingBottom = cookieBanner.offsetHeight + 'px';
+            };
+            ajustarEspacoDoRodape();
+            if (window.ResizeObserver) {
+                new ResizeObserver(ajustarEspacoDoRodape).observe(cookieBanner);
+            } else {
+                window.addEventListener('resize', ajustarEspacoDoRodape);
+            }
+        }
     </script>
 
     {% block extra_js %}{% endblock %}

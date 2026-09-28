@@ -204,7 +204,13 @@ a:hover { color: var(--action-primary-hover); }
 .lq-ad-rail { display: none; position: absolute; top: 0; width: 160px; min-height: 600px; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-sunken); color: var(--text-faint); font: 500 13px var(--font-body); text-align: center; }
 .lq-ad-rail-left { left: 24px; }
 .lq-ad-rail-right { right: 24px; }
-@media (min-width: 1600px) { .lq-ad-rail { display: flex; } }
+@media (min-width: 1600px) {
+  .lq-ad-rail { display: flex; }
+  /* Achado na retrospectiva do Epic 6/7 (2026-09-27, item 28): sem isso, uma pagina curta
+     (login, cadastro, um formulario de campo unico) tinha as rails (600px, absolutas) vazando
+     pra baixo do rodape real -- .lq-main nao tinha altura minima correspondente. */
+  .lq-main { min-height: 624px; }
+}
 .lq-ad-zone .ms { font-size: 20px; }
 
 /* Banner de consentimento de cookies (Story 7.5) */

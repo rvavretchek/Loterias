@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -524,6 +524,13 @@ def save_cookie_consent_view(request):
     """Grava a decisao de cookies (Story 7.5/FR-33) num cookie proprio de 1a parte, ate pra
     visitante anonimo -- nao depende de login nem de sessao pra persistir a longo prazo."""
     choice = request.POST.get('choice')
+    # Achado na retrospectiva do Epic 6/7 (2026-09-27, item 27): antes disso, qualquer 'choice'
+    # ausente/desconhecido (JS quebrado, resubmissao de formulario) caia silenciosamente no
+    # branch "custom" e gravava uma decisao que o visitante nunca tomou de verdade -- 400 em vez
+    # de aceitar qualquer coisa.
+    if choice not in ('accept_all', 'reject_all', 'custom'):
+        return HttpResponseBadRequest('Escolha de cookies invalida.')
+
     if choice == 'accept_all':
         consent = {'necessary': True, 'analytics': True, 'marketing': True}
     elif choice == 'reject_all':
@@ -545,6 +552,7 @@ def save_cookie_consent_view(request):
     response.set_cookie(
         'lottiq_cookies', json.dumps(consent),
         max_age=COOKIE_CONSENT_MAX_AGE, samesite='Lax', httponly=True,
+        secure=request.is_secure(),
     )
     return response
 

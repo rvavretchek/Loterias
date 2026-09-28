@@ -504,6 +504,49 @@ class CookieConsentTests(TestCase):
         response = self.client.get(reverse('save_cookie_consent'))
         self.assertEqual(response.status_code, 405)
 
+    def test_missing_choice_is_rejected_not_silently_treated_as_custom(self):
+        """Fronteira (retrospectiva do Epic 6/7, 2026-09-27, item 27): antes desta correcao,
+        'choice' ausente caia no branch 'custom' e gravava uma decisao que o visitante nunca
+        tomou de verdade."""
+        response = self.client.post(reverse('save_cookie_consent'), {'next': reverse('home')})
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('lottiq_cookies', response.cookies)
+
+    def test_unknown_choice_value_is_rejected(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'algo-invalido', 'next': reverse('home')},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('lottiq_cookies', response.cookies)
+
+    def test_next_pointing_outside_the_site_is_ignored(self):
+        """Fronteira (retro, item 3): mesmo guard ja usado em mark_notification_read_view --
+        garante que save_cookie_consent_view nao virou um open-redirect."""
+        response = self.client.post(reverse('save_cookie_consent'), {
+            'choice': 'accept_all', 'next': 'https://evil.example/phishing',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_scheme_relative_next_is_ignored(self):
+        response = self.client.post(reverse('save_cookie_consent'), {
+            'choice': 'accept_all', 'next': '//evil.example/phishing',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_consent_cookie_is_secure_only_over_https(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')}, secure=True,
+        )
+        self.assertTrue(response.cookies['lottiq_cookies']['secure'])
+
+    def test_consent_cookie_is_not_secure_over_plain_http(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')}, secure=False,
+        )
+        self.assertFalse(response.cookies['lottiq_cookies']['secure'])
+
     def test_exempt_from_incomplete_profile_gate(self):
         user = User.objects.create_user(email='cookiegate@example.com', password='SenhaForte123')
         user.profile_completed = False

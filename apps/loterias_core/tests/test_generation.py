@@ -1232,6 +1232,11 @@ class AllPossibleRuleCombinationsTests(TestCase):
                 yield combo
 
     def _save_combo(self, game, combo):
+        # 'homogenea', nao 'totalmente_aleatoria' -- achado na retrospectiva do Epic 6/7
+        # (2026-09-27, item 22): bet_satisfies_rules/generate_bet_with_relaxation so checam
+        # distribution_type de verdade quando choice_value=='homogenea' ('totalmente_aleatoria'
+        # e no-op). Usar o valor no-op fazia ~metade das combinacoes serem duplicatas
+        # comportamentais sem a regra -- 'homogenea' exercita o branch real.
         GenerationRule.objects.filter(user=self.user, game=game).delete()
         for name in RULE_NAMES_BY_GAME[game]:
             enabled = name in combo
@@ -1239,12 +1244,11 @@ class AllPossibleRuleCombinationsTests(TestCase):
             GenerationRule.objects.create(
                 user=self.user, game=game, rule_name=name, enabled=enabled,
                 numeric_value=self.MODERATE_VALUE[name] if kind == 'int' else None,
-                choice_value='totalmente_aleatoria' if kind == 'choice' else None,
+                choice_value='homogenea' if kind == 'choice' else None,
             )
 
     def test_every_rule_subset_is_satisfied_or_relaxes_at_most_one(self):
         for game in GAMES_CONFIG:
-            active_names = RULE_NAMES_BY_GAME[game]
             for combo in self._rule_subsets(game):
                 self._save_combo(game, combo)
                 rules = list(GenerationRule.objects.filter(user=self.user, game=game, enabled=True))
