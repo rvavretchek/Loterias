@@ -1,3 +1,4 @@
+import logging
 import random
 import re
 from decimal import Decimal
@@ -9,6 +10,8 @@ from .models import (
     GeneratedBet, LotteryResult, PrizeTier, GenerationRule, GAME_GRID,
     GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL, normalize_contest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_numbers(numbers):
@@ -594,6 +597,12 @@ def fetch_cef_result(game, contest):
         clovers = [int(t) for t in data.get('trevosSorteados') or []]
         raw_tiers = data.get('listaRateioPremio') or []
         prizes = _extract_prize_tiers(raw_tiers)
+        if raw_tiers and not prizes:
+            logger.warning(
+                'fetch_cef_result: listaRateioPremio nao-vazia (%d faixa(s)) mas _extract_prize_tiers '
+                'nao extraiu nenhuma faixa pra %s/%s -- possivel mudanca de formato/wording na API da CEF.',
+                len(raw_tiers), game, contest,
+            )
 
         numbers_second_draw = []
         prizes_second_draw = {}

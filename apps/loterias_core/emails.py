@@ -23,9 +23,13 @@ def send_hit_notification_email(notification):
 
         subject = f'Você ganhou! {bet.game} - Concurso {bet.contest}'
         prize_value = number_format(bet.prize, decimal_pos=2)
+        numbers_line = f"Números: {', '.join(f'{n:02d}' for n in bet.numbers)}\n"
+        clovers_line = f"Trevos: {', '.join(f'{c:02d}' for c in bet.clovers)}\n" if bet.clovers else ''
         message = (
             f"Olá {user.first_name or user.email},\n\n"
             f"Seu jogo de {bet.game} (concurso {bet.contest}) foi premiado!\n\n"
+            f"{numbers_line}"
+            f"{clovers_line}"
             f"Acertos: {bet.hits}\n"
             f"Categoria: {get_prize_category_label(bet.prize_description)}\n"
             f"Valor do prêmio: R$ {prize_value}\n\n"
@@ -34,13 +38,19 @@ def send_hit_notification_email(notification):
             f"Equipe Lottiq"
         )
 
-        send_mail(
+        sent_count = send_mail(
             subject,
             message,
             settings.DEFAULT_FROM_EMAIL,
             [user.email],
             fail_silently=True,
         )
+        if not sent_count:
+            logger.warning(
+                'send_hit_notification_email: send_mail nao confirmou entrega pra notificacao %s '
+                '(usuario %s) -- HitNotification ja foi criada e nao sera reenviada automaticamente.',
+                notification.pk, user.pk,
+            )
     except Exception:
         logger.exception(
             'send_hit_notification_email: falha ao enviar e-mail pra notificacao %s', notification.pk

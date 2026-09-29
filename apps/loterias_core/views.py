@@ -462,7 +462,16 @@ def api_create_bet_view(request):
 @login_required
 def notifications_view(request):
     """Lista as notificacoes de acerto nao lidas do usuario, com os numeros batidos e o valor
-    do premio por item, e a acao de marcar como lida (Story 2.5)."""
+    do premio por item, e a acao de marcar como lida (Story 2.5). Deferred-work: antes, desativar
+    o aviso no site (`NotificationPreference.site_enabled=False`) so zerava o badge do cabecalho
+    (Story 2.6) -- a lista completa continuava renderizando normalmente pra quem acessasse
+    /notificacoes/ direto pela URL, inconsistente com o indicador. Mesmo `.filter().first()` fail-
+    soft do context_processor (preferencia ausente = default habilitado)."""
+    preference = NotificationPreference.objects.filter(user=request.user).first()
+    if preference is not None and not preference.site_enabled:
+        messages.info(request, 'Os avisos de acerto no site estao desativados nas suas preferencias.')
+        return render(request, 'loterias_core/notificacoes.html', {'notificacoes': []})
+
     notifications = HitNotification.objects.filter(
         bet__user=request.user, is_read=False
     ).select_related('bet')

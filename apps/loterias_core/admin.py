@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.core.exceptions import ValidationError
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -147,7 +147,20 @@ class LotteryResultAdmin(admin.ModelAdmin):
                     is_protected=Exists(protected_pairs)
                 ).filter(is_protected=False)
 
+                purged_pairs = list(candidates.values_list('game', 'contest'))
                 deleted_count, _ = candidates.delete()
+
+                # Deferred-work: `already_alerted` (CaptureFailureAlert) nunca era limpo quando o
+                # LotteryResult correspondente era purgado -- se o mesmo par voltasse a falhar de
+                # captura depois, o alerta novo ficava silenciosamente suprimido pelo dedup antigo.
+                # Pares exatos via Q() OR (nunca game__in/contest__in cruzados) -- um cartesiano
+                # aqui apagaria por engano o alerta de um par que nao foi purgado.
+                if purged_pairs:
+                    pairs_query = Q()
+                    for game, contest in purged_pairs:
+                        pairs_query |= Q(game=game, contest=contest)
+                    CaptureFailureAlert.objects.filter(pairs_query).delete()
+
                 self.message_user(
                     request,
                     f'{deleted_count} resultado(s) oficial(is) purgado(s) com sucesso.',

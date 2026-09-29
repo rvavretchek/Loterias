@@ -340,6 +340,23 @@ class HitNotificationEmailTests(TestCase):
                 self.fail('send_hit_notification_email nao deveria propagar excecao de formatacao')
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_logs_warning_when_send_mail_returns_zero_sent(self):
+        """Deferred-work item (achado F5, retro do Epic 2): send_mail com fail_silently=True
+        engole falha transiente de SMTP sem deixar rastro -- agora pelo menos loga um warning,
+        mesmo sem reenviar (HitNotification ja foi criada antes do envio)."""
+        bet = self._bet_with_prize('45e')
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        with patch('apps.loterias_core.emails.send_mail', return_value=0):
+            with self.assertLogs('apps.loterias_core.emails', level='WARNING') as logs:
+                send_hit_notification_email(notification)
+        self.assertTrue(any('nao confirmou entrega' in msg for msg in logs.output))
+
+    def test_no_warning_logged_when_send_mail_succeeds(self):
+        bet = self._bet_with_prize('45f')
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        with self.assertNoLogs('apps.loterias_core.emails', level='WARNING'):
+            send_hit_notification_email(notification)
+
     def test_does_not_send_when_user_email_is_empty(self):
         bet = self._bet_with_prize('45d')
         self.user.email = ''
@@ -362,6 +379,31 @@ class HitNotificationEmailTests(TestCase):
         self.assertIn('Acertos: 5', sent.body)
         self.assertIn('Categoria: Quina', sent.body)
         self.assertIn('5000,00', sent.body)
+        self.assertIn('Números: 01, 02, 03, 04, 05', sent.body)
+
+    def test_email_body_includes_clovers_when_game_has_them(self):
+        """Deferred-work item: corpo do e-mail nao incluia os numeros da aposta -- +Milionaria
+        tambem tem trevos, que precisam aparecer junto (nao so nos jogos sem trevo)."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Milionaria', contest='47b',
+            numbers=[1, 2, 3, 4, 5, 6], clovers=[2, 4], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Milionaria', contest='47b', numbers=[1, 2, 3, 4, 5, 6], clovers=[2, 4],
+            prizes={'6': {'value': 'R$ 5.000,00', 'winners': 1}},
+        )
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        sent = mail.outbox[0]
+        self.assertIn('Números: 01, 02, 03, 04, 05, 06', sent.body)
+        self.assertIn('Trevos: 02, 04', sent.body)
+
+    def test_email_body_omits_clovers_line_for_game_without_clovers(self):
+        self._bet_with_prize('47c')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        sent = mail.outbox[0]
+        self.assertNotIn('Trevos:', sent.body)
 
     def test_multiple_winners_in_the_same_run_each_get_their_own_email(self):
         other_user = User.objects.create_user(email='outroemail@example.com', password='SenhaForte123')
@@ -526,6 +568,45 @@ class NotificationsViewTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse('notifications'))
         self.assertRedirects(response, f"/accounts/login/?next={reverse('notifications')}")
+
+    def test_site_disabled_preference_hides_the_full_list_too(self):
+        """Deferred-work item: antes, so o badge do cabecalho respeitava site_enabled=False -- a
+        lista completa em /notificacoes/ continuava mostrando tudo pra quem acessasse a URL direto."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='9',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        HitNotification.objects.create(bet=bet, won=True)
+        NotificationPreference.objects.create(user=self.user, site_enabled=False, email_enabled=True)
+
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['notificacoes']), [])
+        self.assertNotContains(response, 'Concurso 9')
+
+    def test_site_enabled_preference_still_shows_the_list(self):
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='10',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=False)
+
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(list(response.context['notificacoes']), [notification])
+
+    def test_no_preference_row_defaults_to_showing_the_list(self):
+        """Sem nenhuma linha de NotificationPreference (usuario nunca visitou a tela de
+        preferencias), o default e mostrar -- mesmo fail-soft do context_processor do badge."""
+        bet = GeneratedBet.objects.create(
+            user=self.user, game='Quina', contest='11',
+            numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
+        )
+        notification = HitNotification.objects.create(bet=bet, won=True)
+        self.assertFalse(NotificationPreference.objects.filter(user=self.user).exists())
+
+        response = self.client.get(reverse('notifications'))
+        self.assertEqual(list(response.context['notificacoes']), [notification])
 
     def test_lists_only_current_users_unread_notifications(self):
         own_bet = GeneratedBet.objects.create(
