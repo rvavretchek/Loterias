@@ -1157,7 +1157,15 @@ class UpdateMonthlyPrizeValuesCommandTests(TestCase):
         mock_job.assert_called_once_with()
 
 
+@override_settings(OPERATOR_ALERT_EMAIL='ops-alert@example.com')
 class CaptureFailureAlertTests(TestCase):
+    """`OPERATOR_ALERT_EMAIL` fixado aqui (nunca lido da env real): sem isso, essa classe inteira
+    dependia silenciosamente de um valor no `.env` local -- passava sempre no Windows deste
+    workstation (que tem a variavel setada), mas falhava em qualquer ambiente limpo sem ela,
+    como o container do gate de CI (achado real no primeiro run do gate, 2026-09-29). Os testes
+    que exercitam especificamente o caso "email nao configurado" continuam sobrescrevendo pra ''
+    no proprio metodo, o que tem precedencia normal do Django sobre este override de classe."""
+
     def setUp(self):
         self.user = User.objects.create_user(email='alertjob@example.com', password='SenhaForte123')
         mail.outbox.clear()
