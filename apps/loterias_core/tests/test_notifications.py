@@ -366,7 +366,7 @@ class HitNotificationEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
 
     def test_email_content_includes_game_contest_hits_category_and_formatted_prize(self):
-        self._bet_with_prize('47')
+        bet = self._bet_with_prize('47')
         NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
         self._run_job()
         self.assertEqual(len(mail.outbox), 1)
@@ -380,6 +380,19 @@ class HitNotificationEmailTests(TestCase):
         self.assertIn('Categoria: Quina', sent.body)
         self.assertIn('5000,00', sent.body)
         self.assertIn('Números: 01, 02, 03, 04, 05', sent.body)
+        self.assertIn(f'http://www.loterias.internal/jogo/{bet.pk}/', sent.body)
+
+    @override_settings(SITE_URL='https://loterias.example.com')
+    def test_email_link_uses_configured_site_url(self):
+        """Deferred-work item: corpo do e-mail nao tinha link pro detalhe do jogo -- o link
+        precisa respeitar SITE_URL (env), nunca um dominio hardcoded, pra funcionar em qualquer
+        ambiente (homologacao hoje, producao no futuro)."""
+        bet = self._bet_with_prize('47d')
+        NotificationPreference.objects.create(user=self.user, site_enabled=True, email_enabled=True)
+        self._run_job()
+        sent = mail.outbox[0]
+        self.assertIn(f'https://loterias.example.com/jogo/{bet.pk}/', sent.body)
+        self.assertNotIn('loterias.internal', sent.body)
 
     def test_email_body_includes_clovers_when_game_has_them(self):
         """Deferred-work item: corpo do e-mail nao incluia os numeros da aposta -- +Milionaria

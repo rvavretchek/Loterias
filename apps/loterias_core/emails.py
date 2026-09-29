@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.urls import reverse
 from django.utils.formats import number_format
 
 from .models import CAPTURE_FAILURE_ALERT_THRESHOLD_DAYS
@@ -25,6 +26,7 @@ def send_hit_notification_email(notification):
         prize_value = number_format(bet.prize, decimal_pos=2)
         numbers_line = f"Números: {', '.join(f'{n:02d}' for n in bet.numbers)}\n"
         clovers_line = f"Trevos: {', '.join(f'{c:02d}' for c in bet.clovers)}\n" if bet.clovers else ''
+        bet_url = f"{settings.SITE_URL}{reverse('bet_detail', args=[bet.pk])}"
         message = (
             f"Olá {user.first_name or user.email},\n\n"
             f"Seu jogo de {bet.game} (concurso {bet.contest}) foi premiado!\n\n"
@@ -33,7 +35,7 @@ def send_hit_notification_email(notification):
             f"Acertos: {bet.hits}\n"
             f"Categoria: {get_prize_category_label(bet.prize_description)}\n"
             f"Valor do prêmio: R$ {prize_value}\n\n"
-            f"Acesse o site para ver os detalhes completos.\n\n"
+            f"Veja os detalhes completos em: {bet_url}\n\n"
             f"Atenciosamente,\n"
             f"Equipe Lottiq"
         )
