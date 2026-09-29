@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -323,9 +323,12 @@ def check_bet_result_view(request, pk):
 
 
 @login_required
+@require_POST
 def regenerate_bet_view(request, pk):
     """Refaz um jogo existente gerando novos numeros -- substitui o GeneratedBet original in-place
-    (Story 2.17), nunca cria um segundo registro pro mesmo Jogo+Concurso."""
+    (Story 2.17), nunca cria um segundo registro pro mesmo Jogo+Concurso. So aceita POST (deferred-
+    work: antes era GET simples, sem CSRF nem confirmacao -- um duplo clique ou replay de GET do
+    historico do navegador sobrescrevia o jogo sem chance de recuperacao)."""
     original_bet = get_object_or_404(GeneratedBet, pk=pk, user=request.user)
 
     blocked = _block_if_contest_already_drawn(request, original_bet.game, original_bet.contest, redirect_to='bet_detail', pk=pk)
@@ -410,9 +413,21 @@ def api_create_bet_view(request):
         return JsonResponse({'error': 'Metodo nao permitido'}, status=405)
 
     import json
-    data = json.loads(request.body)
+    # Item 26 do deferred-work.md (achado na Story 2.13, corrigido 2026-09-28): payload JSON
+    # malformado ou com 'concurso' num tipo inesperado (numero/objeto em vez de string) devolvia
+    # 500 nao tratado -- json.loads/`.strip()` levantam JSONDecodeError/AttributeError direto.
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Corpo da requisicao nao e um JSON valido'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'Corpo da requisicao precisa ser um objeto JSON'}, status=400)
+
     selected_game = data.get('jogo')
-    contest = data.get('concurso', '').strip()
+    contest = data.get('concurso', '')
+    if not isinstance(contest, str):
+        return JsonResponse({'error': 'Numero de concurso invalido'}, status=400)
+    contest = contest.strip()
 
     if not selected_game or not contest:
         return JsonResponse({'error': 'Dados incompletos'}, status=400)
@@ -447,7 +462,16 @@ def api_create_bet_view(request):
 @login_required
 def notifications_view(request):
     """Lista as notificacoes de acerto nao lidas do usuario, com os numeros batidos e o valor
-    do premio por item, e a acao de marcar como lida (Story 2.5)."""
+    do premio por item, e a acao de marcar como lida (Story 2.5). Deferred-work: antes, desativar
+    o aviso no site (`NotificationPreference.site_enabled=False`) so zerava o badge do cabecalho
+    (Story 2.6) -- a lista completa continuava renderizando normalmente pra quem acessasse
+    /notificacoes/ direto pela URL, inconsistente com o indicador. Mesmo `.filter().first()` fail-
+    soft do context_processor (preferencia ausente = default habilitado)."""
+    preference = NotificationPreference.objects.filter(user=request.user).first()
+    if preference is not None and not preference.site_enabled:
+        messages.info(request, 'Os avisos de acerto no site estao desativados nas suas preferencias.')
+        return render(request, 'loterias_core/notificacoes.html', {'notificacoes': []})
+
     notifications = HitNotification.objects.filter(
         bet__user=request.user, is_read=False
     ).select_related('bet')
@@ -524,6 +548,13 @@ def save_cookie_consent_view(request):
     """Grava a decisao de cookies (Story 7.5/FR-33) num cookie proprio de 1a parte, ate pra
     visitante anonimo -- nao depende de login nem de sessao pra persistir a longo prazo."""
     choice = request.POST.get('choice')
+    # Achado na retrospectiva do Epic 6/7 (2026-09-27, item 27): antes disso, qualquer 'choice'
+    # ausente/desconhecido (JS quebrado, resubmissao de formulario) caia silenciosamente no
+    # branch "custom" e gravava uma decisao que o visitante nunca tomou de verdade -- 400 em vez
+    # de aceitar qualquer coisa.
+    if choice not in ('accept_all', 'reject_all', 'custom'):
+        return HttpResponseBadRequest('Escolha de cookies invalida.')
+
     if choice == 'accept_all':
         consent = {'necessary': True, 'analytics': True, 'marketing': True}
     elif choice == 'reject_all':
@@ -545,6 +576,7 @@ def save_cookie_consent_view(request):
     response.set_cookie(
         'lottiq_cookies', json.dumps(consent),
         max_age=COOKIE_CONSENT_MAX_AGE, samesite='Lax', httponly=True,
+        secure=request.is_secure(),
     )
     return response
 
@@ -572,6 +604,14 @@ def notification_preferences_view(request):
 _GRID_HELP = {
     'limit_row_count': 'Considera as linhas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
     'limit_column_count': 'Considera as colunas do volante oficial da {game} na Caixa ({rows} linhas x {cols} colunas).',
+}
+
+# Detalhe extra pra distribution_type quando o comportamento de 'Homogênea' difere do padrão
+# genérico (1 número por faixa) -- achado na retrospectiva do Epic 6/7 (2026-09-27, item 29):
+# a Lotofácil busca 3 números por linha do volante, não 1 por faixa, e a explicação genérica
+# nunca mencionava isso.
+_DISTRIBUTION_TYPE_GAME_DETAIL = {
+    'Lotofacil': 'Na Lotofácil especificamente, Homogênea busca 3 números por linha do volante oficial, não 1 por faixa como nos demais jogos.',
 }
 
 
@@ -607,12 +647,15 @@ def _build_rule_rows(game, saved_by_name, posted=None):
         grid_help = _GRID_HELP[rule_name].format(
             game=config['name'], rows=GAME_GRID[game][0], cols=GAME_GRID[game][1],
         ) if rule_name in _GRID_HELP else ''
+        if rule_name == 'distribution_type':
+            grid_help = _DISTRIBUTION_TYPE_GAME_DETAIL.get(game, '')
         row = {
             'rule_name': rule_name,
             'label': definition['label'],
             'kind': kind,
             # Story 7.2 (FR-30): explicação em linguagem comum sempre presente; o detalhe do
-            # volante (linha/coluna) se soma a ela, não a substitui.
+            # volante (linha/coluna) ou da variante por Jogo (distribution_type) se soma a
+            # ela, não a substitui.
             'help': f"{definition['explanation']} {grid_help}".strip() if grid_help else definition['explanation'],
             'enabled': bool(saved and saved.enabled),
             'value': stored_value,

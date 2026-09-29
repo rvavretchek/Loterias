@@ -107,7 +107,7 @@ Se o passo 1 mostrar uma contagem de linhas muito menor que a esperada, ou um `D
 
 **Postura de dados (atualizada 2026-09-23, Story 6.8; declaracao formal em 2026-09-27):** o Boss trata a homologacao como producao pra fins de preservacao de dado — mesmo sem usuario real ainda, o volume `loterias_data` **nao deve mais ser tratado como descartavel**. Em 2026-09-27, apos o deploy real do PR #12 confirmado funcionando nos dois hosts, o Boss declarou formalmente: **este ambiente (`ubt-host01`, e por extensao o `ubt-host02` provisionado em 2026-09-27) e homologacao de verdade, tratado como producao daqui pra frente, sem excecao**. A nota antiga ("enquanto lab de teste, pode ser recriado livremente") nunca mais vale; o procedimento abaixo e obrigatorio sempre que uma migration alterar schema, em qualquer merge futuro pra `main`.
 
-**Pendencia conhecida (achado na retrospectiva do Epic 6, 2026-09-27):** o procedimento abaixo documenta backup (passo 1) e validacao contra uma copia (passo 2), mas **nunca documentou o restore de verdade** -- como usar o backup do passo 1 se o `migrate` real (passo 3) falhar ou corromper dado. Com a declaracao formal acima, fechar essa lacuna passa a ser prioridade antes do proximo merge que altere schema.
+**Atencao com segredos dummy (achado na retrospectiva do Epic 6, 2026-09-27):** `SECRET_KEY`/`PASSWORD_PEPPER` dummy no passo 2 valem so pra migration de schema puro (o `migrate` em si nao le/escreve senha nenhuma). Uma migration futura que toque hash de senha ou qualquer coisa derivada do pepper (ex. uma `RunPython` que re-hasheie senhas) **nao pode** ser validada com esses valores dummy -- precisa rodar contra os valores reais do `.env` do host, senao o resultado da validacao nao significa nada.
 
 **Drill real (2026-09-23):** o procedimento abaixo foi exercitado de ponta a ponta pela primeira vez contra o volume real do lab (sem nenhuma migration pendente pra aplicar de verdade — so validou o mecanismo). Achados que corrigiram o procedimento original:
 
@@ -134,6 +134,9 @@ docker run --rm -v /tmp:/hosttmp -e DJANGO_SETTINGS_MODULE=loterias.settings -e 
   -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
   -e DATABASE_NAME=/hosttmp/db-validacao.sqlite3 \
   loterias-loterias-web:latest python manage.py migrate
+# PARE AQUI se o comando acima sair com erro (retcode != 0) -- NAO prossiga pro passo 3. Uma
+# migration que falha contra a copia vai falhar (ou pior, corromper) contra o volume real do
+# mesmo jeito. Investigue e corrija a migration antes de tentar de novo, desde o passo 1.
 docker run --rm -v /tmp:/hosttmp -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
   -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
   -e DATABASE_NAME=/hosttmp/db-validacao.sqlite3 \
@@ -143,8 +146,55 @@ print('contagem DEPOIS:', GeneratedBet.objects.count())  # deve bater com ANTES
 for b in GeneratedBet.objects.all()[:5]: print(b.pk, b.game, b.contest, b.numbers)  # amostra manual"
 rm /tmp/db-validacao.sqlite3  # limpeza -- so o backup em /opt/loterias-backups fica
 
-# 3. Só depois de validar na cópia, aplicar o migrate no volume real (container já rodando)
+# 3. So depois de validar na copia com sucesso: parar o cron (evita escrita concorrente durante
+#    o migrate real) e tirar um backup FRESCO -- o do passo 1 pode estar desatualizado por
+#    escritas que aconteceram durante a validacao do passo 2 (que pode levar um tempo).
+docker stop loterias-cron
+docker run --rm -v loterias_data:/data -v /opt/loterias-backups:/backup \
+  alpine cp /data/db.sqlite3 /backup/db.sqlite3.$(date +%Y%m%d-%H%M%S)-pre-migrate
+
+# 4. Aplicar o migrate no volume real (container ja rodando)
 docker exec loterias-web python manage.py migrate
+# Se este comando falhar (retcode != 0): NAO rode collectstatic/reinicie nada ainda -- va
+# direto pro "Restore" abaixo usando o backup -pre-migrate tirado no passo 3.
+
+# 5. Confirmar que a aplicacao esta respondendo certo, so entao religar o cron
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/  # dentro do host, ou via loterias.internal
+docker start loterias-cron
 ```
 
 `DATABASE_NAME` e a variavel de ambiente que `loterias/settings/base.py` le pra `DATABASES['default']['NAME']` -- apontando ela pra copia temporaria, o passo 2 nunca escreve no arquivo de producao real.
+
+### Restore (se o passo 4 falhar ou o app nao responder certo depois)
+
+**Nunca documentado antes de 2026-09-27 (achado na retrospectiva do Epic 6)** -- o procedimento existia so ate "validar a copia", sem nunca dizer o que fazer se o `migrate` real desse errado mesmo assim. Com o lab agora declarado homologacao/producao pra fins de dado, isso e obrigatorio ter pronto, nao so documentado:
+
+```bash
+# 1. Parar os dois containers que escrevem no volume -- ninguem mais toca no arquivo
+docker stop loterias-web loterias-cron
+
+# 2. Escolher o backup certo -- o -pre-migrate do passo 3 acima e o mais recente antes do
+#    migrate que deu problema. Confira a lista antes de escolher:
+ls -la /opt/loterias-backups/
+
+# 3. Sobrescrever o db.sqlite3 do volume real com o backup escolhido
+docker run --rm -v loterias_data:/data -v /opt/loterias-backups:/backup \
+  alpine cp /backup/db.sqlite3.<timestamp-do-backup-bom> /data/db.sqlite3
+
+# 4. Confirmar que a contagem bate com o que o backup deveria ter, ANTES de religar os
+#    containers -- mesma tecnica do passo 2 da validacao, mas apontando pro arquivo restaurado
+#    dentro do proprio volume (nao numa copia temporaria desta vez)
+docker run --rm -v loterias_data:/data -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+  -e SECRET_KEY=drill-only-not-real -e PASSWORD_PEPPER=drill-only-not-real \
+  -e DATABASE_NAME=/data/db.sqlite3 \
+  loterias-loterias-web:latest python manage.py shell -c "
+from apps.loterias_core.models import GeneratedBet
+print('contagem apos restore:', GeneratedBet.objects.count())"
+
+# 5. So depois de confirmar a contagem, religar os containers -- eles vao rodar 'migrate'
+#    de novo no entrypoint (ver Dockerfile CMD), mas contra o schema ANTIGO (pre-migration
+#    problematica) restaurado, entao isso e um no-op seguro ate a migration ser corrigida
+docker start loterias-web loterias-cron
+```
+
+**Nunca pule o passo 4 (confirmar a contagem antes de religar)** -- religar os containers contra um arquivo restaurado errado (ex. um backup de timestamp trocado) faria o app rodar normalmente mas silenciosamente contra dado desatualizado ou incompleto, sem nenhum erro visivel pra avisar.

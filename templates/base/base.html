@@ -34,6 +34,9 @@
                 <a href="{% url 'statistics' %}" class="{% if request.resolver_match.url_name == 'statistics' %}is-active{% endif %}" {% if request.resolver_match.url_name == 'statistics' %}aria-current="page"{% endif %}>
                     <span class="ms{% if request.resolver_match.url_name == 'statistics' %} msf{% endif %}" aria-hidden="true">bar_chart</span><span class="lq-nav-label">Estatísticas</span>
                 </a>
+                <a href="{% url 'notifications' %}" class="{% if request.resolver_match.url_name == 'notifications' %}is-active{% endif %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %}>
+                    <span class="ms{% if request.resolver_match.url_name == 'notifications' %} msf{% endif %}" aria-hidden="true">notifications</span><span class="lq-nav-label">Notificações</span>
+                </a>
             </nav>
             {% endif %}
 
@@ -47,7 +50,7 @@
                 <a class="lq-bell" href="{% url 'notifications' %}" title="Avisos de acerto"
                    aria-label="{{ unread_notifications_count }} aviso(s) de acerto não lido(s)">
                     <span class="ms msf" aria-hidden="true">notifications</span>
-                    <span class="lq-bell-count{% if has_unread_won_notification %} is-win{% endif %}" aria-hidden="true">{{ unread_notifications_count }}</span>
+                    <span class="lq-bell-count{% if has_unread_won_notification %} is-win{% endif %}" aria-hidden="true">{% if unread_notifications_count > 99 %}99+{% else %}{{ unread_notifications_count }}{% endif %}</span>
                 </a>
                 {% endif %}
                 <details class="lq-menu">
@@ -179,6 +182,14 @@
             });
         });
 
+        document.querySelectorAll('.btn-regenerate').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                if (!confirm('Gerar novamente vai substituir os números deste jogo -- os atuais serão perdidos. Continuar?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+
         const btnConfigurarCookies = document.getElementById('btn-configurar-cookies');
         if (btnConfigurarCookies) {
             btnConfigurarCookies.addEventListener('click', () => {
@@ -187,6 +198,24 @@
                 detalhes.hidden = expanded;
                 btnConfigurarCookies.setAttribute('aria-expanded', String(!expanded));
             });
+        }
+
+        // Achado na retrospectiva do Epic 6/7 (2026-09-27, item 28): o banner e position:fixed
+        // no rodape da viewport -- sem isso, ele sobrepoe o conteudo real do rodape (inclusive
+        // o proprio link "Preferencias de cookies") em qualquer pagina curta. Reage tanto ao
+        // "Configurar" abrindo/fechando (muda a altura do banner) quanto a mudanca de viewport
+        // (o texto quebra linha diferente em telas estreitas).
+        const cookieBanner = document.getElementById('aviso-cookies');
+        if (cookieBanner) {
+            const ajustarEspacoDoRodape = () => {
+                document.body.style.paddingBottom = cookieBanner.offsetHeight + 'px';
+            };
+            ajustarEspacoDoRodape();
+            if (window.ResizeObserver) {
+                new ResizeObserver(ajustarEspacoDoRodape).observe(cookieBanner);
+            } else {
+                window.addEventListener('resize', ajustarEspacoDoRodape);
+            }
         }
     </script>
 

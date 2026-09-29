@@ -1,3 +1,4 @@
+import logging
 import random
 import re
 from decimal import Decimal
@@ -9,6 +10,8 @@ from .models import (
     GeneratedBet, LotteryResult, PrizeTier, GenerationRule, GAME_GRID,
     GAMES_CONFIG, GAMES_WITH_SEQUENCE_RULE, MIN_SEQUENCE_INTERVAL, normalize_contest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_numbers(numbers):
@@ -354,6 +357,24 @@ GAME_PRIZE_CATEGORY = {
     'Dupla-Sena': 'dupla_sena',
 }
 
+# Rotulo de exibicao por chave de GAME_PRIZE_CATEGORY -- usado sempre que a categoria aparece pro
+# usuario (ex. corpo do e-mail de acerto). GeneratedBet.prize_description continua guardando a
+# chave crua (nao afeta dado ja persistido); so a exibicao passa por aqui.
+PRIZE_CATEGORY_LABELS = {
+    'sena': 'Sena',
+    'quina': 'Quina',
+    'lotofacil': 'Lotofácil',
+    'lotomania': 'Lotomania',
+    'milionaria': '+Milionária',
+    'dupla_sena': 'Dupla-Sena',
+}
+
+
+def get_prize_category_label(category):
+    """Traduz a chave crua de categoria (GAME_PRIZE_CATEGORY) pro rotulo de exibicao. Categoria
+    desconhecida cai de volta pra ela mesma, sem quebrar a exibicao."""
+    return PRIZE_CATEGORY_LABELS.get(category, category)
+
 LEGACY_MIN_HITS = {
     'Mega-sena': 4,
     'Quina': 3,
@@ -576,6 +597,12 @@ def fetch_cef_result(game, contest):
         clovers = [int(t) for t in data.get('trevosSorteados') or []]
         raw_tiers = data.get('listaRateioPremio') or []
         prizes = _extract_prize_tiers(raw_tiers)
+        if raw_tiers and not prizes:
+            logger.warning(
+                'fetch_cef_result: listaRateioPremio nao-vazia (%d faixa(s)) mas _extract_prize_tiers '
+                'nao extraiu nenhuma faixa pra %s/%s -- possivel mudanca de formato/wording na API da CEF.',
+                len(raw_tiers), game, contest,
+            )
 
         numbers_second_draw = []
         prizes_second_draw = {}

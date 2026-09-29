@@ -39,6 +39,8 @@ from apps.loterias_core.utils import (
     apply_prize_to_bet,
     normalize_contest,
     bet_satisfies_rules,
+    get_prize_category_label,
+    GAME_PRIZE_CATEGORY,
 )
 
 
@@ -286,6 +288,32 @@ class FetchCefResultTests(TestCase):
         self.assertEqual(result['prizes']['6']['value'], 'R$ 0,00')
         self.assertEqual(result['prizes']['5']['value'], 'R$ 5.000,00')
         self.assertEqual(result['prizes']['5']['winners'], 10)
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_logs_warning_when_prize_tiers_present_but_extraction_yields_nothing(self, mock_get):
+        """Deferred-work item: mudanca de wording/formato da API oficial fazia a extracao de
+        premio falhar em silencio (dict vazio), sem log nem alerta. `descricaoFaixa` num formato
+        que o PRIZE_TIER_PATTERN nao reconhece simula essa mudanca."""
+        self._mock_response(mock_get, {
+            'numero': 2500,
+            'listaDezenas': ['04', '08', '15', '16', '23', '42'],
+            'listaRateioPremio': [
+                {'descricaoFaixa': 'formato novo e desconhecido', 'faixa': 1, 'numeroDeGanhadores': 0, 'valorPremio': 0.0},
+            ],
+        })
+        with self.assertLogs('apps.loterias_core.utils', level='WARNING') as logs:
+            result = fetch_cef_result('Mega-sena', '2500')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['prizes'], {})
+        self.assertTrue(any('possivel mudanca de formato' in msg for msg in logs.output))
+
+    @patch('apps.loterias_core.utils.requests.get')
+    def test_no_warning_logged_when_prize_tiers_list_is_genuinely_empty(self, mock_get):
+        self._mock_response(mock_get, {
+            'numero': 2500, 'listaDezenas': ['04', '08', '15', '16', '23', '42'], 'listaRateioPremio': [],
+        })
+        with self.assertNoLogs('apps.loterias_core.utils', level='WARNING'):
+            fetch_cef_result('Mega-sena', '2500')
 
     @patch('apps.loterias_core.utils.requests.get')
     def test_calls_official_api_with_correct_slug_and_contest(self, mock_get):
@@ -823,6 +851,26 @@ class ApplyPrizeToBetTests(TestCase):
         self.assertEqual(bet.hits, 3)
         self.assertEqual(bet.prize, Decimal('50.00'))
         self.assertEqual(bet.prize_description, '3')
+
+
+class GetPrizeCategoryLabelTests(TestCase):
+    """Deferred-work item #17: bet.prize_description expunha a chave crua de
+    GAME_PRIZE_CATEGORY (ex. 'dupla_sena') direto no e-mail de acerto -- get_prize_category_label
+    traduz pro rotulo de exibicao."""
+
+    def test_known_category_returns_friendly_label(self):
+        self.assertEqual(get_prize_category_label('dupla_sena'), 'Dupla-Sena')
+        self.assertEqual(get_prize_category_label('milionaria'), '+Milionária')
+
+    def test_unknown_category_falls_back_to_itself(self):
+        self.assertEqual(get_prize_category_label('categoria_inexistente'), 'categoria_inexistente')
+
+    def test_empty_string_falls_back_to_itself(self):
+        self.assertEqual(get_prize_category_label(''), '')
+
+    def test_all_game_prize_categories_have_a_label(self):
+        for category in GAME_PRIZE_CATEGORY.values():
+            self.assertNotEqual(get_prize_category_label(category), category)
 
 
 class UpdateMonthlyPrizeValuesTests(TestCase):
@@ -1513,6 +1561,39 @@ class LotteryResultPurgeAdminTests(TestCase):
         self.assertFalse(LotteryResult.objects.filter(pk=old.pk).exists())
         self.assertTrue(GeneratedBet.objects.filter(pk=bet.pk).exists())
         self.assertTrue(PrizeTier.objects.filter(pk=tier.pk).exists())
+
+    def test_purge_clears_capturefailurealert_for_the_purged_pair(self):
+        """Deferred-work item (achado F6, retro do Epic 2): purgar um LotteryResult sem limpar o
+        CaptureFailureAlert do mesmo par deixava um alerta futuro de falha de captura pra aquele
+        par silenciosamente suprimido pelo dedup antigo, mesmo apos a purga."""
+        old = self._create_result(game='Quina', contest='1', days_old=400)
+        CaptureFailureAlert.objects.create(game='Quina', contest='1')
+        cutoff = timezone.localdate() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(CaptureFailureAlert.objects.filter(game='Quina', contest='1').exists())
+
+    def test_purge_does_not_clear_capturefailurealert_of_an_unrelated_pair(self):
+        """Fronteira: 2 pares purgados na mesma execucao (Quina/1, Mega-sena/2) nao podem cruzar
+        game/contest via game__in/contest__in (cartesiano) e limpar por engano o alerta de um par
+        que nunca existiu como LotteryResult nenhum (Quina/2, cruza o game do 1o par com o
+        contest do 2o) -- so pares exatos (Q() OR) sao afetados."""
+        old_quina = self._create_result(game='Quina', contest='1', days_old=400)
+        old_mega = self._create_result(game='Mega-sena', contest='2', days_old=400)
+        CaptureFailureAlert.objects.create(game='Quina', contest='2')  # par cruzado, nunca purgado
+        cutoff = timezone.localdate() - timedelta(days=1)
+        self.client.post(self.changelist_url, {
+            'action': 'purge_until_date',
+            '_selected_action': [old_quina.pk, old_mega.pk],
+            'apply': 'apply',
+            'cutoff_date': cutoff.isoformat(),
+        })
+        self.assertFalse(LotteryResult.objects.filter(pk__in=[old_quina.pk, old_mega.pk]).exists())
+        self.assertTrue(CaptureFailureAlert.objects.filter(game='Quina', contest='2').exists())
 
     def test_no_purge_happens_without_running_the_action(self):
         """Confirma especificamente que as rotinas de cron (fetch_daily_results,

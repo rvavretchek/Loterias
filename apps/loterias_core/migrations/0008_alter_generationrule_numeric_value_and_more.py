@@ -5,6 +5,24 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def normalize_legacy_numeric_value(apps, schema_editor):
+    """Backfill (achado na retrospectiva do Epic 6/7, 2026-09-27, item 25): a CheckConstraint
+    logo abaixo exige numeric_value IS NULL OR numeric_value >= 1 -- mas antes desta migration
+    0 (e qualquer negativo) era um valor aceito e ativamente usado como fixture de "regra
+    impossivel" nos testes, entao um GeneratedBet/GenerationRule pre-existente com esse valor
+    e um cenario real, nao hipotetico (ex.: um ambiente restaurado de um backup anterior a esta
+    migration -- ver deploy/lab/README.md, secao de restore). Sem este passo, aplicar esta
+    migration numa base com dado legado assim falharia com IntegrityError na hora de recriar a
+    tabela (SQLite reconstroi a tabela inteira pra aplicar uma CheckConstraint nova), travando
+    o deploy ate alguem corrigir a linha na mao. Roda ANTES do AlterField/AddConstraint (a
+    constraint so existe a partir daqui) -- normaliza pro minimo valido em vez de apagar a
+    regra, preservando a intencao original ("regra ligada") o mais perto possivel do valor
+    antigo permitia.
+    """
+    GenerationRule = apps.get_model('loterias_core', 'GenerationRule')
+    GenerationRule.objects.filter(numeric_value__lt=1).update(numeric_value=1)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -13,6 +31,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(normalize_legacy_numeric_value, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='generationrule',
             name='numeric_value',

@@ -30,3 +30,11 @@ staticfiles/
 
 # Tenant schemas
 tenants/
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
+
+# Notas de infra de laboratorio nao relacionada a este app (ver CLAUDE.md) -- neste workstation
+# e um symlink pra um arquivo compartilhado fora do repo, atualizado por outros projetos.
+Laboratório/

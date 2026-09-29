@@ -10,8 +10,9 @@ from django.conf import settings
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -291,6 +292,29 @@ class CreateBetViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error'], 'Numero de concurso invalido: ESPECIAL-2026')
 
+    def test_api_create_bet_rejects_malformed_json_body(self):
+        """Item 26 do deferred-work.md (achado na Story 2.13, corrigido 2026-09-28): corpo que
+        nao e JSON valido devolvia 500 nao tratado (JSONDecodeError)."""
+        response = self.client.post(
+            reverse('api_create_bet'), data='isso nao e json{{{', content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_create_bet_rejects_non_object_json_body(self):
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps(['nao', 'e', 'um', 'objeto']),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_create_bet_rejects_non_string_contest_type(self):
+        """Item 26: concurso como numero/objeto quebrava com AttributeError em .strip()."""
+        response = self.client.post(
+            reverse('api_create_bet'), data=json.dumps({'jogo': 'Quina', 'concurso': 2500}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_api_generate_bet_returns_json(self):
         response = self.client.post(
             reverse('api_create_bet'),
@@ -480,7 +504,7 @@ class RegenerateBetViewTests(TestCase):
         """Story 2.17: Refazer substitui o jogo original in-place -- nunca cria um segundo
         GeneratedBet pro mesmo Jogo+Concurso ("Refazer" troca os numeros do jogo)."""
         original_numbers = list(self.bet.numbers)
-        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        response = self.client.post(reverse('regenerate_bet', args=[self.bet.pk]))
         self.assertEqual(
             GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1
         )
@@ -488,6 +512,16 @@ class RegenerateBetViewTests(TestCase):
         self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]))
         self.assertNotEqual(self.bet.numbers, original_numbers)
         self.assertEqual(self.bet.sequential_pairs, count_sequential_pairs(self.bet.numbers))
+
+    def test_regenerating_via_get_is_rejected(self):
+        """Deferred-work item: endpoint era GET simples sem confirmacao/CSRF -- duplo clique ou
+        replay de GET do historico do navegador sobrescrevia o jogo sem chance de recuperacao.
+        Agora so aceita POST; GET deve devolver 405, nunca executar a regeneracao."""
+        original_numbers = list(self.bet.numbers)
+        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]))
+        self.assertEqual(response.status_code, 405)
+        self.bet.refresh_from_db()
+        self.assertEqual(self.bet.numbers, original_numbers)
 
     @patch('apps.loterias_core.views.generate_bet_with_relaxation')
     def test_regenerating_replaces_clovers_for_game_with_clovers(self, mock_generate_bet):
@@ -500,7 +534,7 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5, 6], clovers=[1, 2], sequential_pairs=0,
         )
         mock_generate_bet.return_value = ([10, 20, 30, 40, 45, 50], [3, 4], None)
-        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.clovers, [3, 4])
 
@@ -512,7 +546,7 @@ class RegenerateBetViewTests(TestCase):
             numbers=[1, 2, 3, 4, 5], clovers=[], sequential_pairs=0,
             manual=True, result_checked=True, hits=3, prize=50, prize_description='quadra',
         )
-        self.client.get(reverse('regenerate_bet', args=[checked_bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[checked_bet.pk]))
         checked_bet.refresh_from_db()
         self.assertFalse(checked_bet.manual)
         self.assertFalse(checked_bet.result_checked)
@@ -525,7 +559,7 @@ class RegenerateBetViewTests(TestCase):
         contagem igual sozinha nao provaria que 'Refazer' nao trocou os numeros da mesma linha."""
         LotteryResult.objects.create(game='Mega-sena', contest='5000', numbers=[1, 2, 3, 4, 5, 6], clovers=[], prizes={})
         original_numbers = list(self.bet.numbers)
-        response = self.client.get(reverse('regenerate_bet', args=[self.bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[self.bet.pk]), follow=True)
         self.assertEqual(GeneratedBet.objects.filter(user=self.user, game='Mega-sena', contest='5000').count(), 1)
         self.assertRedirects(response, reverse('bet_detail', args=[self.bet.pk]), target_status_code=200)
         self.bet.refresh_from_db()
@@ -640,6 +674,55 @@ class GenerationRuleModelTests(TestCase):
             rule.clean()
 
 
+class Migration0008BackfillTests(TransactionTestCase):
+    """Fronteira (achado na retrospectiva do Epic 6/7, 2026-09-27, item 25): a CheckConstraint
+    da migration 0008 bloquearia aplicar em qualquer base com dado legado numeric_value<=0 --
+    prova que o RunPython de backfill normaliza esse dado ANTES da constraint entrar em vigor,
+    migrando de verdade pra tras (schema 0007, sem a constraint) e pra frente (0008). So dá pra
+    testar isso migrando de verdade -- com a constraint ja aplicada no banco de teste normal,
+    nao existe nenhum jeito (nem via ORM, nem via SQL cru) de inserir a linha invalida primeiro."""
+
+    def tearDown(self):
+        # Garante que o banco de teste volta pro estado final (todas as migrations aplicadas)
+        # antes do proximo teste, mesmo que este teste falhe no meio do caminho.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_backfill_normalizes_legacy_value_before_constraint_applies(self):
+        # 'accounts' precisa ficar no seu estado mais recente aqui -- sem isso, project_state()
+        # so inclui as migrations de accounts que sao dependencia ancestral direta de
+        # loterias_core.0007 (o initial), sem profile_completed (adicionado depois).
+        targets = [
+            ('loterias_core', '0007_generationrule'),
+            ('accounts', '0003_alter_user_profile_completed'),
+        ]
+        executor = MigrationExecutor(connection)
+        executor.migrate(targets)
+        old_state = executor.loader.project_state(targets)
+        OldUser = old_state.apps.get_model('accounts', 'User')
+        OldGenerationRule = old_state.apps.get_model('loterias_core', 'GenerationRule')
+
+        legacy_user = OldUser.objects.create(
+            email='legado-migration@example.com', password='x', profile_completed=True,
+        )
+        legacy_rule = OldGenerationRule.objects.create(
+            user=legacy_user, game='Quina', rule_name='limit_row_count',
+            enabled=True, numeric_value=0,
+        )
+        self.assertEqual(legacy_rule.numeric_value, 0)  # valido no schema 0007 -- sem constraint ainda
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([('loterias_core', '0008_alter_generationrule_numeric_value_and_more')])
+
+        new_state = executor.loader.project_state(
+            [('loterias_core', '0008_alter_generationrule_numeric_value_and_more')]
+        )
+        NewGenerationRule = new_state.apps.get_model('loterias_core', 'GenerationRule')
+        migrated_rule = NewGenerationRule.objects.get(pk=legacy_rule.pk)
+        self.assertEqual(migrated_rule.numeric_value, 1)
+
+
 class GenerationRulesEditScreenTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='rules@example.com', password='SenhaForte123')
@@ -670,6 +753,16 @@ class GenerationRulesEditScreenTests(TestCase):
             self.assertIn(f'aria-describedby="help-{name}"', html)
             explanation = RULE_DEFINITIONS[name]['explanation']
             self.assertContains(response, explanation)
+
+    def test_distribution_type_explanation_mentions_lotofacil_variant(self):
+        """Item 29 da retrospectiva do Epic 6/7 (2026-09-27): a explicacao generica de
+        distribution_type nunca mencionava que a Lotofacil busca 3 por linha, nao 1 por faixa."""
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'lotofacil'}))
+        self.assertContains(response, '3 números por linha do volante')
+
+    def test_distribution_type_explanation_has_no_extra_detail_for_other_games(self):
+        response = self.client.get(reverse('generation_rules', kwargs={'jogo': 'mega-sena'}))
+        self.assertNotContains(response, '3 números por linha do volante')
 
     def test_first_visit_shows_default_with_disabled_value_fields(self):
         response = self.client.get(self.url)
@@ -995,6 +1088,27 @@ class GenerateBetWithRulesTests(TestCase):
         self.assertEqual(generate_bet('Lotofacil', self.user), (None, None))
         self.assertEqual(generate_bet_with_relaxation('Lotofacil', self.user), (None, None, None))
 
+    def test_impossible_rules_return_none_on_a_sequence_adaptive_game(self):
+        """Item 31 da retrospectiva do Epic 6/7 (2026-09-27): os testes de 'regra impossivel'
+        migraram inteiramente pra Lotofacil apos o valor minimo virar 1 (0 nao e mais aceito) --
+        perdendo a cobertura de 'duas regras inatingiveis, nunca relaxa uma segunda' num jogo
+        COM a regra adaptativa de sequencia (GAMES_WITH_SEQUENCE_RULE). Mega-sena nao tem
+        combinacao matematicamente impossivel com valores >=1 (a folga do grid 6x10 pra so 6
+        numeros sorteados torna quase qualquer combinacao tecnicamente alcancavel) -- usa o
+        mesmo padrao de mock ja estabelecido em test_relaxation_picks_newest_updated_at_among_violated_rules_only
+        pra simular determinsticamente 'nunca sai, nem relaxando' sem depender de impossibilidade
+        matematica genuina."""
+        from unittest.mock import patch
+        self._save('limit_sequence_count', 1)
+        self._save('limit_row_count', 3)
+
+        def fake_draw_always_fails(config, game, rules, attempts=10000):
+            return None, [rule.rule_name for rule in rules]
+
+        with patch('apps.loterias_core.utils._draw_with_rules', side_effect=fake_draw_always_fails):
+            self.assertEqual(generate_bet('Mega-sena', self.user), (None, None))
+            self.assertEqual(generate_bet_with_relaxation('Mega-sena', self.user), (None, None, None))
+
     def test_relaxes_the_only_impossible_rule_in_memory(self):
         """Story 4.5 (FR-22): uma regra inatingivel e relaxada, o jogo sai e o banco nao muda."""
         self._save('limit_sequence_count', 3, game='Lotofacil')
@@ -1065,7 +1179,7 @@ class RelaxationViewsTests(TestCase):
         bet = GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
-        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
         self.assertNotEqual(bet.numbers, original_numbers)
         msgs = [(m.level_tag, m.message) for m in response.context['messages']]
@@ -1111,7 +1225,7 @@ class ImpossibleRulesAcrossViewsTests(TestCase):
         bet = GeneratedBet.objects.create(
             user=self.user, game='Lotofacil', contest='3000', numbers=original_numbers, clovers=[],
         )
-        response = self.client.get(reverse('regenerate_bet', args=[bet.pk]), follow=True)
+        response = self.client.post(reverse('regenerate_bet', args=[bet.pk]), follow=True)
         bet.refresh_from_db()
         self.assertEqual(bet.numbers, original_numbers)
         self.assertContains(response, 'com as suas regras de geracao')
@@ -1144,7 +1258,7 @@ class RepeatedBetsAllowedTests(TestCase):
         GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='1', numbers=[1, 2, 3, 4, 5, 6], clovers=[])
         bet = GeneratedBet.objects.create(user=self.user, game='Mega-sena', contest='2', numbers=[7, 8, 9, 10, 11, 12], clovers=[])
         with patch('apps.loterias_core.views.generate_bet_with_relaxation', return_value=([1, 2, 3, 4, 5, 6], [], None)):
-            self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+            self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         bet.refresh_from_db()
         self.assertEqual(bet.numbers, [1, 2, 3, 4, 5, 6])
 
@@ -1154,7 +1268,7 @@ class RepeatedBetsAllowedTests(TestCase):
             result_checked=True, hits=5, prize=Decimal('100'),
         )
         HitNotification.objects.create(bet=bet, won=True)
-        self.client.get(reverse('regenerate_bet', args=[bet.pk]))
+        self.client.post(reverse('regenerate_bet', args=[bet.pk]))
         self.assertFalse(HitNotification.objects.filter(bet=bet).exists())
 
 
@@ -1182,6 +1296,11 @@ class AllPossibleRuleCombinationsTests(TestCase):
                 yield combo
 
     def _save_combo(self, game, combo):
+        # 'homogenea', nao 'totalmente_aleatoria' -- achado na retrospectiva do Epic 6/7
+        # (2026-09-27, item 22): bet_satisfies_rules/generate_bet_with_relaxation so checam
+        # distribution_type de verdade quando choice_value=='homogenea' ('totalmente_aleatoria'
+        # e no-op). Usar o valor no-op fazia ~metade das combinacoes serem duplicatas
+        # comportamentais sem a regra -- 'homogenea' exercita o branch real.
         GenerationRule.objects.filter(user=self.user, game=game).delete()
         for name in RULE_NAMES_BY_GAME[game]:
             enabled = name in combo
@@ -1189,12 +1308,11 @@ class AllPossibleRuleCombinationsTests(TestCase):
             GenerationRule.objects.create(
                 user=self.user, game=game, rule_name=name, enabled=enabled,
                 numeric_value=self.MODERATE_VALUE[name] if kind == 'int' else None,
-                choice_value='totalmente_aleatoria' if kind == 'choice' else None,
+                choice_value='homogenea' if kind == 'choice' else None,
             )
 
     def test_every_rule_subset_is_satisfied_or_relaxes_at_most_one(self):
         for game in GAMES_CONFIG:
-            active_names = RULE_NAMES_BY_GAME[game]
             for combo in self._rule_subsets(game):
                 self._save_combo(game, combo)
                 rules = list(GenerationRule.objects.filter(user=self.user, game=game, enabled=True))

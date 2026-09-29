@@ -9,6 +9,68 @@ jobs:
   deploy:
     runs-on: [self-hosted]
     steps:
+      # Sem isso o workspace do runner fica vazio -- o pipeline sempre dependeu so do
+      # 'git.latest' do Salt clonando/atualizando nos hosts-alvo (ubt-host01/02), nunca
+      # checou o codigo aqui. Precisa existir pro passo de testes abaixo ter o Dockerfile.
+      - name: Checkout do codigo (pro gate de testes abaixo)
+        uses: actions/checkout@v4
+
+      # Gate de CI (achado na retrospectiva do Epic 6, 2026-09-27): antes desta mudanca,
+      # nenhum passo rodava a suite de testes -- um commit que quebrasse qualquer teste ainda
+      # assim era deployado automaticamente. Builda a MESMA imagem que vai pro ar (Dockerfile)
+      # e roda a suite dentro de um container descartavel, isolado do volume real. Falha de
+      # teste = 'exit 1' = os passos seguintes (deploy Salt, reload nginx) nunca rodam --
+      # bloqueante de verdade, nao so um aviso.
+      - name: Rodar suite de testes (BLOQUEANTE -- falha aqui impede o deploy)
+        run: |
+          docker build -t loterias-ci-test:${{ github.sha }} .
+          set +e
+          docker run --rm \
+            -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+            -e SECRET_KEY='yny8_llvq^nslxwttij@i^f9kg6xf&o%p@%4l6j)gwmu&1pgjb' -e PASSWORD_PEPPER='ci-pepper-only-not-real-8f3ks9dkq2' \
+            loterias-ci-test:${{ github.sha }} python manage.py test
+          TEST_EXIT=$?
+          set -e
+          {
+            if [ $TEST_EXIT -ne 0 ]; then
+              echo "## ❌ Testes falharam (exit $TEST_EXIT) — deploy BLOQUEADO"
+              echo "O commit \`${{ github.sha }}\` nao foi deployado. Corrija os testes e faca push de novo."
+            else
+              echo "## ✅ Suite de testes passou — deploy liberado"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $TEST_EXIT
+
+      # Checagem NAO bloqueante (mesmo achado da retro): 'manage.py check --deploy' cobre
+      # config de seguranca (SECURE_HSTS_SECONDS, DEBUG, etc.) que nao quebra o app, mas merece
+      # atencao. Nunca falha o workflow -- so notifica (resumo do run + issue do GitHub, best
+      # effort, nao quebra o passo se 'gh' nao estiver disponivel no runner).
+      # Nota: roda dentro do container de CI com env minima (nao le o .env real do lab) --
+      # avisos tipo SECURE_SSL_REDIRECT/SESSION_COOKIE_SECURE sao esperados aqui mesmo que o
+      # .env real do lab ja os configure certo; o valor real desta checagem esta nos avisos que
+      # NAO dependem de env externa (ex. mudanca de codigo introduzindo um middleware inseguro).
+      - name: Checar avisos de deploy do Django (NAO bloqueante -- so notifica)
+        run: |
+          set +e
+          CHECK_OUTPUT=$(docker run --rm \
+            -e DJANGO_SETTINGS_MODULE=loterias.settings -e DEBUG=False \
+            -e SECRET_KEY='yny8_llvq^nslxwttij@i^f9kg6xf&o%p@%4l6j)gwmu&1pgjb' -e PASSWORD_PEPPER='ci-pepper-only-not-real-8f3ks9dkq2' \
+            loterias-ci-test:${{ github.sha }} python manage.py check --deploy 2>&1)
+          set -e
+          if echo "$CHECK_OUTPUT" | grep -qi "WARNINGS"; then
+            {
+              echo "## ⚠️ \`manage.py check --deploy\` encontrou avisos (nao bloqueante)"
+              echo '```'
+              echo "$CHECK_OUTPUT"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            gh issue create \
+              --title "Avisos de manage.py check --deploy (commit ${{ github.sha }})" \
+              --body "$CHECK_OUTPUT" --label "deploy-warning" \
+              --repo "${{ github.repository }}" 2>/dev/null || \
+              echo "(gh issue create indisponivel ou falhou -- aviso registrado so no resumo do run acima)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       # 'compose_dir' aponta pro subdiretorio onde o docker-compose.yml do Loterias
       # realmente mora (deploy/lab/, nao a raiz do checkout) -- sem isso o onlyif do
       # state generico 'subir_{{project}}' e sempre falso e o docker compose nunca
@@ -27,6 +89,10 @@ jobs:
       # silenciosamente o reload do nginx-proxy, que ficava preso no IP do container antigo
       # (destruido pelo --remove-orphans) -- Bad Gateway ate alguem recarregar na mao. O
       # reload em si e idempotente/inofensivo mesmo quando o host01 realmente falhou.
+      # Nota: 'always()' aqui roda mesmo se o gate de testes acima bloqueou o deploy -- mas
+      # nesse caso o step "Aplicar state Salt" nunca rodou (o job para no primeiro passo que
+      # falha, a menos que o proprio passo tenha if:always()), entao nao ha nada pra recarregar.
+      # Sem risco: reload contra o container antigo (ainda no ar) e um no-op inofensivo.
       - name: Recarregar nginx-proxy (pega o IP novo do container recriado)
         if: always()
         run: |

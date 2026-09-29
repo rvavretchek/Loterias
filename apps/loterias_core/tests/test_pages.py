@@ -414,6 +414,16 @@ class LottiqBaseTemplateTests(TestCase):
         self.assertContains(response, 'aria-current="page"')
         self.assertNotContains(response, 'navbar-brand')
 
+    def test_notifications_nav_link_is_permanent_even_with_zero_unread(self):
+        """Deferred-work item: o sino/badge some com 0 nao lidas (por design); sem cobertura
+        antes, nao sobrava link nenhum pra revisitar notificacoes ja lidas/historico -- agora
+        existe um item fixo 'Notificações' na navbar, independente da contagem."""
+        user = User.objects.create_user(email='navnotif@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('history'))
+        self.assertContains(response, reverse('notifications'))
+        self.assertContains(response, 'Notificações')
+
     def test_static_files_exist(self):
         from django.contrib.staticfiles import finders
         for path in ('css/lottiq-tokens.css', 'css/lottiq.css', 'img/lottiq-mark.svg'):
@@ -434,6 +444,19 @@ class LottiqBaseTemplateTests(TestCase):
             if url_name == 'home':
                 form_end = html.index('</form>')
                 self.assertGreater(html.index('id="zona-anuncio"'), form_end)
+
+    def test_ad_rails_are_reserved_on_every_page(self):
+        """Story 7.3b (item 30 da retrospectiva do Epic 6/7, 2026-09-27): as duas colunas
+        laterais espelham o mesmo contrato da zona inferior -- reservadas, sem integracao real."""
+        user = User.objects.create_user(email='adrails@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        for url_name in ('home', 'history', 'statistics'):
+            response = self.client.get(reverse(url_name))
+            html = response.content.decode()
+            self.assertIn('class="lq-ad-rail lq-ad-rail-left"', html, url_name)
+            self.assertIn('class="lq-ad-rail lq-ad-rail-right"', html, url_name)
+            self.assertNotIn('googlesyndication', html, url_name)
+            self.assertNotIn('adsbygoogle', html, url_name)
 
     def test_html_tag_carries_data_theme_from_context(self):
         """Story 7.4 (FR-32/UX-DR13): data-theme no <html> reflete theme_context, sem FOUC."""
@@ -503,6 +526,49 @@ class CookieConsentTests(TestCase):
     def test_get_is_not_allowed(self):
         response = self.client.get(reverse('save_cookie_consent'))
         self.assertEqual(response.status_code, 405)
+
+    def test_missing_choice_is_rejected_not_silently_treated_as_custom(self):
+        """Fronteira (retrospectiva do Epic 6/7, 2026-09-27, item 27): antes desta correcao,
+        'choice' ausente caia no branch 'custom' e gravava uma decisao que o visitante nunca
+        tomou de verdade."""
+        response = self.client.post(reverse('save_cookie_consent'), {'next': reverse('home')})
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('lottiq_cookies', response.cookies)
+
+    def test_unknown_choice_value_is_rejected(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'algo-invalido', 'next': reverse('home')},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('lottiq_cookies', response.cookies)
+
+    def test_next_pointing_outside_the_site_is_ignored(self):
+        """Fronteira (retro, item 3): mesmo guard ja usado em mark_notification_read_view --
+        garante que save_cookie_consent_view nao virou um open-redirect."""
+        response = self.client.post(reverse('save_cookie_consent'), {
+            'choice': 'accept_all', 'next': 'https://evil.example/phishing',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_scheme_relative_next_is_ignored(self):
+        response = self.client.post(reverse('save_cookie_consent'), {
+            'choice': 'accept_all', 'next': '//evil.example/phishing',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_consent_cookie_is_secure_only_over_https(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')}, secure=True,
+        )
+        self.assertTrue(response.cookies['lottiq_cookies']['secure'])
+
+    def test_consent_cookie_is_not_secure_over_plain_http(self):
+        response = self.client.post(
+            reverse('save_cookie_consent'), {'choice': 'accept_all', 'next': reverse('home')}, secure=False,
+        )
+        self.assertFalse(response.cookies['lottiq_cookies']['secure'])
 
     def test_exempt_from_incomplete_profile_gate(self):
         user = User.objects.create_user(email='cookiegate@example.com', password='SenhaForte123')
