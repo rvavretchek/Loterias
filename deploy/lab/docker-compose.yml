@@ -24,6 +24,7 @@ services:
       EMAIL_HOST_PASSWORD: ${BREVO_SMTP_KEY}
       DEFAULT_FROM_EMAIL: ${BREVO_FROM_EMAIL}
       OPERATOR_ALERT_EMAIL: ${OPERATOR_ALERT_EMAIL:-}
+      SITE_URL: ${SITE_URL:-http://www.loterias.internal}
     volumes:
       - loterias_data:/app/data
       - loterias_media:/app/media
@@ -65,6 +66,7 @@ services:
       EMAIL_HOST_PASSWORD: ${BREVO_SMTP_KEY}
       DEFAULT_FROM_EMAIL: ${BREVO_FROM_EMAIL}
       OPERATOR_ALERT_EMAIL: ${OPERATOR_ALERT_EMAIL:-}
+      SITE_URL: ${SITE_URL:-http://www.loterias.internal}
     volumes:
       - loterias_data:/app/data
       - loterias_media:/app/media

@@ -238,6 +238,12 @@ EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 20))
 # Vazio por padrao -- send_capture_failure_alert so loga um aviso e nao envia nada se nao configurado.
 OPERATOR_ALERT_EMAIL = os.getenv('OPERATOR_ALERT_EMAIL', '')
 
+# Base absoluta usada pra montar link clicavel em e-mail (ex. detalhe do jogo no e-mail de
+# acerto premiado) -- nao ha request nesse contexto (roda via cron), entao nao da pra usar
+# request.build_absolute_uri(). Default e a URL real de homologacao (deploy/lab/README.md);
+# sobrescreva via env quando um dominio de producao proprio for definido.
+SITE_URL = os.getenv('SITE_URL', 'http://www.loterias.internal').rstrip('/')
+
 # Security
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'DENY'
