@@ -488,7 +488,7 @@ class SaveManualBetViewTests(TestCase):
         self.assertTrue(bet.result_checked)
         self.assertEqual(bet.hits, len(self.numbers))
         self.assertEqual(bet.prize, Decimal('1000000.00'))
-        self.assertEqual(bet.prize_description, 'lotofacil')
+        self.assertEqual(bet.prize_description, '15_acertos')
 
 
 class RegenerateBetViewTests(TestCase):

@@ -24,7 +24,8 @@ from .models import (
 from .utils import (
     generate_bet_with_relaxation, check_duplicate_bet, count_sequential_pairs,
     calculate_statistics, normalize_numbers, calculate_bet_prize,
-    fetch_cef_result, suggest_next_contest, apply_prize_to_bet, normalize_contest
+    fetch_cef_result, suggest_next_contest, apply_prize_to_bet, normalize_contest,
+    get_prize_category_label,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ def bet_detail_view(request, pk):
                 'captured_at': official_result.captured_at,
             }
         )
+        prize_info['category'] = get_prize_category_label(prize_info['category'])
 
     context = {
         'jogo': bet,

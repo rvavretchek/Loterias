@@ -40,7 +40,7 @@ from apps.loterias_core.utils import (
     normalize_contest,
     bet_satisfies_rules,
     get_prize_category_label,
-    GAME_PRIZE_CATEGORY,
+    PRIZE_CATEGORY_LABELS,
 )
 
 
@@ -158,6 +158,7 @@ class CalculateBetPrizeTests(TestCase):
         self.assertEqual(prize['hits'], 4)
         self.assertTrue(prize['won'])
         self.assertEqual(prize['value'], 'R$ 900,00')
+        self.assertEqual(prize['category'], 'quadra')
 
     def test_dupla_sena_uses_second_draw_when_its_prize_is_higher(self):
         """Story 2.18: usuario bate so 4 no 1o sorteio (premio menor) mas 6 no 2o (premio maior) --
@@ -227,6 +228,100 @@ class CalculateBetPrizeTests(TestCase):
         }
         prize = calculate_bet_prize('Quina', [1, 2, 3, 4, 5], [], result)
         self.assertEqual(prize['value'], 'R$ 1.000,00')
+
+
+class PrizeCategoryByHitCountTests(TestCase):
+    """Corrige o bug real: `category` era fixa por Jogo (Mega-Sena sempre 'sena', mesmo pra quem
+    bateu so quadra) -- agora reflete a faixa real de acertos, com o nome tradicional da CEF
+    (sena/quina/quadra/terno) pros 4 jogos que pagam faixa com nome proprio. Terno (3 acertos) so
+    existe pra Quina -- os outros 3 pagam a partir de 4 (quadra)."""
+
+    def _prize(self, game, hit_numbers, all_numbers, prizes):
+        result = {'numbers': all_numbers, 'clovers': [], 'prizes': prizes}
+        return calculate_bet_prize(game, hit_numbers, [], result)
+
+    def test_mega_sena_six_hits_is_sena(self):
+        prize = self._prize(
+            'Mega-sena', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6],
+            {'6': {'value': 'R$ 50.000.000,00', 'winners': 1}},
+        )
+        self.assertEqual(prize['category'], 'sena')
+
+    def test_mega_sena_five_hits_is_quina_not_sena(self):
+        prize = self._prize(
+            'Mega-sena', [1, 2, 3, 4, 5, 60], [1, 2, 3, 4, 5, 6],
+            {'5': {'value': 'R$ 40.000,00', 'winners': 10}},
+        )
+        self.assertEqual(prize['hits'], 5)
+        self.assertEqual(prize['category'], 'quina')
+
+    def test_mega_sena_four_hits_is_quadra_not_sena(self):
+        prize = self._prize(
+            'Mega-sena', [1, 2, 3, 4, 59, 60], [1, 2, 3, 4, 5, 6],
+            {'4': {'value': 'R$ 900,00', 'winners': 5000}},
+        )
+        self.assertEqual(prize['hits'], 4)
+        self.assertEqual(prize['category'], 'quadra')
+
+    def test_quina_five_hits_is_quina(self):
+        prize = self._prize(
+            'Quina', [1, 2, 3, 4, 5], [1, 2, 3, 4, 5],
+            {'5': {'value': 'R$ 5.000,00', 'winners': 1}},
+        )
+        self.assertEqual(prize['category'], 'quina')
+
+    def test_quina_three_hits_is_terno(self):
+        """Terno (3 acertos) so e' uma faixa real pra Quina -- os outros 3 jogos com nomenclatura
+        tradicional (Mega-Sena/Dupla-Sena/+Milionaria) pagam a partir de 4 (quadra)."""
+        prize = self._prize(
+            'Quina', [1, 2, 3, 40, 50], [1, 2, 3, 4, 5],
+            {'3': {'value': 'R$ 4,00', 'winners': 100000}},
+        )
+        self.assertEqual(prize['hits'], 3)
+        self.assertEqual(prize['category'], 'terno')
+
+    def test_dupla_sena_four_hits_is_quadra_never_terno(self):
+        """Fronteira: Dupla-Sena so paga a partir de 4 acertos -- 3 acertos nao e' uma faixa
+        premiada real, entao nunca deveria virar 'terno' (contaminacao da regra da Quina)."""
+        prize = self._prize(
+            'Dupla-Sena', [1, 2, 3, 4, 59, 60], [1, 2, 3, 4, 5, 6],
+            {'4': {'value': 'R$ 50,00', 'winners': 500}},
+        )
+        self.assertEqual(prize['hits'], 4)
+        self.assertEqual(prize['category'], 'quadra')
+
+    def test_milionaria_six_hits_is_sena(self):
+        prize = self._prize(
+            'Milionaria', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6],
+            {'6': {'value': 'R$ 1.000.000,00', 'winners': 1}},
+        )
+        self.assertEqual(prize['category'], 'sena')
+
+    def test_lotofacil_has_no_named_tier_uses_hit_count_category(self):
+        """Lotofacil nao tem nomenclatura tradicional de faixa (quadra/quina/sena/terno) na CEF --
+        so 'N acertos', diferente dos 4 jogos com nome proprio por faixa."""
+        numbers = list(range(1, 16))
+        prize = self._prize(
+            'Lotofacil', numbers, numbers,
+            {'15': {'value': 'R$ 1.000.000,00', 'winners': 1}},
+        )
+        self.assertEqual(prize['category'], '15_acertos')
+
+    def test_lotomania_zero_hits_uses_hit_count_category(self):
+        prize = self._prize(
+            'Lotomania', [], list(range(1, 21)),
+            {'0': {'value': 'R$ 500,00', 'winners': 3}},
+        )
+        self.assertEqual(prize['hits'], 0)
+        self.assertEqual(prize['category'], '0_acertos')
+
+    def test_no_hits_no_prize_never_gets_a_named_category(self):
+        prize = self._prize(
+            'Mega-sena', [40, 41, 42, 43, 44, 45], [1, 2, 3, 4, 5, 6],
+            {'6': {'value': 'R$ 1,00'}},
+        )
+        self.assertEqual(prize['hits'], 0)
+        self.assertEqual(prize['category'], 'Sem premio')
 
 
 class FetchCefResultTests(TestCase):
@@ -854,13 +949,24 @@ class ApplyPrizeToBetTests(TestCase):
 
 
 class GetPrizeCategoryLabelTests(TestCase):
-    """Deferred-work item #17: bet.prize_description expunha a chave crua de
-    GAME_PRIZE_CATEGORY (ex. 'dupla_sena') direto no e-mail de acerto -- get_prize_category_label
-    traduz pro rotulo de exibicao."""
+    """Deferred-work item #17: bet.prize_description expunha a chave crua de categoria (ex.
+    'dupla_sena', hoje legado -- ver PRIZE_CATEGORY_LABELS) direto no e-mail de acerto --
+    get_prize_category_label traduz pro rotulo de exibicao."""
 
     def test_known_category_returns_friendly_label(self):
+        self.assertEqual(get_prize_category_label('sena'), 'Sena')
+        self.assertEqual(get_prize_category_label('quadra'), 'Quadra')
+        self.assertEqual(get_prize_category_label('terno'), 'Terno')
+
+    def test_legacy_game_keyed_category_still_has_a_label(self):
+        """Bets conferidos antes da correcao de 2026-09-30 (categoria fixa por Jogo) continuam
+        com prize_description no formato antigo persistido -- precisa continuar traduzindo."""
         self.assertEqual(get_prize_category_label('dupla_sena'), 'Dupla-Sena')
         self.assertEqual(get_prize_category_label('milionaria'), '+Milionária')
+
+    def test_dynamic_hit_count_category_gets_a_generic_label(self):
+        self.assertEqual(get_prize_category_label('15_acertos'), '15 acertos')
+        self.assertEqual(get_prize_category_label('0_acertos'), '0 acertos')
 
     def test_unknown_category_falls_back_to_itself(self):
         self.assertEqual(get_prize_category_label('categoria_inexistente'), 'categoria_inexistente')
@@ -868,8 +974,8 @@ class GetPrizeCategoryLabelTests(TestCase):
     def test_empty_string_falls_back_to_itself(self):
         self.assertEqual(get_prize_category_label(''), '')
 
-    def test_all_game_prize_categories_have_a_label(self):
-        for category in GAME_PRIZE_CATEGORY.values():
+    def test_all_known_categories_have_a_distinct_label(self):
+        for category in PRIZE_CATEGORY_LABELS:
             self.assertNotEqual(get_prize_category_label(category), category)
 
 

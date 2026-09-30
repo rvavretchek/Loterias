@@ -348,32 +348,54 @@ def calculate_statistics(user, game_name):
     }
 
 
-GAME_PRIZE_CATEGORY = {
-    'Mega-sena': 'sena',
-    'Quina': 'quina',
-    'Lotofacil': 'lotofacil',
-    'Lotomania': 'lotomania',
-    'Milionaria': 'milionaria',
-    'Dupla-Sena': 'dupla_sena',
-}
+# Rotulo tradicional da faixa de premio por quantidade real de acertos -- nomenclatura oficial da
+# CEF pros 4 jogos que pagam faixas com nome proprio (mecanica de escolher numeros de um pool
+# maior; Lotofacil/Lotomania nao tem nome especial por faixa, so "N acertos"). Quina e' o unico
+# desses 4 que paga a partir de 3 acertos (terno) -- Mega-Sena/Dupla-Sena/+Milionaria pagam a
+# partir de 4 (quadra), entao nunca geram 'terno' aqui (so ganham a faixa premiada se is_valid).
+HIT_COUNT_CATEGORY_GAMES = {'Mega-sena', 'Milionaria', 'Quina', 'Dupla-Sena'}
+HIT_COUNT_CATEGORY_LABELS = {6: 'sena', 5: 'quina', 4: 'quadra', 3: 'terno'}
 
-# Rotulo de exibicao por chave de GAME_PRIZE_CATEGORY -- usado sempre que a categoria aparece pro
-# usuario (ex. corpo do e-mail de acerto). GeneratedBet.prize_description continua guardando a
-# chave crua (nao afeta dado ja persistido); so a exibicao passa por aqui.
+
+def _prize_category_key(game, hits):
+    """Chave crua da categoria de premio por faixa real de acertos -- corrige o bug historico de
+    `category` ser fixa por Jogo (ex. Mega-Sena sempre mostrava 'sena', mesmo pra quem bateu so
+    quadra). Jogos sem nomenclatura tradicional de faixa (Lotofacil, Lotomania) usam 'N_acertos'."""
+    if game in HIT_COUNT_CATEGORY_GAMES and hits in HIT_COUNT_CATEGORY_LABELS:
+        return HIT_COUNT_CATEGORY_LABELS[hits]
+    return f'{hits}_acertos'
+
+
+# Rotulo de exibicao por chave de categoria -- usado sempre que a categoria aparece pro usuario
+# (ex. corpo do e-mail de acerto, tela de detalhe do jogo). GeneratedBet.prize_description
+# continua guardando a chave crua (nao afeta dado ja persistido); so a exibicao passa por aqui.
 PRIZE_CATEGORY_LABELS = {
     'sena': 'Sena',
     'quina': 'Quina',
+    'quadra': 'Quadra',
+    'terno': 'Terno',
+    # Legado: antes de 2026-09-30 a categoria era fixa por Jogo (GAME_PRIZE_CATEGORY, removida) --
+    # mantido so pra exibir corretamente prize_description ja persistido de bets conferidos antes
+    # desta correcao (homologacao ja tem dado real desde a declaracao de 2026-09-27).
     'lotofacil': 'Lotofácil',
     'lotomania': 'Lotomania',
     'milionaria': '+Milionária',
     'dupla_sena': 'Dupla-Sena',
 }
 
+PRIZE_CATEGORY_HIT_COUNT_PATTERN = re.compile(r'^(\d+)_acertos$')
+
 
 def get_prize_category_label(category):
-    """Traduz a chave crua de categoria (GAME_PRIZE_CATEGORY) pro rotulo de exibicao. Categoria
-    desconhecida cai de volta pra ela mesma, sem quebrar a exibicao."""
-    return PRIZE_CATEGORY_LABELS.get(category, category)
+    """Traduz a chave crua de categoria pro rotulo de exibicao: nome tradicional da faixa
+    (PRIZE_CATEGORY_LABELS), 'N acertos' pra chave dinamica de _prize_category_key, ou a propria
+    categoria sem tradução conhecida, sem quebrar a exibicao."""
+    if category in PRIZE_CATEGORY_LABELS:
+        return PRIZE_CATEGORY_LABELS[category]
+    match = PRIZE_CATEGORY_HIT_COUNT_PATTERN.match(category or '')
+    if match:
+        return f'{match.group(1)} acertos'
+    return category
 
 LEGACY_MIN_HITS = {
     'Mega-sena': 4,
@@ -490,7 +512,7 @@ def _calculate_prize_for_draw(game, user_numbers, draw_numbers, prizes, referenc
         elif tier is not None:
             amount = tier.value
 
-    prize_key = GAME_PRIZE_CATEGORY.get(game) if is_valid else None
+    prize_key = _prize_category_key(game, hits) if is_valid else None
     won = bool(is_valid and amount > 0)
     return {
         'won': won,
