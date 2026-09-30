@@ -349,6 +349,39 @@ class BetDetailViewTests(TestCase):
         self.assertIsNotNone(response.context['premio_info'])
         self.assertEqual(response.context['resultado_oficial'], official_result)
 
+    def test_bet_detail_shows_friendly_category_label_for_named_tier(self):
+        """A pagina de detalhe mostrava a chave crua de categoria (ex. 'quadra' sem
+        capitalizacao) direto no HTML -- precisa passar pelo mesmo rotulo amigavel do e-mail."""
+        user = User.objects.create_user(email='rotulodetalhe@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Mega-sena', contest='6003',
+            numbers=[1, 2, 3, 4, 59, 60], clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Mega-sena', contest='6003', numbers=[1, 2, 3, 4, 5, 6], clovers=[],
+            prizes={'4': {'value': 'R$ 900,00', 'winners': 5000}},
+        )
+        response = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertEqual(response.context['premio_info']['category'], 'Quadra')
+        self.assertContains(response, 'Quadra')
+        self.assertNotContains(response, '>quadra<')
+
+    def test_bet_detail_shows_generic_hit_count_label_for_lotofacil(self):
+        numbers = list(range(1, 16))
+        user = User.objects.create_user(email='rotulolotofacil@example.com', password='SenhaForte123')
+        self.client.force_login(user)
+        bet = GeneratedBet.objects.create(
+            user=user, game='Lotofacil', contest='6004',
+            numbers=numbers, clovers=[], sequential_pairs=0,
+        )
+        LotteryResult.objects.create(
+            game='Lotofacil', contest='6004', numbers=numbers, clovers=[],
+            prizes={'15': {'value': 'R$ 1.000.000,00', 'winners': 1}},
+        )
+        response = self.client.get(reverse('bet_detail', args=[bet.pk]))
+        self.assertEqual(response.context['premio_info']['category'], '15 acertos')
+
     def test_bet_detail_marks_hit_and_miss_numbers_when_result_known(self):
         """Retro do Epic 5, item 18: numero a numero (acerto/erro), reusando lq-ball-hit/-not-hit."""
         user = User.objects.create_user(email='acertoerro@example.com', password='SenhaForte123')
