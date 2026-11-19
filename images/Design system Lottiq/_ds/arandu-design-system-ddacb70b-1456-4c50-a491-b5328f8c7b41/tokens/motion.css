@@ -1,0 +1,12 @@
+:root{
+  --duration-instant:80ms; /* @kind other */
+  --duration-fast:150ms; /* @kind other */
+  --duration-base:200ms; /* @kind other */
+  --duration-slow:300ms; /* @kind other */
+  --ease-standard:cubic-bezier(.2,.6,.2,1); /* @kind other */
+  --ease-out:cubic-bezier(0,0,.2,1); /* @kind other */
+  --ease-in-out:cubic-bezier(.4,0,.2,1); /* @kind other */
+  --transition-colors:color var(--duration-fast) var(--ease-standard),background-color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard);
+  --transition-elevate:box-shadow var(--duration-slow) var(--ease-standard),transform var(--duration-slow) var(--ease-standard),border-color var(--duration-slow) var(--ease-standard);
+  --lift-hover:translateY(-2px); /* @kind other */
+}

@@ -1,0 +1,23 @@
+:root{
+  /* 4px base grid */
+  --space-0:0;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;
+  --space-6:24px;--space-7:32px;--space-8:40px;--space-9:48px;--space-10:64px;--space-11:80px;--space-12:96px;
+
+  /* Layout constants lifted from the mockups */
+  --layout-header-h:64px;
+  --layout-sidenav-w:256px;
+  --layout-content-max:1280px;
+  --layout-content-narrow:1024px;
+  --layout-page-pad:32px;
+  --layout-page-pad-sm:24px;
+  --layout-card-pad:24px;
+  --layout-card-pad-sm:16px;
+  --layout-gap-cards:24px;
+  --layout-gap-fields:16px;
+
+  /* Control sizes */
+  --control-h-sm:32px;--control-h-md:40px;--control-h-lg:48px;--control-h-xl:56px;
+  --control-pad-x-sm:12px;--control-pad-x-md:16px;--control-pad-x-lg:24px;
+  --table-cell-pad-y:12px;--table-cell-pad-x:24px;
+  --table-cell-pad-y-dense:8px;--table-cell-pad-x-dense:16px;
+}

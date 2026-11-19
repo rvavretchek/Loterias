@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+<style>
+body { margin:0; background:#F2F5F7; }
+a { color:#0F7A7C; text-decoration:none; }
+a:hover { color:#0C6668; }
+.ms { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1; letter-spacing:normal; text-transform:none; display:inline-block; white-space:nowrap; direction:ltr; -webkit-font-feature-settings:'liga'; -webkit-font-smoothing:antialiased; }
+@keyframes lq-pop { 0%{transform:scale(.6); opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1); opacity:1} }
+@keyframes lq-shine { 0%{transform:translateX(-120%)} 100%{transform:translateX(220%)} }
+</style>
+</helmet>
+
+<div style="max-width:1120px; margin:0 auto; padding:56px 28px 96px; font-family:Figtree,system-ui,sans-serif; color:#24404E; display:flex; flex-direction:column; gap:72px">
+
+  <header style="display:flex; flex-direction:column; gap:24px">
+    <div style="display:flex; align-items:center; gap:14px">
+      <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="#0A2A42"></rect>
+        <g stroke="#7FD3CF" stroke-width="1.6" stroke-linecap="round" opacity=".55">
+          <path d="M13 13 L13 35 L35 35"></path>
+          <path d="M13 13 L35 24 L13 35"></path>
+          <path d="M13 24 L24 24 L35 13"></path>
+        </g>
+        <g fill="#F7FBFB">
+          <circle cx="13" cy="13" r="3"></circle><circle cx="13" cy="24" r="2.4"></circle>
+          <circle cx="13" cy="35" r="3"></circle><circle cx="24" cy="24" r="2.4"></circle>
+          <circle cx="35" cy="35" r="3"></circle>
+        </g>
+        <circle cx="35" cy="13" r="3.4" fill="#F0A028"></circle>
+      </svg>
+      <div style="font:800 26px/1 Sora,sans-serif; letter-spacing:-.03em; color:#0A2A42; position:relative">Lott<span style="position:relative">i<span style="position:absolute; left:50%; top:-2px; width:5px; height:5px; background:#F0A028; transform:translateX(-50%)"></span></span>q</div>
+      <span style="margin-left:6px; padding:5px 10px; border-radius:999px; background:#E4EFEF; color:#0C6668; font:700 11px/1 Figtree,sans-serif; letter-spacing:.08em; text-transform:uppercase">Design system v1</span>
+    </div>
+    <h1 style="font:800 44px/1.1 Sora,sans-serif; letter-spacing:-.03em; color:#0A2A42; margin:0; max-width:24ch; text-wrap:pretty">Método onde antes havia só sorte</h1>
+    <p style="font:400 18px/1.6 Figtree,sans-serif; color:#5A6E79; margin:0; max-width:64ch; text-wrap:pretty">O Lottiq gera, guarda e confere jogos das loterias da Caixa. O sistema visual precisa sustentar duas coisas ao mesmo tempo: a confiança de quem cuida do seu histórico e do seu dinheiro, e o prazer de jogar. A regra é simples — a estrutura é séria, a alegria é pontual e sempre merecida.</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap">
+      <span style="padding:7px 14px; border-radius:999px; background:#0A2A42; color:#fff; font:600 13px/1.3 Figtree,sans-serif">Sério na estrutura</span>
+      <span style="padding:7px 14px; border-radius:999px; background:#0F7A7C; color:#fff; font:600 13px/1.3 Figtree,sans-serif">Calmo no dia a dia</span>
+      <span style="padding:7px 14px; border-radius:999px; background:#F0A028; color:#3A2405; font:600 13px/1.3 Figtree,sans-serif">Festivo só no acerto</span>
+    </div>
+  </header>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">01 · Marca</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">O logo mantido e refinado</h2>
+    <p style="font:400 16px/1.6 Figtree,sans-serif; color:#5A6E79; margin:0; max-width:62ch">O desenho original já dizia a coisa certa: uma malha de nós e arestas, cálculo e não superstição. O refinamento mantém a ideia e resolve os problemas de aplicação — traço de espessura única, nós em três tamanhos apenas, contorno do bloco fechado e o âmbar promovido a nó de destaque (o número que saiu). O quadrado âmbar sobre o "i" permanece como assinatura.</p>
+    <div style="display:flex; gap:20px; flex-wrap:wrap">
+      <div style="flex:1 1 300px; min-width:0; background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:16px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Candidato original</div>
+        <div style="background:#F7F9FA; border-radius:12px; padding:24px; display:flex; justify-content:center"><img src="assets/Lottiq_Logo.png" alt="Logo candidato Lottiq" style="height:160px; width:auto"></div>
+        <p style="font:400 14px/1.55 Figtree,sans-serif; color:#5A6E79; margin:0">Gradiente com pouco contraste em tamanhos pequenos, nós de tamanhos irregulares e arestas que cruzam o contorno.</p>
+      </div>
+      <div style="flex:1 1 300px; min-width:0; background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:16px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#0C6668">Refinamento proposto</div>
+        <div style="background:#F7F9FA; border-radius:12px; padding:24px; display:flex; flex-direction:column; align-items:center; gap:18px">
+          <svg width="112" height="112" viewBox="0 0 48 48" aria-label="Símbolo Lottiq refinado">
+            <rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="#0A2A42"></rect>
+            <g stroke="#7FD3CF" stroke-width="1.6" stroke-linecap="round" opacity=".55">
+              <path d="M13 13 L13 35 L35 35"></path><path d="M13 13 L35 24 L13 35"></path><path d="M13 24 L24 24 L35 13"></path>
+            </g>
+            <g fill="#F7FBFB"><circle cx="13" cy="13" r="3"></circle><circle cx="13" cy="24" r="2.4"></circle><circle cx="13" cy="35" r="3"></circle><circle cx="24" cy="24" r="2.4"></circle><circle cx="35" cy="35" r="3"></circle></g>
+            <circle cx="35" cy="13" r="3.4" fill="#F0A028"></circle>
+          </svg>
+          <div style="font:800 36px/1 Sora,sans-serif; letter-spacing:-.04em; color:#0A2A42">Lott<span style="position:relative">i<span style="position:absolute; left:50%; top:-3px; width:7px; height:7px; background:#F0A028; transform:translateX(-50%)"></span></span>q</div>
+        </div>
+        <p style="font:400 14px/1.55 Figtree,sans-serif; color:#5A6E79; margin:0">Legível a 16px, funciona em favicon, aceita fundo claro e escuro sem alteração.</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap">
+      <div style="flex:1 1 200px; background:#0A2A42; border-radius:12px; padding:20px; display:flex; align-items:center; justify-content:center; gap:12px">
+        <svg width="28" height="28" viewBox="0 0 48 48"><rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="#F7FBFB"></rect><g stroke="#0F7A7C" stroke-width="1.6" stroke-linecap="round" opacity=".6"><path d="M13 13 L13 35 L35 35"></path><path d="M13 13 L35 24 L13 35"></path></g><g fill="#0A2A42"><circle cx="13" cy="13" r="3"></circle><circle cx="13" cy="35" r="3"></circle><circle cx="35" cy="35" r="3"></circle><circle cx="24" cy="24" r="2.4"></circle><circle cx="13" cy="24" r="2.4"></circle></g><circle cx="35" cy="13" r="3.4" fill="#F0A028"></circle></svg>
+        <span style="font:800 20px/1 Sora,sans-serif; letter-spacing:-.03em; color:#fff">Lott<span style="position:relative">i<span style="position:absolute; left:50%; top:-1px; width:4px; height:4px; background:#F0A028; transform:translateX(-50%)"></span></span>q</span>
+      </div>
+      <div style="flex:1 1 200px; background:#fff; border:1px solid #DDE4E8; border-radius:12px; padding:20px; display:flex; align-items:center; justify-content:center; gap:10px">
+        <svg width="20" height="20" viewBox="0 0 48 48"><rect width="48" height="48" rx="11" fill="#0A2A42"></rect><g stroke="#7FD3CF" stroke-width="2" stroke-linecap="round" opacity=".6"><path d="M14 14 L14 34 L34 34"></path></g><g fill="#F7FBFB"><circle cx="14" cy="14" r="3.4"></circle><circle cx="14" cy="34" r="3.4"></circle><circle cx="34" cy="34" r="3.4"></circle></g><circle cx="34" cy="14" r="3.8" fill="#F0A028"></circle></svg>
+        <span style="font:800 15px/1 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42">Lottiq</span>
+        <span style="font:400 13px/1 Figtree,sans-serif; color:#8496A0">· 16px mínimo</span>
+      </div>
+      <div style="flex:1 1 200px; background:#E4EFEF; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:6px; justify-content:center">
+        <div style="font:700 12px/1.3 Figtree,sans-serif; color:#0C6668">Nunca</div>
+        <div style="font:400 13px/1.5 Figtree,sans-serif; color:#5A6E79">Rotacionar, aplicar sombra, trocar o âmbar por outra cor ou usar o símbolo sem o bloco navy.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">02 · Cor</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">Três cores de marca, tiradas do logo</h2>
+    <p style="font:400 16px/1.6 Figtree,sans-serif; color:#5A6E79; margin:0; max-width:62ch">Navy é a voz institucional: cabeçalho, texto, números sorteados. Teal é a única cor de ação — um botão teal por tela. Âmbar não é decoração e não é aviso: é acerto. Se o âmbar aparece, o usuário ganhou algo.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px">
+      <div style="border-radius:14px; overflow:hidden; border:1px solid #DDE4E8; background:#fff">
+        <div style="height:104px; background:#0A2A42"></div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:3px">
+          <div style="font:700 15px/1.3 Figtree,sans-serif; color:#0A2A42">Navy Lottiq</div>
+          <div style="font:500 13px/1.4 'JetBrains Mono',monospace; color:#5A6E79">#0A2A42</div>
+          <div style="font:400 13px/1.5 Figtree,sans-serif; color:#8496A0">Tinta, cabeçalho, bola de número</div>
+        </div>
+      </div>
+      <div style="border-radius:14px; overflow:hidden; border:1px solid #DDE4E8; background:#fff">
+        <div style="height:104px; background:#0F7A7C"></div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:3px">
+          <div style="font:700 15px/1.3 Figtree,sans-serif; color:#0A2A42">Teal ação</div>
+          <div style="font:500 13px/1.4 'JetBrains Mono',monospace; color:#5A6E79">#0F7A7C</div>
+          <div style="font:400 13px/1.5 Figtree,sans-serif; color:#8496A0">Botão primário, foco, link</div>
+        </div>
+      </div>
+      <div style="border-radius:14px; overflow:hidden; border:1px solid #DDE4E8; background:#fff">
+        <div style="height:104px; background:#F0A028"></div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:3px">
+          <div style="font:700 15px/1.3 Figtree,sans-serif; color:#0A2A42">Âmbar acerto</div>
+          <div style="font:500 13px/1.4 'JetBrains Mono',monospace; color:#5A6E79">#F0A028</div>
+          <div style="font:400 13px/1.5 Figtree,sans-serif; color:#8496A0">Prêmio, número batido, comemoração</div>
+        </div>
+      </div>
+      <div style="border-radius:14px; overflow:hidden; border:1px solid #DDE4E8; background:#fff">
+        <div style="height:104px; background:#10585F"></div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:3px">
+          <div style="font:700 15px/1.3 Figtree,sans-serif; color:#0A2A42">Teal profundo</div>
+          <div style="font:500 13px/1.4 'JetBrains Mono',monospace; color:#5A6E79">#10585F</div>
+          <div style="font:400 13px/1.5 Figtree,sans-serif; color:#8496A0">Hover de superfície escura, gráficos</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px">
+      <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Escala teal</div>
+      <div style="display:flex; border-radius:10px; overflow:hidden; border:1px solid #DDE4E8">
+        <div style="flex:1; height:56px; background:#E4EFEF; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">50</div>
+        <div style="flex:1; height:56px; background:#C3DEDE; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">100</div>
+        <div style="flex:1; height:56px; background:#8CC4C4; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">200</div>
+        <div style="flex:1; height:56px; background:#4FA3A4; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">400</div>
+        <div style="flex:1; height:56px; background:#0F7A7C; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">600</div>
+        <div style="flex:1; height:56px; background:#0C6668; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">700</div>
+        <div style="flex:1; height:56px; background:#10585F; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">800</div>
+      </div>
+      <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0; margin-top:8px">Neutros</div>
+      <div style="display:flex; border-radius:10px; overflow:hidden; border:1px solid #DDE4E8">
+        <div style="flex:1; height:56px; background:#FFFFFF; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">0</div>
+        <div style="flex:1; height:56px; background:#F7F9FA; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">50</div>
+        <div style="flex:1; height:56px; background:#EEF2F4; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">100</div>
+        <div style="flex:1; height:56px; background:#DDE4E8; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">200</div>
+        <div style="flex:1; height:56px; background:#9CADB6; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#0A2A42">400</div>
+        <div style="flex:1; height:56px; background:#5A6E79; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">600</div>
+        <div style="flex:1; height:56px; background:#24404E; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">800</div>
+        <div style="flex:1; height:56px; background:#0A2A42; display:flex; align-items:flex-end; padding:6px; font:500 10px/1 'JetBrains Mono',monospace; color:#fff">900</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-top:8px">
+      <div style="background:#fff; border:1px solid #DDE4E8; border-left:none; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px">
+        <span style="align-self:flex-start; padding:5px 11px; border-radius:999px; background:#FDF1DE; color:#8A5209; font:700 12px/1.3 Figtree,sans-serif">Premiado</span>
+        <div style="font:400 13px/1.5 Figtree,sans-serif; color:#5A6E79">Âmbar 50 / 800 — o jogo bateu e há prêmio estimado.</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px">
+        <span style="align-self:flex-start; padding:5px 11px; border-radius:999px; background:#E4EFEF; color:#0C6668; font:700 12px/1.3 Figtree,sans-serif">Aguardando sorteio</span>
+        <div style="font:400 13px/1.5 Figtree,sans-serif; color:#5A6E79">Teal 50 / 700 — registrado, concurso ainda não saiu.</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px">
+        <span style="align-self:flex-start; padding:5px 11px; border-radius:999px; background:#EEF2F4; color:#5A6E79; font:700 12px/1.3 Figtree,sans-serif">Conferido · sem prêmio</span>
+        <div style="font:400 13px/1.5 Figtree,sans-serif; color:#5A6E79">Neutro 100 / 600 — conferido, nada nesta. Sem drama.</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px">
+        <span style="align-self:flex-start; padding:5px 11px; border-radius:999px; background:#FBE9E5; color:#A93520; font:700 12px/1.3 Figtree,sans-serif">Falha na captura</span>
+        <div style="font:400 13px/1.5 Figtree,sans-serif; color:#5A6E79">Vermelho 50 / 700 — não deu pra ler o resultado da CEF.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">03 · Tipografia</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">Sora para afirmar, Figtree para explicar, JetBrains Mono para contar</h2>
+    <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:28px; display:flex; flex-direction:column; gap:22px">
+      <div style="display:flex; flex-direction:column; gap:6px; padding-bottom:20px; border-bottom:1px solid #EEF2F4">
+        <div style="font:500 12px/1 'JetBrains Mono',monospace; color:#8496A0">Sora 800 · 44/1.1 · -0.03em</div>
+        <div style="font:800 44px/1.1 Sora,sans-serif; letter-spacing:-.03em; color:#0A2A42">Seu jogo, conferido sozinho</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; padding-bottom:20px; border-bottom:1px solid #EEF2F4">
+        <div style="font:500 12px/1 'JetBrains Mono',monospace; color:#8496A0">Sora 700 · 24/1.25 · títulos de tela</div>
+        <div style="font:700 24px/1.25 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42">Regras de geração</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; padding-bottom:20px; border-bottom:1px solid #EEF2F4">
+        <div style="font:500 12px/1 'JetBrains Mono',monospace; color:#8496A0">Figtree 400 · 16/1.6 · corpo</div>
+        <div style="font:400 16px/1.6 Figtree,sans-serif; color:#24404E; max-width:60ch">Cada palpite que você guarda entra na fila de conferência. Quando o resultado sai na Caixa, o Lottiq compara e avisa — inclusive quando não deu nada, pra você não ficar na dúvida.</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; padding-bottom:20px; border-bottom:1px solid #EEF2F4">
+        <div style="font:500 12px/1 'JetBrains Mono',monospace; color:#8496A0">Figtree 700 · 12/1 · micro-rótulo, uppercase, .09em</div>
+        <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#5A6E79">Concurso · Dezenas · Conferência</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px">
+        <div style="font:500 12px/1 'JetBrains Mono',monospace; color:#8496A0">JetBrains Mono 700 · tabular · todo número que o usuário compara</div>
+        <div style="display:flex; gap:28px; flex-wrap:wrap; align-items:baseline">
+          <div style="font:700 30px/1 'JetBrains Mono',monospace; color:#0A2A42; font-variant-numeric:tabular-nums">R$ 48.712,35</div>
+          <div style="font:700 20px/1 'JetBrains Mono',monospace; color:#5A6E79; font-variant-numeric:tabular-nums">2920</div>
+          <div style="font:700 20px/1 'JetBrains Mono',monospace; color:#5A6E79; font-variant-numeric:tabular-nums">14/09/2026</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">04 · A bola de número</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">O componente mais importante do produto</h2>
+    <p style="font:400 16px/1.6 Figtree,sans-serif; color:#5A6E79; margin:0; max-width:62ch">É o que o usuário olha primeiro e é o que precisa ser lido à distância. Quatro estados, nunca mais: escolhido, batido, sorteado-e-não-batido, trevo. Sem gradiente, sem sombra colorida — a diferença é preenchimento, não brilho.</p>
+    <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:28px; display:flex; flex-direction:column; gap:26px">
+      <div style="display:flex; gap:32px; flex-wrap:wrap">
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start">
+          <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Escolhido</div>
+          <div style="width:48px; height:48px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">04</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start">
+          <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#B9721A">Batido</div>
+          <div style="width:48px; height:48px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; box-shadow:0 0 0 4px #FDF1DE">17</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start">
+          <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Sorteado, não batido</div>
+          <div style="width:48px; height:48px; border-radius:50%; background:#fff; border:2px dashed #9CADB6; color:#5A6E79; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">30</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start">
+          <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Trevo (+Milionária)</div>
+          <div style="width:48px; height:48px; border-radius:50%; background:#E4EFEF; border:2px solid #0F7A7C; color:#0C6668; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">03</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start">
+          <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Disponível (grade)</div>
+          <div style="width:48px; height:48px; border-radius:50%; background:#F7F9FA; border:1px solid #DDE4E8; color:#9CADB6; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">41</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:32px; flex-wrap:wrap; align-items:flex-end; padding-top:22px; border-top:1px solid #EEF2F4">
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center">
+          <div style="width:56px; height:56px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 20px/1 'JetBrains Mono',monospace">04</div>
+          <div style="font:500 11px/1 'JetBrains Mono',monospace; color:#8496A0">56 · destaque</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center">
+          <div style="width:48px; height:48px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 17px/1 'JetBrains Mono',monospace">04</div>
+          <div style="font:500 11px/1 'JetBrains Mono',monospace; color:#8496A0">48 · padrão</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center">
+          <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">04</div>
+          <div style="font:500 11px/1 'JetBrains Mono',monospace; color:#8496A0">36 · tabela</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center">
+          <div style="width:28px; height:28px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 11px/1 'JetBrains Mono',monospace">04</div>
+          <div style="font:500 11px/1 'JetBrains Mono',monospace; color:#8496A0">28 · Lotomania</div>
+        </div>
+        <div style="font:400 14px/1.55 Figtree,sans-serif; color:#5A6E79; max-width:34ch">Toque mínimo de 44px em qualquer bola clicável no celular — na grade de seleção a bola de 48 com gap de 8 resolve.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">05 · Componentes</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">Peças do app</h2>
+
+    <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:28px; display:flex; flex-direction:column; gap:24px">
+      <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Botões · altura 44 padrão, raio 10</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center">
+        <button style="height:44px; padding:0 20px; border:none; border-radius:10px; background:#0F7A7C; color:#fff; font:600 15px/1 Figtree,sans-serif; display:inline-flex; align-items:center; gap:8px; cursor:pointer; box-shadow:0 1px 2px rgba(10,42,66,.14)" style-hover="background:#0C6668"><span class="ms" style="font-size:20px">auto_awesome</span>Gerar jogo</button>
+        <button style="height:44px; padding:0 20px; border:1.5px solid #0F7A7C; border-radius:10px; background:#fff; color:#0C6668; font:600 15px/1 Figtree,sans-serif; display:inline-flex; align-items:center; gap:8px; cursor:pointer" style-hover="background:#E4EFEF">Conferir agora</button>
+        <button style="height:44px; padding:0 20px; border:1px solid #DDE4E8; border-radius:10px; background:#fff; color:#24404E; font:600 15px/1 Figtree,sans-serif; cursor:pointer" style-hover="background:#F7F9FA">Cancelar</button>
+        <button style="height:44px; padding:0 20px; border:none; border-radius:10px; background:transparent; color:#A93520; font:600 15px/1 Figtree,sans-serif; display:inline-flex; align-items:center; gap:8px; cursor:pointer" style-hover="background:#FBE9E5"><span class="ms" style="font-size:20px">delete</span>Excluir</button>
+        <button style="height:36px; padding:0 14px; border:1px solid #DDE4E8; border-radius:8px; background:#fff; color:#24404E; font:600 13px/1 Figtree,sans-serif; cursor:pointer">Pequeno</button>
+        <button disabled="disabled" style="height:44px; padding:0 20px; border:none; border-radius:10px; background:#EEF2F4; color:#9CADB6; font:600 15px/1 Figtree,sans-serif; cursor:not-allowed">Indisponível</button>
+        <div style="display:flex; align-items:center; gap:8px; margin-left:4px"><div style="width:36px; height:36px; border-radius:8px; border:1px solid #DDE4E8; background:#fff; display:flex; align-items:center; justify-content:center; color:#5A6E79"><span class="ms" style="font-size:20px">visibility</span></div><div style="width:36px; height:36px; border-radius:8px; border:1px solid #DDE4E8; background:#fff; display:flex; align-items:center; justify-content:center; color:#5A6E79"><span class="ms" style="font-size:20px">refresh</span></div><div style="width:36px; height:36px; border-radius:8px; border:1px solid #DDE4E8; background:#fff; display:flex; align-items:center; justify-content:center; color:#5A6E79"><span class="ms" style="font-size:20px">more_vert</span></div></div>
+      </div>
+
+      <div style="padding-top:22px; border-top:1px solid #EEF2F4; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Campos e controles de regra</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:18px">
+          <label style="display:flex; flex-direction:column; gap:6px"><span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Concurso</span><input value="2920" style="height:44px; padding:0 14px; border:1px solid #DDE4E8; border-radius:10px; background:#fff; font:700 15px/1 'JetBrains Mono',monospace; color:#0A2A42" readonly="readonly"><span style="font:400 12px/1.4 Figtree,sans-serif; color:#8496A0">Sugerido pelo próximo sorteio</span></label>
+          <label style="display:flex; flex-direction:column; gap:6px"><span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Loteria</span><select style="height:44px; padding:0 12px; border:1px solid #DDE4E8; border-radius:10px; background:#fff; font:500 15px/1 Figtree,sans-serif; color:#24404E"><option>Mega-Sena</option><option>Lotofácil</option></select><span style="font:400 12px/1.4 Figtree,sans-serif; color:#8496A0">6 dezenas de 60</span></label>
+          <label style="display:flex; flex-direction:column; gap:6px"><span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Foco (estado de foco)</span><input value="01, 12, 23" style="height:44px; padding:0 14px; border:1.5px solid #0F7A7C; border-radius:10px; background:#fff; font:700 15px/1 'JetBrains Mono',monospace; color:#0A2A42; box-shadow:0 0 0 4px rgba(15,122,124,.18)" readonly="readonly"><span style="font:400 12px/1.4 Figtree,sans-serif; color:#8496A0">Anel teal 4px, nunca outline do browser</span></label>
+          <label style="display:flex; flex-direction:column; gap:6px"><span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Com erro</span><input value="7, 7, 9" style="height:44px; padding:0 14px; border:1.5px solid #C8442F; border-radius:10px; background:#fff; font:700 15px/1 'JetBrains Mono',monospace; color:#0A2A42" readonly="readonly"><span style="font:600 12px/1.4 Figtree,sans-serif; color:#A93520">Dezena repetida — cada número entra uma vez</span></label>
+        </div>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-top:4px">
+          <div style="display:flex; flex-direction:column; gap:8px">
+            <span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Máx. de números em sequência</span>
+            <div style="display:flex; border:1px solid #DDE4E8; border-radius:10px; overflow:hidden; background:#fff">
+              <div style="padding:10px 16px; font:700 14px/1 'JetBrains Mono',monospace; color:#5A6E79; border-right:1px solid #DDE4E8">0</div>
+              <div style="padding:10px 16px; font:700 14px/1 'JetBrains Mono',monospace; color:#5A6E79; border-right:1px solid #DDE4E8">1</div>
+              <div style="padding:10px 16px; font:700 14px/1 'JetBrains Mono',monospace; background:#0A2A42; color:#fff; border-right:1px solid #0A2A42">2</div>
+              <div style="padding:10px 16px; font:700 14px/1 'JetBrains Mono',monospace; color:#5A6E79; border-right:1px solid #DDE4E8">3</div>
+              <div style="padding:10px 16px; font:700 14px/1 'JetBrains Mono',monospace; color:#5A6E79">4</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px">
+            <span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Distribuição</span>
+            <div style="display:flex; gap:8px">
+              <span style="padding:9px 14px; border-radius:999px; background:#0A2A42; color:#fff; font:600 13px/1 Figtree,sans-serif">Equilibrada</span>
+              <span style="padding:9px 14px; border-radius:999px; background:#fff; border:1px solid #DDE4E8; color:#5A6E79; font:600 13px/1 Figtree,sans-serif">Aleatória</span>
+              <span style="padding:9px 14px; border-radius:999px; background:#fff; border:1px solid #DDE4E8; color:#5A6E79; font:600 13px/1 Figtree,sans-serif">Por quadrantes</span>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px">
+            <span style="font:600 13px/1.3 Figtree,sans-serif; color:#24404E">Avisar por e-mail</span>
+            <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:26px; border-radius:999px; background:#0F7A7C; padding:3px; display:flex; justify-content:flex-end"><div style="width:20px; height:20px; border-radius:50%; background:#fff"></div></div><span style="font:400 14px/1 Figtree,sans-serif; color:#5A6E79">Ativado</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding-top:22px; border-top:1px solid #EEF2F4; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Cartão de jogo · a unidade do histórico</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:18px">
+          <div style="border:1px solid #DDE4E8; border-radius:14px; background:#fff; padding:18px; display:flex; flex-direction:column; gap:14px">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+              <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 15px/1.2 Sora,sans-serif; color:#0A2A42">Mega-Sena</span><span style="font:500 12px/1.3 'JetBrains Mono',monospace; color:#8496A0">Concurso 2921 · gerado</span></div>
+              <span style="padding:5px 11px; border-radius:999px; background:#E4EFEF; color:#0C6668; font:700 12px/1.3 Figtree,sans-serif">Aguardando sorteio</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">08</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">15</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">27</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">33</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">49</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#0A2A42; color:#fff; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">58</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; font:500 12px/1 Figtree,sans-serif">
+              <span style="padding:5px 9px; border-radius:6px; background:#F7F9FA; border:1px solid #EEF2F4; color:#5A6E79">máx. 2 em sequência</span>
+              <span style="padding:5px 9px; border-radius:6px; background:#F7F9FA; border:1px solid #EEF2F4; color:#5A6E79">espaço mín. 3</span>
+            </div>
+          </div>
+          <div style="border:1px solid #F0A028; border-radius:14px; background:#FFFDF8; padding:18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+              <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 15px/1.2 Sora,sans-serif; color:#0A2A42">Mega-Sena</span><span style="font:500 12px/1.3 'JetBrains Mono',monospace; color:#8A5209">Concurso 2920 · conferido</span></div>
+              <span style="padding:5px 11px; border-radius:999px; background:#F0A028; color:#3A2405; font:700 12px/1.3 Figtree,sans-serif">Premiado</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">
+              <div style="width:36px; height:36px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">04</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">17</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">23</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #DDE4E8; color:#9CADB6; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">38</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">45</div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono',monospace">52</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px">
+              <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8A5209">Quina · 5 acertos</span><span style="font:700 22px/1.1 'JetBrains Mono',monospace; color:#0A2A42; font-variant-numeric:tabular-nums">R$ 48.712,35</span></div>
+              <span style="font:400 12px/1.4 Figtree,sans-serif; color:#8496A0; text-align:right; max-width:14ch">Estimado pela faixa do concurso</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding-top:22px; border-top:1px solid #EEF2F4; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Alerta, estado vazio e comemoração</div>
+        <div style="display:flex; gap:12px; align-items:flex-start; background:#FBE9E5; border-radius:12px; padding:14px 16px">
+          <span class="ms" style="font-size:22px; color:#A93520">error</span>
+          <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 14px/1.35 Figtree,sans-serif; color:#0A2A42">Não conseguimos ler o resultado do concurso 2920</span><span style="font:400 14px/1.5 Figtree,sans-serif; color:#5A6E79">O site da Caixa não respondeu. Vamos tentar de novo em 30 minutos — seu jogo continua na fila.</span></div>
+        </div>
+        <div style="display:flex; gap:12px; align-items:flex-start; background:#E4EFEF; border-radius:12px; padding:14px 16px">
+          <span class="ms" style="font-size:22px; color:#0C6668">schedule</span>
+          <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 14px/1.35 Figtree,sans-serif; color:#0A2A42">3 jogos esperando o sorteio de quarta</span><span style="font:400 14px/1.5 Figtree,sans-serif; color:#5A6E79">A conferência é automática. Você não precisa voltar aqui.</span></div>
+        </div>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:4px">
+          <div style="flex:1 1 280px; border:1px dashed #DDE4E8; border-radius:14px; padding:32px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; background:#fff">
+            <span class="ms" style="font-size:36px; color:#9CADB6">confirmation_number</span>
+            <div style="font:700 16px/1.3 Sora,sans-serif; color:#0A2A42">Nenhum jogo por aqui ainda</div>
+            <div style="font:400 14px/1.55 Figtree,sans-serif; color:#5A6E79; max-width:34ch">Gere o primeiro com as suas regras, ou guarde um palpite que você já jogou na lotérica.</div>
+            <button style="margin-top:6px; height:44px; padding:0 20px; border:none; border-radius:10px; background:#0F7A7C; color:#fff; font:600 15px/1 Figtree,sans-serif; cursor:pointer">Gerar meu primeiro jogo</button>
+          </div>
+          <div style="flex:1 1 280px; border-radius:14px; padding:28px; background:#0A2A42; display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; position:relative; overflow:hidden">
+            <div style="position:absolute; inset:0; background:radial-gradient(circle at 50% 0%, rgba(240,160,40,.22), transparent 62%)"></div>
+            <div style="position:relative; display:flex; gap:6px; animation:lq-pop .5s cubic-bezier(.2,.7,.2,1) both">
+              <div style="width:40px; height:40px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 14px/1 'JetBrains Mono',monospace">04</div>
+              <div style="width:40px; height:40px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 14px/1 'JetBrains Mono',monospace">17</div>
+              <div style="width:40px; height:40px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 14px/1 'JetBrains Mono',monospace">45</div>
+            </div>
+            <div style="position:relative; font:700 22px/1.25 Sora,sans-serif; color:#fff; letter-spacing:-.02em">Você fez 5 na Mega</div>
+            <div style="position:relative; font:700 26px/1 'JetBrains Mono',monospace; color:#F0A028; font-variant-numeric:tabular-nums">R$ 48.712,35</div>
+            <div style="position:relative; font:400 13px/1.5 Figtree,sans-serif; color:#9CADB6; max-width:30ch">Comemoração acontece uma vez, na hora do acerto. Depois disso o jogo volta a ser uma linha no histórico.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">06 · Tema escuro</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">O escuro é navy, não preto</h2>
+    <p style="font:400 16px/1.6 Figtree,sans-serif; color:#5A6E79; margin:0; max-width:62ch">A superfície escura sai do próprio navy da marca. O teal clareia para manter contraste de 4.5:1; o âmbar não muda — ele é a única cor que o usuário precisa reconhecer instantaneamente nos dois temas.</p>
+    <div style="border-radius:16px; padding:28px; background:#071A29; display:flex; flex-direction:column; gap:22px">
+      <div style="display:flex; gap:14px; flex-wrap:wrap">
+        <div style="flex:1 1 130px; border-radius:10px; overflow:hidden; border:1px solid #1E4159"><div style="height:60px; background:#071A29"></div><div style="padding:10px; background:#0D2637; font:500 11px/1.5 'JetBrains Mono',monospace; color:#8FA8B7">#071A29<br>página</div></div>
+        <div style="flex:1 1 130px; border-radius:10px; overflow:hidden; border:1px solid #1E4159"><div style="height:60px; background:#0D2637"></div><div style="padding:10px; background:#0D2637; font:500 11px/1.5 'JetBrains Mono',monospace; color:#8FA8B7">#0D2637<br>cartão</div></div>
+        <div style="flex:1 1 130px; border-radius:10px; overflow:hidden; border:1px solid #1E4159"><div style="height:60px; background:#1E4159"></div><div style="padding:10px; background:#0D2637; font:500 11px/1.5 'JetBrains Mono',monospace; color:#8FA8B7">#1E4159<br>borda</div></div>
+        <div style="flex:1 1 130px; border-radius:10px; overflow:hidden; border:1px solid #1E4159"><div style="height:60px; background:#2FA9A6"></div><div style="padding:10px; background:#0D2637; font:500 11px/1.5 'JetBrains Mono',monospace; color:#8FA8B7">#2FA9A6<br>ação</div></div>
+        <div style="flex:1 1 130px; border-radius:10px; overflow:hidden; border:1px solid #1E4159"><div style="height:60px; background:#F0A028"></div><div style="padding:10px; background:#0D2637; font:500 11px/1.5 'JetBrains Mono',monospace; color:#8FA8B7">#F0A028<br>acerto</div></div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:18px">
+        <div style="border:1px solid #1E4159; border-radius:14px; background:#0D2637; padding:18px; display:flex; flex-direction:column; gap:14px">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+            <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 15px/1.2 Sora,sans-serif; color:#E8F0F4">Lotofácil</span><span style="font:500 12px/1.3 'JetBrains Mono',monospace; color:#8FA8B7">Concurso 3181 · palpite</span></div>
+            <span style="padding:5px 11px; border-radius:999px; background:#123C43; color:#7FD3CF; font:700 12px/1.3 Figtree,sans-serif">Aguardando sorteio</span>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap">
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">01</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">05</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">09</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">13</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">18</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">22</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#1E4159; color:#E8F0F4; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">25</div>
+          </div>
+          <div style="display:flex; gap:10px"><button style="height:40px; padding:0 16px; border:none; border-radius:10px; background:#2FA9A6; color:#052B2C; font:700 14px/1 Figtree,sans-serif; cursor:pointer">Conferir</button><button style="height:40px; padding:0 16px; border:1px solid #1E4159; border-radius:10px; background:transparent; color:#C6D6DE; font:600 14px/1 Figtree,sans-serif; cursor:pointer">Ver jogo</button></div>
+        </div>
+        <div style="border:1px solid #6A4A16; border-radius:14px; background:#1E1408; padding:18px; display:flex; flex-direction:column; gap:14px">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+            <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 15px/1.2 Sora,sans-serif; color:#FFF6E6">Quina</span><span style="font:500 12px/1.3 'JetBrains Mono',monospace; color:#D9A85C">Concurso 6890 · conferido</span></div>
+            <span style="padding:5px 11px; border-radius:999px; background:#F0A028; color:#3A2405; font:700 12px/1.3 Figtree,sans-serif">Premiado</span>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap">
+            <div style="width:32px; height:32px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">11</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">42</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:#F0A028; color:#3A2405; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">58</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:transparent; border:1px solid #6A4A16; color:#A98A55; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">63</div>
+            <div style="width:32px; height:32px; border-radius:50%; background:transparent; border:1px solid #6A4A16; color:#A98A55; display:flex; align-items:center; justify-content:center; font:700 12px/1 'JetBrains Mono',monospace">77</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:2px"><span style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#D9A85C">Terno · 3 acertos</span><span style="font:700 22px/1.1 'JetBrains Mono',monospace; color:#F0A028; font-variant-numeric:tabular-nums">R$ 142,80</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">07 · Forma, espaço e movimento</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px">
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 15px/1.3 Sora,sans-serif; color:#0A2A42">Raio</div>
+        <div style="display:flex; flex-direction:column; gap:10px; font:400 13px/1.4 Figtree,sans-serif; color:#5A6E79">
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:6px"></div>6 · tag de regra</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:8px"></div>8 · botão pequeno, ícone</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:10px"></div>10 · botão, campo</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:14px"></div>14 · cartão</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:20px"></div>20 · modal</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:44px; height:28px; background:#EEF2F4; border-radius:999px"></div>full · bola, chip, status</div>
+        </div>
+      </div>
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 15px/1.3 Sora,sans-serif; color:#0A2A42">Espaço · grade de 4</div>
+        <div style="display:flex; flex-direction:column; gap:8px; font:400 13px/1.4 Figtree,sans-serif; color:#5A6E79">
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:6px; height:14px; background:#0F7A7C"></div>6 · entre bolas</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:12px; height:14px; background:#0F7A7C"></div>12 · dentro de grupo</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:20px; height:14px; background:#0F7A7C"></div>20 · padding de cartão</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:32px; height:14px; background:#0F7A7C"></div>32 · entre blocos</div>
+          <div style="display:flex; align-items:center; gap:10px"><div style="width:56px; height:14px; background:#0F7A7C"></div>56 · entre seções</div>
+        </div>
+        <div style="font:400 13px/1.55 Figtree,sans-serif; color:#8496A0; padding-top:8px; border-top:1px solid #EEF2F4">Coluna de conteúdo 1120px · cabeçalho 64px · padding de página 28px no desktop, 16px no celular.</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 15px/1.3 Sora,sans-serif; color:#0A2A42">Elevação e movimento</div>
+        <div style="display:flex; gap:12px">
+          <div style="flex:1; height:52px; border-radius:10px; background:#fff; box-shadow:0 1px 2px rgba(10,42,66,.10)"></div>
+          <div style="flex:1; height:52px; border-radius:10px; background:#fff; box-shadow:0 4px 12px rgba(10,42,66,.10)"></div>
+          <div style="flex:1; height:52px; border-radius:10px; background:#fff; box-shadow:0 12px 32px rgba(10,42,66,.16)"></div>
+        </div>
+        <div style="font:400 13px/1.55 Figtree,sans-serif; color:#5A6E79">Cartão em repouso não tem sombra — só borda. Sombra aparece em hover, dropdown e modal.</div>
+        <div style="font:400 13px/1.55 Figtree,sans-serif; color:#5A6E79; padding-top:10px; border-top:1px solid #EEF2F4">150ms cor e hover · 200ms abrir e fechar · easing <span style="font:500 12px/1 'JetBrains Mono',monospace">cubic-bezier(.2,.7,.2,1)</span>. A única animação expressiva do produto é a entrada das dezenas batidas — 500ms, uma vez, sem repetir.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">08 · Palavras</div>
+    <h2 style="font:700 30px/1.2 Sora,sans-serif; letter-spacing:-.02em; color:#0A2A42; margin:0">Vocabulário e tom</h2>
+    <div style="display:flex; gap:18px; flex-wrap:wrap">
+      <div style="flex:1 1 300px; background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#8496A0">Termos fixos</div>
+        <div style="display:flex; flex-direction:column; gap:12px; font:400 14px/1.5 Figtree,sans-serif; color:#5A6E79">
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Palpite</span> — números que o usuário escolheu e ainda não jogou.</div>
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Jogo</span> — o que já está feito e vai ser conferido.</div>
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Conferir</span> — comparar com o resultado oficial. Nunca "verificar", nunca "validar".</div>
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Dezena</span> — o número dentro de um jogo.</div>
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Concurso</span> — a edição do sorteio, sempre com o número.</div>
+          <div><span style="font:700 14px/1.5 Figtree,sans-serif; color:#0A2A42">Regra de geração</span> — sequência, espaço, linha, coluna, distribuição.</div>
+        </div>
+      </div>
+      <div style="flex:1 1 300px; background:#0A2A42; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:16px">
+        <div style="font:700 11px/1 Figtree,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:#7FD3CF">Como o Lottiq fala</div>
+        <div style="display:flex; flex-direction:column; gap:14px">
+          <div style="display:flex; flex-direction:column; gap:4px"><span style="font:700 15px/1.45 Figtree,sans-serif; color:#fff">"Seu jogo entrou na fila. A conferência é automática."</span><span style="font:400 13px/1.5 Figtree,sans-serif; color:#9CADB6">Direto, no presente, sem prometer sorte.</span></div>
+          <div style="display:flex; flex-direction:column; gap:4px"><span style="font:700 15px/1.45 Figtree,sans-serif; color:#fff">"Nada nesta. Seu histórico continua guardado."</span><span style="font:400 13px/1.5 Figtree,sans-serif; color:#9CADB6">Perda se comunica em uma linha, sem consolo forçado.</span></div>
+          <div style="display:flex; flex-direction:column; gap:4px"><span style="font:700 15px/1.45 Figtree,sans-serif; color:#fff">"O valor é estimado pela faixa do concurso — a Caixa é quem paga."</span><span style="font:400 13px/1.5 Figtree,sans-serif; color:#9CADB6">Toda estimativa vem com o limite dela explícito.</span></div>
+        </div>
+        <div style="padding-top:14px; border-top:1px solid #1E4159; font:400 13px/1.6 Figtree,sans-serif; color:#9CADB6">Nunca: "aumente suas chances", "números da sorte", "algoritmo inteligente", emoji, exclamação fora do acerto. O Lottiq aplica as regras que o usuário pediu — não promete resultado.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex; flex-direction:column; gap:20px">
+    <div style="font:700 12px/1 Figtree,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#8496A0">09 · Ícones e imagem</div>
+    <div style="display:flex; gap:18px; flex-wrap:wrap">
+      <div style="flex:1 1 320px; background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:16px">
+        <div style="font:700 15px/1.3 Sora,sans-serif; color:#0A2A42">Material Symbols Rounded, 24px, FILL 0</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:16px; color:#24404E">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">casino</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Gerar</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">confirmation_number</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Jogos</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">tune</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Regras</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">fact_check</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Conferir</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">history</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Histórico</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">notifications</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Avisos</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">emoji_events</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Prêmio</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span class="ms" style="font-size:26px">shield_lock</span><span style="font:400 11px/1.2 Figtree,sans-serif; color:#8496A0; text-align:center">Conta</span></div>
+        </div>
+        <div style="font:400 13px/1.55 Figtree,sans-serif; color:#5A6E79; padding-top:12px; border-top:1px solid #EEF2F4">Preenchido (FILL 1) somente no item de navegação ativo. Nenhum ícone colorido, nenhum emoji.</div>
+      </div>
+      <div style="flex:1 1 280px; background:#fff; border:1px solid #DDE4E8; border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px">
+        <div style="font:700 15px/1.3 Sora,sans-serif; color:#0A2A42">Fotografia</div>
+        <div style="display:flex; gap:12px">
+          <img src="assets/Jogadora.jpeg" alt="Jogadora" style="flex:1; min-width:0; height:150px; object-fit:cover; border-radius:12px">
+          <img src="assets/Ganhador.jpeg" alt="Ganhador" style="flex:1; min-width:0; height:150px; object-fit:cover; border-radius:12px">
+        </div>
+        <div style="font:400 13px/1.55 Figtree,sans-serif; color:#5A6E79">Gente real, luz natural, a aposta na mão. Só na landing e em e-mails — dentro do app, nenhuma foto compete com os números. Nunca dinheiro empilhado, cassino, dados ou cifrão.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+</body>
+</html>

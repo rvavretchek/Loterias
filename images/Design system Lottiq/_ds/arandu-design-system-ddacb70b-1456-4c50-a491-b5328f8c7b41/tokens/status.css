@@ -1,0 +1,19 @@
+:root{
+  /* Opportunity status (ARANDU.statusColors in mockups/arandu-shared.js) */
+  --status-dev-bg:var(--info-bg);--status-dev-border:var(--info-border);--status-dev-fg:var(--info-fg);
+  --status-reprovada-bg:var(--danger-bg);--status-reprovada-border:var(--danger-border);--status-reprovada-fg:var(--danger-fg);
+  --status-ganha-bg:var(--success-bg);--status-ganha-border:var(--success-border);--status-ganha-fg:var(--success-fg);
+  --status-perdida-bg:#FDE9EE;--status-perdida-border:#F5C6D2;--status-perdida-fg:#A62447;
+  --status-cancelada-bg:var(--neutral-bg);--status-cancelada-border:var(--neutral-border);--status-cancelada-fg:var(--neutral-fg);
+  --status-entregue-bg:#E6F4F7;--status-entregue-border:#BBE0E9;--status-entregue-fg:#166275;
+
+  /* Scenario / approval workflow status */
+  --status-rascunho-bg:var(--neutral-bg);--status-rascunho-border:var(--neutral-border);--status-rascunho-fg:var(--neutral-fg);
+  --status-aprovacao-bg:var(--warning-bg);--status-aprovacao-border:var(--warning-border);--status-aprovacao-fg:var(--warning-fg);
+  --status-aprovado-bg:var(--success-bg);--status-aprovado-border:var(--success-border);--status-aprovado-fg:var(--success-fg);
+
+  /* Scenario timeline bands (Resumo Executivo) */
+  --band-transicao:var(--amber-400);
+  --band-vigencia:var(--teal-500);
+  --band-overlap:#8B5CF6;
+}

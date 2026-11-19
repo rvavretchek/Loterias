@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+[data-theme="light"] {
+  --bg-primary:#f8f9fa; --bg-secondary:#ffffff; --bg-card:#ffffff; --bg-navbar:#ffffff;
+  --text-primary:#212529; --text-secondary:#6c757d; --text-muted:#adb5bd; --border-color:#dee2e6;
+  --accent-primary:#0d6efd; --accent-secondary:#6c757d; --success:#198754; --warning:#ffc107;
+  --danger:#dc3545; --info:#0dcaf0; --shadow:rgba(0,0,0,0.08); --shadow-lg:rgba(0,0,0,0.15);
+}
+[data-theme="dark"] {
+  --bg-primary:#0f172a; --bg-secondary:#1e293b; --bg-card:#1e293b; --bg-navbar:#0f172a;
+  --text-primary:#f1f5f9; --text-secondary:#94a3b8; --text-muted:#64748b; --border-color:#334155;
+  --accent-primary:#3b82f6; --accent-secondary:#94a3b8; --success:#22c55e; --warning:#f59e0b;
+  --danger:#ef4444; --info:#06b6d4; --shadow:rgba(0,0,0,0.3); --shadow-lg:rgba(0,0,0,0.5);
+}
+.screen .navbar-nav .nav-link { padding:.5rem .9rem; }
+.screen ul.navbar-nav { display:flex; flex-direction:row; align-items:center; gap:2px; margin:0; }
+.screen { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; background-color:var(--bg-primary); color:var(--text-primary); }
+.screen .navbar { background-color:var(--bg-navbar)!important; border-bottom:1px solid var(--border-color); box-shadow:0 1px 3px var(--shadow); }
+.screen .navbar-brand { font-weight:700; color:var(--accent-primary)!important; }
+.screen .nav-link { color:var(--text-secondary)!important; font-weight:500; }
+.screen .nav-link:hover, .screen .nav-link.active { color:var(--accent-primary)!important; }
+.screen .card { background-color:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; box-shadow:0 2px 8px var(--shadow); }
+.screen .card-header { background-color:transparent; border-bottom:1px solid var(--border-color); font-weight:600; }
+.screen .card-footer { background-color:transparent; border-top:1px solid var(--border-color); }
+.screen .btn-primary { background-color:var(--accent-primary); border-color:var(--accent-primary); }
+.screen .btn-outline-primary { color:var(--accent-primary); border-color:var(--accent-primary); }
+.screen .form-control, .screen .form-select { background-color:var(--bg-secondary); border-color:var(--border-color); color:var(--text-primary); }
+.screen .table { color:var(--text-primary); --bs-table-color:var(--text-primary); --bs-table-bg:transparent; }
+.screen .table-hover tbody tr:hover { background-color:var(--bg-secondary); }
+.screen .alert { border-radius:10px; }
+.screen .badge { font-weight:500; }
+.screen .numero-bola { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,var(--accent-primary),#0056b3); color:#fff; font-weight:700; font-size:14px; margin:3px; box-shadow:0 2px 4px var(--shadow); }
+.screen .trevo-bola { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; font-weight:700; font-size:14px; margin:3px; box-shadow:0 2px 4px var(--shadow); }
+.screen .stat-card { padding:1.5rem; border-radius:12px; text-align:center; }
+.screen .stat-card i { font-size:2rem; margin-bottom:.5rem; }
+.screen .stat-card .stat-value { font-size:1.75rem; font-weight:700; color:var(--accent-primary); }
+.screen .stat-card .stat-label { font-size:.875rem; color:var(--text-secondary); }
+.screen .game-selector { cursor:pointer; padding:1rem; border-radius:12px; border:2px solid var(--border-color); transition:all .3s ease; }
+.screen .game-selector.active { border-color:var(--accent-primary); background-color:rgba(13,110,253,.1); }
+.screen .footer { background-color:var(--bg-navbar); border-top:1px solid var(--border-color); padding:2rem 0; }
+.screen .text-secondary { color:var(--text-secondary)!important; }
+.screen .text-muted { color:var(--text-muted)!important; }
+.screen .pagination .page-link { background-color:var(--bg-card); border-color:var(--border-color); color:var(--text-primary); }
+.screen .pagination .active .page-link { background-color:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
+.screen .breadcrumb { --bs-breadcrumb-divider-color:var(--text-muted); }
+.screen .breadcrumb-item a { color:var(--accent-primary); text-decoration:none; }
+.screen .breadcrumb-item.active { color:var(--text-secondary); }
+a { color:#0d6efd; }
+a:hover { color:#0a58ca; }
+</style>
+</helmet>
+
+<section style="background:#e9edf2; padding:40px; width:1400px; font-family:'Inter',sans-serif; display:flex; flex-direction:column; gap:40px">
+  <div style="max-width:1320px">
+    <div style="font:700 13px/1 'Inter',sans-serif; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:8px">Recriação — estado atual</div>
+    <h1 style="font:800 30px/1.2 'Inter',sans-serif; letter-spacing:-.02em; color:#0f172a; margin:0 0 8px">Gerador de Loterias (Django + Bootstrap 5)</h1>
+    <p style="font:400 15px/1.55 'Inter',sans-serif; color:#475569; margin:0; max-width:70ch">Cópia fiel do que existe hoje: tokens e CSS de <code>templates/base/base.html</code>, marcação de <code>home.html</code>, <code>history.html</code>, <code>bet_detail.html</code>, <code>notificacoes.html</code> e <code>account/login.html</code>. Dados de exemplo com base em <code>models.py</code> (GAMES_CONFIG).</p>
+  </div>
+
+  <div>
+    <div style="font:700 12px/1 'Inter',sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:10px">01 · Início / Gerar Novo Jogo — tema claro</div>
+    <div class="screen" data-theme="light" data-screen-label="01 Home claro" style="border:1px solid #cbd5e1; border-radius:10px; overflow:hidden; width:1280px; max-width:100%">
+      <nav class="navbar navbar-expand-lg">
+        <div class="container">
+          <a class="navbar-brand d-flex align-items-center" href="#"><i class="bi bi-dice-5-fill me-2"></i><span>Gerador de Loterias</span></a>
+          <div class="navbar-collapse" style="display:flex; flex-wrap:nowrap; align-items:center">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-house-door me-1"></i> Inicio</a></li>
+              <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-clock-history me-1"></i> Historico</a></li>
+              <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-graph-up me-1"></i> Estatisticas</a></li>
+            </ul>
+            <ul class="navbar-nav align-items-center">
+              <li class="nav-item me-2"><a class="nav-link position-relative" href="#"><i class="bi bi-bell-fill fs-5"></i><span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">2</span></a></li>
+              <li class="nav-item me-2"><button class="theme-toggle" style="cursor:pointer; padding:.5rem; border-radius:50%; border:none; background:transparent; color:var(--text-secondary)"><i class="bi bi-moon-fill fs-5"></i></button></li>
+              <li class="nav-item dropdown"><a class="nav-link dropdown-toggle d-flex align-items-center" href="#"><div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width:32px;height:32px;font-weight:600">RA</div><span>Ricardo</span></a></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <div class="container py-5">
+        <div class="row mb-5">
+          <div class="col-lg-8 mx-auto text-center">
+            <h1 class="display-4 fw-bold mb-3"><i class="bi bi-stars text-warning"></i> Gerador de Loterias</h1>
+            <p class="lead text-secondary mb-4">Gere apostas inteligentes para as principais loterias brasileiras. Mantenha seu historico, acompanhe estatisticas e aumente suas chances.</p>
+          </div>
+        </div>
+
+        <div class="row mb-5">
+          <div class="col-md-4 mb-3"><div class="card stat-card h-100"><i class="bi bi-ticket-perforated text-primary"></i><div class="stat-value">128</div><div class="stat-label">Jogos Gerados</div></div></div>
+          <div class="col-md-4 mb-3"><div class="card stat-card h-100"><i class="bi bi-collection text-success"></i><div class="stat-value">6</div><div class="stat-label">Tipos de Jogo</div></div></div>
+          <div class="col-md-4 mb-3"><div class="card stat-card h-100"><i class="bi bi-clock-history text-info"></i><div class="stat-value">5</div><div class="stat-label">Jogos Recentes</div></div></div>
+        </div>
+
+        <div class="row mb-5"><div class="col-12"><div class="card">
+          <div class="card-header d-flex align-items-center p-3"><i class="bi bi-plus-circle me-2 text-primary"></i><span>Gerar Novo Jogo</span></div>
+          <div class="card-body">
+            <div class="row g-3 mb-4">
+              <div class="col-md-4 col-lg-2"><div class="game-selector active"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Mega-sena</h5><small class="text-secondary">6 de 60</small></div></div></div>
+              <div class="col-md-4 col-lg-2"><div class="game-selector"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Milionaria</h5><small class="text-secondary">6 de 50<br>+ 2 trevos</small></div></div></div>
+              <div class="col-md-4 col-lg-2"><div class="game-selector"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Lotomania</h5><small class="text-secondary">50 de 100</small></div></div></div>
+              <div class="col-md-4 col-lg-2"><div class="game-selector"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Lotofacil</h5><small class="text-secondary">15 de 25</small></div></div></div>
+              <div class="col-md-4 col-lg-2"><div class="game-selector"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Quina</h5><small class="text-secondary">5 de 80</small></div></div></div>
+              <div class="col-md-4 col-lg-2"><div class="game-selector"><div class="text-center"><i class="bi bi-dice-5 fs-2 text-primary mb-2"></i><h5 class="mb-1">Dupla-Sena</h5><small class="text-secondary">6 de 50</small></div></div></div>
+            </div>
+            <div class="row"><div class="col-md-6 col-lg-4"><div class="mb-3">
+              <label class="form-label fw-semibold"><i class="bi bi-hash me-1"></i>Numero do Concurso</label>
+              <input type="text" class="form-control form-control-lg" value="2920" readonly>
+              <small class="text-secondary">Sugestao: concurso 2920</small>
+            </div></div></div>
+            <button type="button" class="btn btn-primary btn-lg"><i class="bi bi-magic me-2"></i>Gerar Jogo</button>
+          </div>
+        </div></div></div>
+
+        <div class="row mb-5"><div class="col-12"><div class="card">
+          <div class="card-header d-flex align-items-center p-3"><i class="bi bi-pencil-square me-2 text-success"></i><span>Guardar Jogo Manual</span></div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-4"><label class="form-label">Jogo</label><select class="form-select"><option>Mega-sena</option></select></div>
+              <div class="col-md-3"><label class="form-label">Concurso</label><input type="text" class="form-control" value="2920" readonly></div>
+              <div class="col-md-5"><label class="form-label">Números</label><input type="text" class="form-control" placeholder="Ex: 01, 12, 23, 34, 45, 56"></div>
+            </div>
+            <button type="button" class="btn btn-success mt-3"><i class="bi bi-save me-2"></i>Salvar Jogo Manual</button>
+          </div>
+        </div></div></div>
+
+        <div class="row"><div class="col-12"><div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center p-3"><span><i class="bi bi-clock-history me-2 text-primary"></i>Ultimos Jogos</span><a href="#" class="btn btn-sm btn-outline-primary">Ver Todos <i class="bi bi-arrow-right ms-1"></i></a></div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0">
+            <thead><tr><th>Jogo</th><th>Concurso</th><th>Numeros</th><th>Trevos</th><th>Data</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge bg-primary">Mega-sena</span></td><td>2920</td><td><span class="numero-bola">04</span><span class="numero-bola">17</span><span class="numero-bola">23</span><span class="numero-bola">38</span><span class="numero-bola">45</span><span class="numero-bola">52</span></td><td><span class="text-muted">-</span></td><td>14/09/2026 21:32</td><td><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td></tr>
+              <tr><td><span class="badge bg-primary">Milionaria</span></td><td>312</td><td><span class="numero-bola">02</span><span class="numero-bola">09</span><span class="numero-bola">21</span><span class="numero-bola">33</span><span class="numero-bola">41</span><span class="numero-bola">48</span></td><td><span class="trevo-bola">03</span><span class="trevo-bola">05</span></td><td>13/09/2026 19:10</td><td><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td></tr>
+            </tbody>
+          </table></div></div>
+        </div></div></div>
+      </div>
+
+      <footer class="footer">
+        <div class="container"><div class="row align-items-center">
+          <div class="col-md-6"><p class="mb-0 text-secondary"><i class="bi bi-dice-5 me-2"></i><strong>Gerador de Loterias</strong> © 2026</p></div>
+          <div class="col-md-6 text-md-end"><small class="text-muted">Desenvolvido com <i class="bi bi-heart-fill text-danger"></i> e Django</small></div>
+        </div></div>
+      </footer>
+    </div>
+  </div>
+
+  <div>
+    <div style="font:700 12px/1 'Inter',sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:10px">02 · Histórico de Jogos — tema escuro</div>
+    <div class="screen" data-theme="dark" data-screen-label="02 Historico escuro" style="border:1px solid #334155; border-radius:10px; overflow:hidden; width:1280px; max-width:100%">
+      <nav class="navbar navbar-expand-lg">
+        <div class="container">
+          <a class="navbar-brand d-flex align-items-center" href="#"><i class="bi bi-dice-5-fill me-2"></i><span>Gerador de Loterias</span></a>
+          <div class="navbar-collapse" style="display:flex; flex-wrap:nowrap; align-items:center">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-house-door me-1"></i> Inicio</a></li>
+              <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-clock-history me-1"></i> Historico</a></li>
+              <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-graph-up me-1"></i> Estatisticas</a></li>
+            </ul>
+            <ul class="navbar-nav align-items-center">
+              <li class="nav-item me-2"><button class="theme-toggle" style="cursor:pointer; padding:.5rem; border-radius:50%; border:none; background:transparent; color:var(--text-secondary)"><i class="bi bi-sun-fill fs-5"></i></button></li>
+              <li class="nav-item dropdown"><a class="nav-link dropdown-toggle d-flex align-items-center" href="#"><div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width:32px;height:32px;font-weight:600">RA</div><span>Ricardo</span></a></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <div class="container py-5">
+        <div class="row mb-4"><div class="col">
+          <h2><i class="bi bi-clock-history me-2 text-primary"></i>Historico de Jogos</h2>
+          <p class="text-secondary">Todos os jogos gerados por voce</p>
+        </div></div>
+
+        <div class="card mb-4"><div class="card-body"><div class="row g-3 align-items-end">
+          <div class="col-md-4"><label class="form-label">Filtrar por Jogo</label><select class="form-select"><option>Todos os jogos</option></select></div>
+          <div class="col-md-3"><label class="form-label">Ordenacao</label><select class="form-select"><option>Mais recentes primeiro</option></select></div>
+          <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-funnel me-2"></i>Filtrar</button></div>
+          <div class="col-md-3 text-md-end"><a href="#" class="btn btn-success"><i class="bi bi-plus-circle me-2"></i>Novo Jogo</a></div>
+        </div></div></div>
+
+        <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0">
+          <thead><tr><th>Jogo</th><th>Concurso</th><th>Numeros</th><th>Trevos</th><th>Seq.</th><th>Data</th><th class="text-end">Acoes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="badge bg-primary">Mega-sena</span></td>
+              <td class="fw-semibold">2920</td>
+              <td><div class="d-flex flex-wrap" style="max-width:300px"><span class="numero-bola" style="width:32px;height:32px;font-size:11px">04</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">17</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">23</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">38</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">45</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">52</span></div></td>
+              <td><span class="text-muted">-</span></td>
+              <td><span class="badge bg-success">0</span></td>
+              <td><small>14/09/2026<br>21:32</small></td>
+              <td class="text-end"><div class="btn-group"><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a><a href="#" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat"></i></a><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></div></td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-primary">Lotofacil</span></td>
+              <td class="fw-semibold">3180</td>
+              <td><div class="d-flex flex-wrap" style="max-width:300px"><span class="numero-bola" style="width:32px;height:32px;font-size:11px">01</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">02</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">05</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">07</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">09</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">11</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">13</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">14</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">16</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">18</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">19</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">21</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">22</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">24</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">25</span></div></td>
+              <td><span class="text-muted">-</span></td>
+              <td><span class="badge bg-warning text-dark">4</span></td>
+              <td><small>12/09/2026<br>08:04</small></td>
+              <td class="text-end"><div class="btn-group"><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a><a href="#" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat"></i></a><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></div></td>
+            </tr>
+          </tbody>
+        </table></div></div></div>
+
+        <nav class="mt-4"><ul class="pagination justify-content-center">
+          <li class="page-item"><a class="page-link" href="#"><i class="bi bi-chevron-left"></i></a></li>
+          <li class="page-item active"><span class="page-link">1</span></li>
+          <li class="page-item"><a class="page-link" href="#">2</a></li>
+          <li class="page-item"><a class="page-link" href="#">3</a></li>
+          <li class="page-item"><a class="page-link" href="#"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:32px; flex-wrap:wrap">
+    <div style="flex:1 1 640px; min-width:0">
+      <div style="font:700 12px/1 'Inter',sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:10px">03 · Detalhe do jogo + resultado CEF</div>
+      <div class="screen" data-theme="light" data-screen-label="03 Detalhe" style="border:1px solid #cbd5e1; border-radius:10px; overflow:hidden; width:1280px; max-width:100%; padding:0 0 24px">
+        <div class="container py-4">
+          <nav class="mb-4"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="#">Inicio</a></li><li class="breadcrumb-item"><a href="#">Historico</a></li><li class="breadcrumb-item active">Mega-sena - Concurso 2920</li></ol></nav>
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center p-3">
+              <div><h4 class="mb-0"><i class="bi bi-ticket-perforated me-2 text-primary"></i>Mega-sena</h4><small class="text-secondary">Concurso 2920</small></div>
+              <span class="badge bg-primary fs-6">14/09/2026 21:32</span>
+            </div>
+            <div class="card-body text-center py-5">
+              <h5 class="mb-4 text-secondary">Numeros Sorteados</h5>
+              <div class="mb-4"><span class="numero-bola fs-5">04</span><span class="numero-bola fs-5">17</span><span class="numero-bola fs-5">23</span><span class="numero-bola fs-5">38</span><span class="numero-bola fs-5">45</span><span class="numero-bola fs-5">52</span></div>
+              <div class="alert alert-success d-inline-block"><i class="bi bi-check-circle me-2"></i>Pares sequenciais: <strong>0</strong><br><small>Nenhum par sequencial encontrado</small></div>
+              <div class="mt-4"><a href="#" class="btn btn-outline-primary"><i class="bi bi-check-circle me-2"></i>Verificar Resultado da CEF</a></div>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center p-3">
+              <div><a href="#" class="btn btn-success me-2"><i class="bi bi-arrow-repeat me-2"></i>Gerar Novamente</a><a href="#" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Voltar</a></div>
+              <button class="btn btn-outline-danger"><i class="bi bi-trash me-2"></i>Excluir</button>
+            </div>
+          </div>
+          <div class="card mt-4">
+            <div class="card-header p-3"><i class="bi bi-trophy me-2 text-warning"></i>Resultado e Premiação</div>
+            <div class="card-body">
+              <p class="mb-1"><strong>Concurso:</strong> 2920</p>
+              <p class="mb-1"><strong>Jogo:</strong> Mega-sena</p>
+              <p class="mb-1"><strong>Números sorteados:</strong> 04 17 23 30 45 52</p>
+              <p class="mb-0"><strong>Origem:</strong> servicebus2.caixa.gov.br</p>
+              <div class="table-responsive"><table class="table table-bordered mt-3 mb-0">
+                <thead><tr><th>Acertos</th><th>Categoria</th><th>Premio</th><th>Status</th></tr></thead>
+                <tbody><tr><td>5</td><td>Quina</td><td>R$ 48.712,35</td><td><span class="badge bg-success">Ganhou</span></td></tr></tbody>
+              </table></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1 1 420px; min-width:0">
+      <div style="font:700 12px/1 'Inter',sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:10px">04 · Login (allauth + crispy)</div>
+      <div class="screen" data-theme="light" data-screen-label="04 Login" style="border:1px solid #cbd5e1; border-radius:10px; overflow:hidden; width:1280px; max-width:100%">
+        <div class="container py-5"><div class="row justify-content-center"><div class="col-lg-10">
+          <div class="card"><div class="card-body p-4 p-md-5">
+            <div class="text-center mb-4">
+              <i class="bi bi-box-arrow-in-right display-4 text-primary"></i>
+              <h3 class="mt-3">Bem-vindo de Volta</h3>
+              <p class="text-secondary">Entre com seu e-mail e senha</p>
+            </div>
+            <div class="mb-3"><label class="form-label">E-mail</label><input type="email" class="form-control" placeholder="voce@email.com"></div>
+            <div class="mb-3"><label class="form-label">Senha</label><input type="password" class="form-control" placeholder="••••••••"></div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">Lembrar-me</label></div>
+              <a href="#" class="text-primary small">Esqueceu a senha?</a>
+            </div>
+            <div class="d-grid gap-2"><button class="btn btn-primary btn-lg"><i class="bi bi-box-arrow-in-right me-2"></i>Entrar</button></div>
+            <hr class="my-4">
+            <div class="text-center"><p class="mb-0">Nao tem conta? <a href="#" class="text-primary fw-semibold">Cadastre-se gratis</a></p></div>
+          </div></div>
+        </div></div></div>
+      </div>
+
+      <div style="font:700 12px/1 'Inter',sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:24px 0 10px">05 · Notificações de acerto</div>
+      <div class="screen" data-theme="light" data-screen-label="05 Notificacoes" style="border:1px solid #cbd5e1; border-radius:10px; overflow:hidden; width:1280px; max-width:100%">
+        <div class="container py-4">
+          <div class="row mb-4">
+            <div class="col"><h2 style="font-size:1.6rem"><i class="bi bi-bell me-2 text-primary"></i>Notificacoes de Acerto</h2><p class="text-secondary mb-0">Jogos seus que bateram com o resultado oficial</p></div>
+            <div class="col-auto"><a href="#" class="btn btn-outline-secondary"><i class="bi bi-sliders me-2"></i>Preferencias</a></div>
+          </div>
+          <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0">
+            <thead><tr><th>Jogo</th><th>Concurso</th><th>Numeros batidos</th><th>Premio</th><th class="text-end">Acoes</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="badge bg-primary">Mega-sena</span></td>
+                <td class="fw-semibold">2920</td>
+                <td><div class="d-flex flex-wrap" style="max-width:260px"><span class="numero-bola" style="width:32px;height:32px;font-size:11px">04</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">17</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">23</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">45</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">52</span></div><small class="text-secondary">5 acertos</small></td>
+                <td><span class="badge bg-success"><i class="bi bi-trophy-fill me-1"></i>R$ 48712.35</span></td>
+                <td class="text-end"><div class="d-flex justify-content-end gap-1"><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a><button class="btn btn-sm btn-outline-success"><i class="bi bi-check2"></i></button></div></td>
+              </tr>
+              <tr>
+                <td><span class="badge bg-primary">Quina</span></td>
+                <td class="fw-semibold">6890</td>
+                <td><div class="d-flex flex-wrap" style="max-width:260px"><span class="numero-bola" style="width:32px;height:32px;font-size:11px">11</span><span class="numero-bola" style="width:32px;height:32px;font-size:11px">42</span></div><small class="text-secondary">2 acertos</small></td>
+                <td><span class="badge bg-secondary">Sem premio</span></td>
+                <td class="text-end"><div class="d-flex justify-content-end gap-1"><a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a><button class="btn btn-sm btn-outline-success"><i class="bi bi-check2"></i></button></div></td>
+              </tr>
+            </tbody>
+          </table></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

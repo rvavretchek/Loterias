@@ -1,0 +1,8 @@
+/* Webfonts. No binaries were shipped with the Arandu sources, so both families are
+   loaded from Google Fonts — Manrope is the family declared in every mockup;
+   IBM Plex Mono is an intentional addition for tabular financial figures. */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+/* Iconography: Material Symbols Outlined (variable). Load in the page <head>:
+   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"> */
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");

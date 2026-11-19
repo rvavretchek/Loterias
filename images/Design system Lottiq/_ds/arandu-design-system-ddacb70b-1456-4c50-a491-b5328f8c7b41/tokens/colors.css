@@ -1,0 +1,73 @@
+:root{
+  /* ── Brand anchors (from the Arandu mockups and logo) ── */
+  --brand-teal:#2D9FA3;
+  --brand-ink:#1F2F32;
+  --brand-amber:#F2A12C;
+
+  /* ── Teal scale (primary) ── */
+  --teal-50:#EAF6F7;--teal-100:#D2ECED;--teal-200:#A6D9DB;--teal-300:#79C5C8;
+  --teal-400:#4DB2B5;--teal-500:#2D9FA3;--teal-600:#248084;--teal-700:#1C6265;
+  --teal-800:#134346;--teal-900:#0B2527;
+
+  /* ── Amber scale (accent — the colour of the logo mark) ── */
+  --amber-50:#FEF6E9;--amber-100:#FDEACB;--amber-200:#FAD394;--amber-300:#F7BC5D;
+  --amber-400:#F2A12C;--amber-500:#DE8D18;--amber-600:#B87213;--amber-700:#8F580E;
+
+  /* ── Neutral scale (cool slate, tuned to the ink #1F2F32) ── */
+  --neutral-0:#FFFFFF;--neutral-25:#FAFBFB;--neutral-50:#F6F7F8;--neutral-100:#EEF0F2;
+  --neutral-200:#DBE0E6;--neutral-300:#C3CAD1;--neutral-400:#9AA5AE;--neutral-500:#74818B;
+  --neutral-600:#556169;--neutral-700:#3B464C;--neutral-800:#2A353A;--neutral-900:#1F2F32;
+  --neutral-950:#131D20;
+
+  /* ── Semantic hues ── */
+  --success-bg:#E6F5EE;--success-border:#B7E2CE;--success-fg:#0E7A51;--success-solid:#0E8F5D;
+  --danger-bg:#FCEAE9;--danger-border:#F3C6C3;--danger-fg:#B32E27;--danger-solid:#C6362F;
+  --warning-bg:#FEF6E9;--warning-border:#FAD394;--warning-fg:#8F580E;--warning-solid:#F2A12C;
+  --info-bg:#E8F1FA;--info-border:#C2DAF0;--info-fg:#1A5F9E;--info-solid:#1D6FB8;
+  --neutral-bg:#EEF0F2;--neutral-border:#DBE0E6;--neutral-fg:#556169;
+
+  /* ── Semantic aliases: text ── */
+  --text-strong:var(--neutral-900);
+  --text-body:var(--neutral-700);
+  --text-muted:var(--neutral-500);
+  --text-subtle:var(--neutral-400);
+  --text-brand:var(--teal-700);
+  --text-on-brand:#FFFFFF;
+  --text-on-ink:#FFFFFF;
+  --text-on-ink-muted:#B9C2C7;
+
+  /* ── Semantic aliases: surfaces ── */
+  --surface-page:var(--neutral-50);
+  --surface-card:var(--neutral-0);
+  --surface-sunken:var(--neutral-100);
+  --surface-hover:var(--neutral-50);
+  --surface-inverse:var(--neutral-900);
+  --surface-inverse-soft:#2A353A;
+  --surface-brand-soft:rgba(45,159,163,.10);
+  --surface-brand-soft-hover:rgba(45,159,163,.18);
+  --surface-accent-soft:rgba(242,161,44,.12);
+  --surface-scrim:rgba(19,29,32,.34);
+
+  /* ── Semantic aliases: interactive ── */
+  --action-primary:var(--teal-500);
+  --action-primary-hover:var(--teal-600);
+  --action-primary-active:var(--teal-700);
+  --action-inverse:var(--neutral-900);
+  --action-inverse-hover:var(--neutral-800);
+  --action-accent:var(--amber-400);
+  --action-accent-hover:var(--amber-500);
+  --action-danger:var(--danger-solid);
+  --action-danger-hover:var(--danger-fg);
+
+  /* ── Semantic aliases: borders ── */
+  --border-subtle:var(--neutral-100);
+  --border-default:var(--neutral-200);
+  --border-strong:var(--neutral-300);
+  --border-brand:var(--teal-500);
+  --border-focus:var(--teal-500);
+  --focus-ring:0 0 0 3px rgba(45,159,163,.28);
+
+  /* ── Data-visualisation sequence (as used in the scenario timelines/DRE charts) ── */
+  --data-1:#2D9FA3;--data-2:#F2A12C;--data-3:#8B5CF6;--data-4:#1D6FB8;
+  --data-5:#0E8F5D;--data-6:#C6362F;--data-track:#EEF0F2;
+}

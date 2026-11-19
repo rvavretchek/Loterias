@@ -1,0 +1,15 @@
+/* Minimal element defaults. Components style themselves via the tokens above. */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--surface-page);color:var(--text-strong);font:var(--type-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,h4,h5,h6{margin:0;color:var(--text-strong);letter-spacing:var(--tracking-tight)}
+h1{font:var(--type-page-title)}h2{font:var(--type-section-title)}h3{font:var(--type-card-title)}
+p{margin:0;text-wrap:pretty}
+a{color:var(--text-brand);text-decoration:none;transition:var(--transition-colors)}
+a:hover{color:var(--teal-500);text-decoration:underline}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:var(--focus-ring);border-radius:var(--radius-xs)}
+small{font:var(--type-caption);color:var(--text-muted)}
+code,kbd,samp{font-family:var(--font-mono);font-size:.92em}
+table{border-collapse:collapse}
+.material-symbols-outlined{font-family:var(--font-icon);font-weight:400;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;-webkit-font-feature-settings:'liga';-webkit-font-smoothing:antialiased;user-select:none}
+.material-symbols-outlined.is-filled{font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}

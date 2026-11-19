@@ -1,0 +1,11 @@
+:root{
+  --radius-xs:4px;   /* default radius in the mockups (0.25rem) */
+  --radius-sm:6px;
+  --radius-md:8px;   /* lg in the mockups — buttons, inputs, nav items */
+  --radius-lg:12px;  /* xl — cards, tables, panels */
+  --radius-xl:16px;  /* 2xl — hero/marketing panels, modals */
+  --radius-full:9999px;
+
+  --border-width:1px;
+  --border-width-strong:2px;
+}
